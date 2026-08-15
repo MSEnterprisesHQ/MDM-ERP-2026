@@ -8429,7 +8429,7 @@ gP = function(p) {
    16 System self-test + optimization diagnostics
    ═════════════════════════════════════════════════════════════════════ */
 const P916={version:"4.50",completedAt:new Date().toISOString()};
-function p916Role(){return String(A.currentUser?.role||"").toLowerCase();}
+function p916Role(){const r=String(A.currentUser?.role||"").toLowerCase().trim();return r==="administrator"||r.startsWith("admin")?"admin":r;}
 function p916IsAdmin(){return p916Role()==="admin";}
 function p916Can(action){
   const r=p916Role();
