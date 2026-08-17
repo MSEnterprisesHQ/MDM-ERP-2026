@@ -1849,7 +1849,7 @@ function nw(n){const a=["","One","Two","Three","Four","Five","Six","Seven","Eigh
 function shuf(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=~~(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
 function toast(m,t){const d=document.createElement("div");d.className="toast "+(t||"");d.innerHTML="<span>"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span>"+ec(m);document.getElementById("toasts").appendChild(d);setTimeout(()=>d.remove(),3400);}
 function addRV(id){let r=A.rv.filter(x=>x!==id);r.unshift(id);if(r.length>5)r=r.slice(0,5);sv("rv",r);}
-function sBdg(st,sy){if(st==="cancelled")return'<span class="bdg br sync-badge"><span class="sync-dot sync-red"></span>Cancelled</span>';if(st==="revised")return'<span class="bdg bam sync-badge"><span class="sync-dot sync-amber"></span>Revised</span>';if(st==="draft")return'<span class="bdg bs sync-badge"><span class="sync-dot sync-gray"></span>Draft</span>';if(["syncing","uploading","processing"].includes(sy))return'<span class="bdg bb sync-badge"><span class="sync-dot sync-blue"></span>Syncing</span>';if(sy==="pending")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-orange"></span>Pending Sync</span>';if(sy==="synced")return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Synced</span>';return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Active</span>';}
+function sBdg(st,sy){if(st==="released")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-blue"></span>Released</span>';if(st==="cancelled")return'<span class="bdg br sync-badge"><span class="sync-dot sync-red"></span>Cancelled</span>';if(st==="revised")return'<span class="bdg bam sync-badge"><span class="sync-dot sync-amber"></span>Revised</span>';if(st==="draft")return'<span class="bdg bs sync-badge"><span class="sync-dot sync-gray"></span>Draft</span>';if(["syncing","uploading","processing"].includes(sy))return'<span class="bdg bb sync-badge"><span class="sync-dot sync-blue"></span>Syncing</span>';if(sy==="pending")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-orange"></span>Pending Sync</span>';if(sy==="synced")return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Synced</span>';return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Active</span>';}
 
 // ═══ CALC ENGINE - GST Back Calculation BR-07 ═══
 function calc(s15,s68,sFr,frR,doSh){
@@ -1893,7 +1893,7 @@ function parseCounterFromInvNo(invNo,s){
 function invNoCounters(s){
   s=s||A.series;
   const re=seriesInvNoRegex(s);
-  const nums=A.invoices.map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
+  const nums=A.invoices.filter(i=>i.status!=="released"&&i.status!=="hard_reset").map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
   return [...new Set(nums)].sort((a,b)=>a-b);
 }
 function invNoLast(s){const n=invNoCounters(s);return n.length?n[n.length-1]:null;}
@@ -1904,7 +1904,7 @@ function invNoPrevious(s){const n=invNoCounters(s);return n.length>1?n[n.length-
 function invNoMonthCounters(s,month,year){
   s=s||A.series;
   const re=seriesInvNoRegex(s);
-  const nums=A.invoices.filter(i=>(!month||i.month===month)&&(!year||String(i.year)===String(year))).map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
+  const nums=A.invoices.filter(i=>i.status!=="released"&&i.status!=="hard_reset"&&(!month||i.month===month)&&(!year||String(i.year)===String(year))).map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
   return [...new Set(nums)].sort((a,b)=>a-b);
 }
 function invNoMonthGaps(s,month,year){
@@ -2040,11 +2040,12 @@ function invoiceCounterAnySeries(invNo,s){
 }
 function invNoFYUsedCounter(s,counter){
   const es=s||A.series;
-  return A.invoices.some(i=>invoiceFYForRecord(i)===es.fy&&invoiceCounterAnySeries(i.invNo,es)===Number(counter));
+  return A.invoices.some(i=>i.status!=="released"&&i.status!=="hard_reset"&&invoiceFYForRecord(i)===es.fy&&invoiceCounterAnySeries(i.invNo,es)===Number(counter));
 }
 function invNoFYCounters(s){
   const es=s||A.series;
-  const nums=A.invoices.filter(i=>invoiceFYForRecord(i)===es.fy).map(i=>invoiceCounterAnySeries(i.invNo,es)).filter(n=>n!==null);
+  const nums=A.invoices.filter(i=>invoiceFYForRecord(i)===es.fy && i.status!=="released" && i.status!=="hard_reset")
+    .map(i=>invoiceCounterAnySeries(i.invNo,es)).filter(n=>n!==null);
   return [...new Set(nums)].sort((a,b)=>a-b);
 }
 function invNoNextAuto(s){
@@ -2257,7 +2258,6 @@ const NAV=[
 ];
 const LB={dashboard:"Dashboard",new:"New Invoice",history:"Invoice History",schools:"School Master",items:"Item Master",ledger:"School Ledger",archive:"MDM Engine",audit:"Breakup Sheets",admin:"Admin Control",settings:"Settings",controls:"Invoice Control",backupsync:"Backup & Sync",profile:"Profile",reports:"Reports"};
 function renderShell(){
-  try{ensureAdminRecoveryRecord();}catch(e){}
   const pnd=A.invoices.filter(i=>i.syncStatus==="pending").length;
   const sy=pnd>0
     ?`<span class="sy sy-p">&#128995; ${pnd} Pending</span>`
@@ -3143,6 +3143,8 @@ function histMenuAction(action, encodedId){
   if(action==='revisions'){HS.rId=id;HS.page=1;gP('history');return;}
   if(action==='audit'){AUD_ID=id;gP('audit');return;}
   if(action==='cancel'){canInv(id);return;}
+  if(action==='release'){openInvoiceRecovery(id,"release");return;}
+  if(action==='hardReset'){openInvoiceRecovery(id,"hardReset");return;}
 }
 
 function toggleHistMenu(id, btn){
@@ -3167,7 +3169,12 @@ function toggleHistMenu(id, btn){
     <button type="button" class="hist-action-menu-item" role="menuitem" data-action="share">Share</button>
     <button type="button" class="hist-action-menu-item" role="menuitem" data-action="revisions">Revisions</button>
     <button type="button" class="hist-action-menu-item" role="menuitem" data-action="audit">Audit</button>
-    ${inv.status!=="cancelled"?`<button type="button" class="hist-action-menu-item danger" role="menuitem" data-action="cancel">Cancel</button>`:''}
+    ${inv.status!=="cancelled"&&inv.status!=="released"?`<button type="button" class="hist-action-menu-item danger" role="menuitem" data-action="cancel">Cancel</button>`:''}
+    ${A.currentUser?.role==="admin"&&inv.status!=="released"?`
+      <div class="hist-action-menu-sep"></div>
+      <button type="button" class="hist-action-menu-item admin-recovery" role="menuitem" data-action="release">Release Number</button>
+      <button type="button" class="hist-action-menu-item danger admin-recovery" role="menuitem" data-action="hardReset">Hard Reset</button>
+    `:''}
   `;
   document.body.appendChild(menu);
   menu.addEventListener('click',function(e){
@@ -3324,11 +3331,11 @@ function pgHist(){
         <div class="hist-data-block hist-class-block">
           <div class="hist-data-label">CLASS BREAKDOWN</div>
           <div class="hist-class-grid">
-            <div class="hist-class-col">
+            <div class="hist-class-col hist-class-left">
               <div class="hist-class-l">1–5</div>
               <div class="hist-class-v" style="color:var(--pu)">${has15?ns(inv.s15):"—"}</div>
             </div>
-            <div class="hist-class-col">
+            <div class="hist-class-col hist-class-right">
               <div class="hist-class-l">6–8</div>
               <div class="hist-class-v" style="color:var(--sk)">${has68?ns(inv.s68):"—"}</div>
             </div>
@@ -3337,7 +3344,15 @@ function pgHist(){
       </div>
       <div class="hist-grid-cell"><div class="hist-data-block"><div class="hist-data-label">TOTAL STUDENTS</div><div class="hist-students">${ns((inv.s15||0)+(inv.s68||0))}</div></div></div>
       <div class="hist-grid-cell"><div class="hist-data-block"><div class="hist-data-label">NET PAYABLE</div><div class="hist-amount">${R(inv.net)}</div></div></div>
-      <div class="hist-grid-cell"><div class="hist-data-block"><div class="hist-data-label">SYNC STATUS</div><div class="hist-status">${sBdg(inv.status,inv.syncStatus)}</div></div></div>
+      <div class="hist-grid-cell">
+        <div class="hist-data-block hist-syncshare-block">
+          <div class="hist-data-label">SYNC &amp; SHARE STATUS</div>
+          <div class="hist-syncshare">
+            <div class="hist-sync-part"><span class="hist-mini-label">SYNC</span>${sBdg(inv.status,inv.syncStatus)}</div>
+            <div class="hist-share-part"><span class="hist-mini-label">SHARE</span>${histShareStatus(inv)}</div>
+          </div>
+        </div>
+      </div>
       <div class="hist-grid-cell">
         <div class="hist-actions">
           <div class="hist-actions-label">ACTIONS</div>
@@ -3345,7 +3360,6 @@ function pgHist(){
             <button type="button" class="btn btn-g btn-sm" onclick="opIM('${inv.id}')">Open</button>
             <button type="button" class="btn btn-g btn-sm hist-more-btn" aria-label="Invoice actions" aria-haspopup="menu" aria-expanded="${menuOpen?"true":"false"}" data-invoice-id="${ec(inv.id)}">&#8942;</button>
           </div>
-          
         </div>
       </div>
     </div>`;
@@ -3400,7 +3414,7 @@ function pgHist(){
     <div>Class Breakdown<span class="hg-sub hg-class-sub"><span>Class 1–5</span><span>Class 6–8</span></span></div>
     <div>Students<span class="hg-sub">Total</span></div>
     <div>Net Payable<span class="hg-sub">Amount</span></div>
-    <div>Sync Status</div>
+    <div>Sync &amp; Share Status<span class="hg-sub hg-syncshare-sub"><span>Sync</span><span>Share</span></span></div>
     <div style="text-align:center">Actions</div>
   </div>`;
   let listHTML="";
@@ -3530,7 +3544,59 @@ function histExportExcel(){
 }
 function opIM(id){HS.vId=id;HS.vTab="merged";addRV(id);gP("history");}
 /* hsPDF replaced by v2.1 below */
-function canInv(id){const r=prompt("Enter cancellation reason:");if(r===null)return;if(!r.trim()){toast("Reason required","err");return;}sv("iv",A.invoices.map(i=>i.id===id?{...i,status:"cancelled",cancelReason:r.trim(),cancelledAt:new Date().toISOString()}:i));toast("Invoice cancelled","warn");gP("history");}
+const INV_RECOVERY_REASONS=["Wrong Billing Month Selected","Wrong Invoice Number Selected","Duplicate / Accidental Invoice Generated","Incorrect Invoice Details Before Finalization"];
+function isInvoiceAdmin(){return A.currentUser?.role==="admin";}
+function invoiceRecoveryDependency(inv){
+  if(!inv)return "Invoice not found";
+  if(inv.status==="released")return "Invoice is already released";
+  if(inv.payment||inv.paymentId||inv.receiptId||inv.creditNoteId||inv.debitNoteId||inv.eInvoiceId||inv.ewayBillNo||inv.submittedAt||inv.settledAt||inv.paidAt)return "This invoice has a protected accounting/statutory dependency";
+  return "";
+}
+function openInvoiceRecovery(id,mode){
+  if(!isInvoiceAdmin()){toast("Administrator access required","err");return;}
+  const inv=A.invoices.find(i=>i.id===id);if(!inv){toast("Invoice not found","err");return;}
+  const dep=invoiceRecoveryDependency(inv);if(dep){toast(dep,"err");return;}
+  const title=mode==="hardReset"?"Hard Reset Invoice":"Release Invoice Number";
+  const warning=mode==="hardReset"?"This permanently removes the invoice record. Its number will return to the available pool. The recovery event remains in Audit.":"This marks the invoice as Released and returns its number to the available pool. The invoice record and audit trail remain.";
+  const opts=INV_RECOVERY_REASONS.map(r=>`<option value="${ec(r)}">${ec(r)}</option>`).join("");
+  const dlg=document.createElement("div");dlg.className="ov";dlg.id="inv-recovery-dlg";
+  dlg.innerHTML=`<div class="modal" style="max-width:520px"><div class="mhd"><div><div class="mt">${title}</div><div style="font-size:10.5px;color:var(--txl);margin-top:2px">${ec(inv.invNo)} · ${ec(inv.schoolName||"")}</div></div><button class="btn btn-g btn-sm" onclick="document.getElementById('inv-recovery-dlg')?.remove()">&#10005;</button></div>
+  <div class="mbd"><div class="info ${mode==="hardReset"?"inf-r":"inf-b"}" style="margin-bottom:12px">${ec(warning)}</div>
+  <label class="flbl">Reason Template *</label><select class="fi" id="inv-rec-reason">${opts}<option value="Other Reason">Other Reason</option></select>
+  <label class="flbl" style="margin-top:10px">Custom Comment / Additional Details</label><textarea class="fi" id="inv-rec-comment" rows="3" placeholder="Optional additional details"></textarea>
+  <div style="font-size:10.5px;color:var(--txl);margin-top:5px">Use a preset for common cases; add a custom comment when additional context is needed.</div></div>
+  <div class="mft"><button class="btn btn-g" onclick="document.getElementById('inv-recovery-dlg')?.remove()">Cancel</button><button class="btn ${mode==="hardReset"?"btn-danger":"btn-p"}" onclick="confirmInvoiceRecovery('${ec(id)}','${mode}')">${mode==="hardReset"?"Confirm Hard Reset":"Confirm Release"}</button></div></div>`;
+  document.body.appendChild(dlg);
+}
+function confirmInvoiceRecovery(id,mode){
+  if(!isInvoiceAdmin()){toast("Administrator access required","err");return;}
+  const inv=A.invoices.find(i=>i.id===id);if(!inv)return;
+  const dep=invoiceRecoveryDependency(inv);if(dep){toast(dep,"err");return;}
+  const reason=(document.getElementById("inv-rec-reason")||{}).value||"Other Reason";
+  const comment=(document.getElementById("inv-rec-comment")||{}).value?.trim()||"";
+  if(reason==="Other Reason"&&!comment){toast("Custom comment is required for Other Reason","err");return;}
+  const at=new Date().toISOString();
+  if(mode==="release"){
+    const upd={...inv,status:"released",releaseReason:reason,releaseComment:comment,releasedAt:at,releasedBy:A.currentUser?.name||"Admin"};
+    sv("iv",A.invoices.map(i=>i.id===id?upd:i));
+    auditLog("RELEASE","invoice",id,"Invoice number released: "+inv.invNo,{invoiceNo:inv.invNo,reason,comment,at});
+    document.getElementById("inv-recovery-dlg")?.remove();toast("Invoice number released and returned to Available","ok");gP("history");return;
+  }
+  auditLog("HARD_RESET","invoice",id,"Invoice hard reset: "+inv.invNo,{invoiceNo:inv.invNo,reason,comment,at,school:inv.schoolName,month:inv.month,year:inv.year});
+  sv("iv",A.invoices.filter(i=>i.id!==id));
+  document.getElementById("inv-recovery-dlg")?.remove();toast("Invoice hard reset. Number is available again.","ok");gP("history");
+}
+function histShareStatus(inv){
+  const raw=Array.isArray(inv.shareHistory)&&inv.shareHistory.length?inv.shareHistory:(inv.deliveryMethod&&inv.deliveryAt?[{method:inv.deliveryMethod,at:inv.deliveryAt}]:[]);
+  if(!raw.length)return '<span class="hist-share-none">Not Shared</span>';
+  const latest=raw[raw.length-1],items=raw.slice(-4);
+  const icon=m=>{const x=String(m||"").toLowerCase();if(x.includes("whatsapp"))return "◉";if(x.includes("telegram"))return "✈";if(x.includes("email"))return "✉";return "↗";};
+  const labels=items.map(x=>`<span class="hist-share-chip" title="${ec(x.method||"Shared")}">${icon(x.method)} ${ec(x.method||"Shared")}</span>`).join("");
+  const dt=latest.at?new Date(latest.at):null;
+  const ts=dt&&!isNaN(dt)?dt.toLocaleDateString("en-IN",{day:"2-digit",month:"short"})+" · "+dt.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):"";
+  return `<div class="hist-share-wrap">${labels}<span class="hist-share-time">${ec(ts)}</span></div>`;
+}
+function canInv(id){const inv=A.invoices.find(i=>i.id===id);if(!inv)return;if(inv.status==="released"){toast("Released invoice cannot be cancelled","err");return;}const r=prompt("Enter cancellation reason:",inv.cancelReason||"");if(r===null)return;if(!r.trim()){toast("Reason required","err");return;}const at=new Date().toISOString();sv("iv",A.invoices.map(i=>i.id===id?{...i,status:"cancelled",cancelReason:r.trim(),cancelledAt:at}:i));auditLog("CANCEL","invoice",id,"Invoice cancelled: "+inv.invNo,{reason:r.trim(),invoiceNo:inv.invNo});toast("Invoice cancelled","warn");gP("history");}
 function addRev(id){const r=prompt("Enter revision reason (min 10 chars):");if(r===null)return;if(!r||r.trim().length<10){toast("Reason must be at least 10 characters","err");return;}const inv=A.invoices.find(i=>i.id===id);if(!inv)return;const rev={by:A.currentUser?.name||"Admin",at:new Date().toISOString(),reason:r.trim()};sv("iv",A.invoices.map(i=>i.id===id?{...i,revisions:[...(i.revisions||[]),rev],status:"revised"}:i));toast("Revision recorded","ok");gP("history");}
 
 // ═══ SCHOOLS ═══
@@ -3921,158 +3987,19 @@ function doExp(){const data={version:"2.0",exportedAt:new Date().toISOString(),f
 function doImp(){const inp=document.createElement("input");inp.type="file";inp.accept=".json";inp.onchange=ev=>{const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(!d.invoices||!d.firm){toast("Invalid backup file","err");return;}if(!confirm(`Restore backup from ${d.exportedAt}?\n\nThis replaces ALL current data (${d.invoices.length} invoices, ${d.schools.length} schools).\n\nThis cannot be undone!`))return;sv("f",d.firm);sv("sr",d.series);sv("rt",d.rates);sv("hd",d.heads);sv("it",d.items);sv("sc",d.schools);sv("iv",d.invoices);if(d.users)sv("us",d.users);toast(`Restored! ${d.invoices.length} invoices loaded.`,"ok");setTimeout(()=>gP("dashboard"),600);}catch(err){toast("Failed: "+err.message,"err");}};r.readAsText(file);};document.body.appendChild(inp);inp.click();document.body.removeChild(inp);}
 
 // ═══ PROFILE ═══
-function pgPro(){
-  const f=A.firm;
-  const me=A.currentUser||{};
-  const isAdmin=me.role==="admin";
-  return `<div class="shd"><div><div class="stl">Profile &amp; Firm Details</div><div class="sst">Printed on every invoice and PDF</div></div><button class="btn btn-p" onclick="svPro()">Save Profile</button></div>
-  <div style="display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start">
-    <div class="card"><div class="cbd" style="text-align:center"><div style="width:76px;height:76px;background:var(--slt);border:2px dashed var(--sf);border-radius:11px;display:flex;align-items:center;justify-content:center;margin:0 auto 11px;font-size:28px">&#127970;</div><div style="font-weight:800;font-size:13px;color:var(--nv);margin-bottom:2px">${ec(f.name)}</div><div style="font-size:10px;color:var(--txl)">${ec(f.gstin)}</div></div></div>
-    <div style="display:flex;flex-direction:column;gap:13px">
-      <div class="card"><div class="chd"><span class="cht">Business Details</span></div><div class="cbd"><div class="fg fg2">${[["name","Business Name",true],["gstin","GSTIN",true],["pan","PAN"],["stateCode","State Code"],["phone","Phone"],["email","Email"]].map(([k,l,req])=>`<div><label class="flbl">${l}${req?`<span style="color:var(--rd)">*</span>`:""}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Full Address</label><textarea class="fi" id="pr-address" rows="2">${ec(f.address||"")}</textarea></div></div></div></div>
-      <div class="card"><div class="chd"><span class="cht">Bank Details</span></div><div class="cbd"><div class="fg fg2">${[["accountName","Account Name"],["accountNo","Account Number"],["bankName","Bank Name"],["ifsc","IFSC Code"],["signatory","Authorised Signatory"]].map(([k,l])=>`<div><label class="flbl">${l}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Branch Address</label><input class="fi" id="pr-branch" value="${ec(f.branch||"")}"/></div></div></div></div>
-      <div class="card"><div class="chd"><span class="cht">Terms &amp; Conditions</span></div><div class="cbd"><textarea class="fi" id="pr-terms" rows="2">${ec(f.terms||"")}</textarea></div></div>
-      ${isAdmin||me.id?`<div class="card"><div class="chd"><div><span class="cht">Account &amp; Security</span><div style="font-size:10px;color:var(--txl);margin-top:2px">Manage the credentials for the currently signed-in account.</div></div></div><div class="cbd">
-        <div class="fg fg2">
-          <div><label class="flbl">Full Name</label><input class="fi" id="sec-name" value="${ec(me.name||"")}"/></div>
-          <div><label class="flbl">Username</label><input class="fi" id="sec-uname" value="${ec(me.username||"")}"/></div>
-          <div><label class="flbl">Current Password</label><input class="fi" type="password" id="sec-current" autocomplete="current-password" placeholder="Required to change credentials"/></div>
-          <div><label class="flbl">New Password</label><input class="fi" type="password" id="sec-new" autocomplete="new-password" placeholder="Minimum 6 characters"/></div>
-          <div><label class="flbl">Confirm New Password</label><input class="fi" type="password" id="sec-confirm" autocomplete="new-password" placeholder="Re-enter new password"/></div>
-        </div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
-          <button class="btn btn-p btn-sm" onclick="saveMyAccountSecurity()">Save Account &amp; Password</button>
-          ${isAdmin?`<button class="btn btn-g btn-sm" onclick="downloadAdminRecoveryFile(true)">Download Recovery File</button><button class="btn btn-g btn-sm" onclick="syncAdminRecoveryNow()">Sync Recovery to Master Backup</button>`:""}
-        </div>
-        <div class="info inf-b" style="margin-top:10px">Admin recovery keeps the current credential plus the two most recent previous credential states in a restricted recovery record. The recovery record contains credentials and must be treated as highly confidential.</div>
-      </div></div>`:""}
-    </div>
-  </div>`;
-}
-function svPro(){const keys=["name","gstin","pan","stateCode","phone","email","address","accountName","accountNo","bankName","ifsc","signatory","branch","terms"];const upd={...A.firm};keys.forEach(k=>{const el=document.getElementById("pr-"+k);if(el)upd[k]=el.value;});sv("f",upd);toast("Profile saved","ok");}
-
-function adminRecoveryRead(){
+function pgPro(){const f=A.firm,u=A.currentUser||{};return `<div class="shd"><div><div class="stl">Profile &amp; Firm Details</div><div class="sst">Printed on every invoice and PDF</div></div><button class="btn btn-p" onclick="svPro()">Save Profile</button></div><div style="display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start"><div class="card"><div class="cbd" style="text-align:center"><div style="width:76px;height:76px;background:var(--slt);border:2px dashed var(--sf);border-radius:11px;display:flex;align-items:center;justify-content:center;margin:0 auto 11px;font-size:28px">&#127970;</div><div style="font-weight:800;font-size:13px;color:var(--nv);margin-bottom:2px">${ec(f.name)}</div><div style="font-size:10px;color:var(--txl)">${ec(f.gstin)}</div></div></div><div style="display:flex;flex-direction:column;gap:13px"><div class="card"><div class="chd"><span class="cht">Business Details</span></div><div class="cbd"><div class="fg fg2">${[["name","Business Name",true],["gstin","GSTIN",true],["pan","PAN"],["stateCode","State Code"],["phone","Phone"],["email","Email"]].map(([k,l,req])=>`<div><label class="flbl">${l}${req?`<span style="color:var(--rd)">*</span>`:""}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Full Address</label><textarea class="fi" id="pr-address" rows="2">${ec(f.address||"")}</textarea></div></div></div></div><div class="card"><div class="chd"><span class="cht">Bank Details</span></div><div class="cbd"><div class="fg fg2">${[["accountName","Account Name"],["accountNo","Account Number"],["bankName","Bank Name"],["ifsc","IFSC Code"],["signatory","Authorised Signatory"]].map(([k,l])=>`<div><label class="flbl">${l}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Branch Address</label><input class="fi" id="pr-branch" value="${ec(f.branch||"")}/></div></div></div></div><div class="card"><div class="chd"><span class="cht">Terms &amp; Conditions</span></div><div class="cbd"><textarea class="fi" id="pr-terms" rows="2">${ec(f.terms||"")}</textarea></div></div><div class="card"><div class="chd"><span class="cht">Account &amp; Security</span></div><div class="cbd"><div class="fg fg2"><div><label class="flbl">Full Name</label><input class="fi" id="sec-name" value="${ec(u.name||"")}"/></div><div><label class="flbl">Username</label><input class="fi" id="sec-uname" value="${ec(u.username||"")}"/></div><div><label class="flbl">Current Password</label><input class="fi" type="password" id="sec-current" placeholder="Required to change credentials"/></div><div><label class="flbl">New Password</label><input class="fi" type="password" id="sec-new" placeholder="Minimum 6 characters"/></div><div><label class="flbl">Confirm New Password</label><input class="fi" type="password" id="sec-confirm" placeholder="Repeat new password"/></div></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-p btn-sm" onclick="saveOwnCredentials()">Save Account &amp; Password</button><button class="btn btn-g btn-sm" onclick="downloadAdminRecovery()">Export Recovery Record</button></div><div style="font-size:10px;color:var(--txl);margin-top:8px">Credential recovery metadata is retained locally and mirrored through the existing Drive adapter when cloud access is active. Plaintext passwords are not written to the recovery export.</div></div></div></div></div>`;}
+function adminRecoveryHistory(){return Array.isArray(A.adminRecoveryHistory)?A.adminRecoveryHistory.slice(-3):[];}
+function saveAdminRecoveryState(snapshot){
+  const next=[...adminRecoveryHistory(),{...snapshot,createdAt:snapshot.createdAt||new Date().toISOString()}].slice(-3);
+  A.adminRecoveryHistory=next;sv("ar",next);
   try{
-    const raw=localStorage.getItem("mdm_admin_recovery");
-    const v=raw?JSON.parse(raw):null;
-    return v&&Array.isArray(v.history)?v:{version:1,updatedAt:"",history:[]};
-  }catch(e){return {version:1,updatedAt:"",history:[]};}
-}
-function adminRecoveryWrite(history){
-  const rec={version:1,updatedAt:new Date().toISOString(),history:(history||[]).slice(0,3)};
-  try{localStorage.setItem("mdm_admin_recovery",JSON.stringify(rec));}catch(e){throw new Error("Unable to save admin recovery record");}
-  return rec;
-}
-function adminRecoveryEntry(user,reason,comment){
-  return {ts:new Date().toISOString(),userId:user.id||"",name:user.name||"",username:user.username||"",password:user.password||"",reason:reason||"",comment:comment||""};
-}
-function adminRecoveryText(){
-  const rec=adminRecoveryRead(),h=rec.history||[];
-  const lines=[
-    "MDM ERP — ADMIN CREDENTIAL RECOVERY RECORD",
-    "===========================================",
-    "CONFIDENTIAL / RESTRICTED ACCESS",
-    "",
-    "This file is an emergency credential recovery record.",
-    "Keep it only in the authorized Master Drive location.",
-    "Do not forward, email, or share it outside the administrator group.",
-    "",
-    "Record Updated: "+(rec.updatedAt||new Date().toISOString()),
-    "Records Retained: "+h.length+" (current + up to 2 previous)",
-    ""
-  ];
-  h.forEach((x,i)=>{
-    lines.push((i===0?"CURRENT CREDENTIAL":"PREVIOUS CREDENTIAL #"+i));
-    lines.push("-------------------------------------------");
-    lines.push("Full Name: "+(x.name||""));
-    lines.push("Username: "+(x.username||""));
-    lines.push("Password: "+(x.password||""));
-    lines.push("Recorded At: "+(x.ts||""));
-    lines.push("Reason: "+(x.reason||"Initial recovery record"));
-    if(x.comment)lines.push("Comment: "+x.comment);
-    lines.push("");
-  });
-  return lines.join("\n");
-}
-function buildAdminRecoveryFile(){
-  return {name:"MDM_ERP_Admin_Recovery.txt",content:adminRecoveryText(),updatedAt:new Date().toISOString()};
-}
-function recordAdminRecovery(user,reason,comment){
-  if(!user||user.role!=="admin")return;
-  const rec=adminRecoveryRead();
-  const entry=adminRecoveryEntry(user,reason,comment);
-  const h=[entry,...(rec.history||[]).filter(x=>x.username!==entry.username||x.password!==entry.password)];
-  const saved=adminRecoveryWrite(h.slice(0,3));
-  try{
-    const file=buildAdminRecoveryFile();
-    if(typeof V42!=="undefined"&&typeof V42.enqueue==="function"){
-      V42.enqueue("admin_recovery","admin_recovery",{fileName:file.name,content:file.content,updatedAt:file.updatedAt,deviceId:V42.deviceId});
-    }
+    const payload={type:"MDM_ADMIN_RECOVERY",version:1,updatedAt:new Date().toISOString(),accountId:A.currentUser?.id||"",username:A.currentUser?.username||"",recoveryToken:A.adminRecoveryToken||"",records:next};
+    if(typeof DRIVE_ADAPTER!=="undefined")DRIVE_ADAPTER.writeFile(DRIVE_ROOT+"/Security/Admin_Recovery.json",payload);
   }catch(e){}
-  return saved;
 }
-function downloadAdminRecoveryFile(silent){
-  if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}
-  try{
-    const file=buildAdminRecoveryFile();
-    const blob=new Blob([file.content],{type:"text/plain;charset=utf-8"});
-    const url=URL.createObjectURL(blob),a=document.createElement("a");
-    a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
-    auditLog("EXPORT","admin_recovery","local","Admin recovery file exported",{file:file.name,updatedAt:file.updatedAt});
-    if(!silent)toast("Admin recovery file downloaded","ok");
-  }catch(e){toast("Recovery file export failed: "+e.message,"err");}
-}
-async function syncAdminRecoveryNow(){
-  if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}
-  try{
-    const file=buildAdminRecoveryFile();
-    if(typeof V42!=="undefined"&&typeof V42.enqueue==="function"){
-      await V42.enqueue("admin_recovery","admin_recovery",{fileName:file.name,content:file.content,updatedAt:file.updatedAt,deviceId:V42.deviceId});
-    }
-    if(typeof CLOUD!=="undefined"&&CLOUD.user&&typeof V42!=="undefined"&&V42.idToken&&typeof V42.backend==="function"){
-      await V42.backend("backup",{snapshot:CLOUD.getPayload(),recoveryFile:file});
-    }
-    auditLog("EXPORT","admin_recovery","cloud","Admin recovery record queued for Master Backup",{file:file.name,updatedAt:file.updatedAt});
-    toast("Admin recovery record queued for Master Backup","ok");
-    if(navigator.onLine&&typeof V42!=="undefined")setTimeout(()=>V42.flushQueue(),250);
-  }catch(e){toast("Recovery sync failed: "+e.message,"err");}
-}
-function ensureAdminRecoveryRecord(){
-  if(A.currentUser?.role!=="admin")return;
-  const rec=adminRecoveryRead();
-  const u=A.users.find(x=>x.id===A.currentUser.id)||A.currentUser;
-  if(!u||!u.password)return;
-  if(!rec.history.length){
-    try{adminRecoveryWrite([adminRecoveryEntry(u,"INITIAL ADMIN RECOVERY RECORD","Created automatically from the existing administrator credential.")]);}catch(e){}
-  }
-}
-async function saveMyAccountSecurity(){
-  const me=A.currentUser;
-  if(!me){toast("No active user session","err");return;}
-  const name=(document.getElementById("sec-name")||{}).value?.trim()||"";
-  const uname=(document.getElementById("sec-uname")||{}).value?.trim()||"";
-  const current=(document.getElementById("sec-current")||{}).value||"";
-  const np=(document.getElementById("sec-new")||{}).value||"";
-  const cp=(document.getElementById("sec-confirm")||{}).value||"";
-  if(!name||!uname){toast("Name and username are required","err");return;}
-  if(current!==me.password){toast("Current password is incorrect","err");return;}
-  if(uname!==me.username&&A.users.some(u=>u.id!==me.id&&String(u.username).toLowerCase()===uname.toLowerCase())){toast("Username already exists","err");return;}
-  if((np||cp)&&(!np||!cp||np!==cp)){toast("New password and confirmation must match","err");return;}
-  if(np&&np.length<6){toast("New password must be at least 6 characters","err");return;}
-  const old={...me};
-  const item={...A.users.find(u=>u.id===me.id),name,username:uname,password:np||me.password,updatedAt:new Date().toISOString()};
-  const upd=A.users.map(u=>u.id===me.id?item:u);
-  if(np && old.password && old.password!==np) recordAdminRecovery(old,"PREVIOUS ADMIN PASSWORD","Retained automatically before the administrator password was changed.");
-  sv("us",upd);A.currentUser={...item,authMethod:me.authMethod||"local",deviceId:me.deviceId,signedInAt:me.signedInAt};
-  recordAdminRecovery(item,np?"ADMIN PASSWORD CHANGE":"ADMIN ACCOUNT UPDATE",np?"Password changed by administrator":"Administrator account details updated");
-  auditLog(np?"PASSWORD_CHANGE":"UPDATE","user",item.id,np?"Administrator password changed":"Administrator account details changed",{before:{name:old.name,username:old.username},after:{name,username:uname}});
-  if(typeof V42!=="undefined"&&typeof V42.saveSession==="function"){try{await V42.saveSession(A.currentUser);}catch(e){}}
-  if(np){try{localStorage.removeItem("mdm_local_user");}catch(e){}}
-  toast(np?"Account updated. Please sign in again with the new password.":"Account details updated","ok");
-  if(np){setTimeout(()=>{try{doLogout();}catch(e){A.loggedIn=false;A.currentUser=null;pgLogin();}},500);}
-  else gP("profile");
-}
-
+function saveOwnCredentials(){const u=A.currentUser;if(!u){toast("No active user","err");return;}const cur=document.getElementById("sec-current")?.value||"",name=document.getElementById("sec-name")?.value?.trim()||u.name||"",uname=document.getElementById("sec-uname")?.value?.trim()||u.username||"",np=document.getElementById("sec-new")?.value||"",cp=document.getElementById("sec-confirm")?.value||"";if(cur!==u.password){toast("Current password is incorrect","err");return;}if(!name||!uname){toast("Name and username are required","err");return;}if(A.users.some(x=>x.id!==u.id&&x.username===uname)){toast("Username already exists","err");return;}if(!np||np.length<6){toast("New password must be at least 6 characters","err");return;}if(np!==cp){toast("New password and confirmation do not match","err");return;}const old={username:u.username,role:u.role,changedAt:new Date().toISOString()};const item={...u,name,username:uname,password:np,updatedAt:new Date().toISOString()};sv("us",A.users.map(x=>x.id===u.id?item:x));A.currentUser=item;saveAdminRecoveryState({type:"credential-change",accountId:item.id,name,username:uname,role:item.role,previous:old});auditLog("PASSWORD_CHANGE","user",item.id,"Credentials changed",{usernameChanged:old.username!==uname});toast("Credentials updated. Please sign in again.","ok");setTimeout(()=>doLogout(),500);}
+function downloadAdminRecovery(){if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}const r={generatedAt:new Date().toISOString(),accountId:A.currentUser.id,name:A.currentUser.name,username:A.currentUser.username,role:A.currentUser.role,records:adminRecoveryHistory()};const txt=["MDM ERP — ADMIN RECOVERY RECORD","================================","Generated: "+r.generatedAt,"Account ID: "+r.accountId,"Name: "+r.name,"Username: "+r.username,"Role: "+r.role,"","Security note: plaintext passwords are intentionally excluded.","Admin Recovery Token: "+(A.adminRecoveryToken||"Not generated"),"Keep this token with the restricted recovery file; possession authorizes an admin password reset.","Recovery records: "+r.records.length,...r.records.map((x,i)=>`#${i+1} ${x.createdAt||""} · ${x.username||""} · ${x.type||""}`)].join("\n");const blob=new Blob([txt],{type:"text/plain;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="MDM_ERP_Admin_Recovery.txt";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);auditLog("EXPORT","security",A.currentUser.id,"Admin recovery record exported",null);toast("Recovery record exported","ok");}
+function svPro(){const keys=["name","gstin","pan","stateCode","phone","email","address","accountName","accountNo","bankName","ifsc","signatory","branch","terms"];const upd={...A.firm};keys.forEach(k=>{const el=document.getElementById("pr-"+k);if(el)upd[k]=el.value;});sv("f",upd);toast("Profile saved","ok");}
 
 // ═══ REPORTS ═══
 function pgRep(){
@@ -4090,7 +4017,25 @@ function pgLogin(){
   const td=(A.sett&&A.sett.themeDesign)||ST0.themeDesign;
   const pattern=td.loginPattern||"glow";
   const bgAttr=td.loginCardBg?` style="background:${ec(td.loginCardBg)}"`:"";
-  document.getElementById("app").innerHTML=`<div class="login-wrap login-pattern-${ec(pattern)}"${bgAttr}><div class="login-card"><div style="text-align:center;margin-bottom:28px"><div style="font-size:38px;margin-bottom:8px">&#127963;</div><div style="font-size:9.5px;font-weight:700;color:var(--sf);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:4px">Government of Bihar</div><div class="login-app-title" style="font-size:22px;font-weight:800">MDM Invoice Platform</div><div style="font-size:12px;color:var(--txl);margin-top:4px">MS Enterprises &middot; Motihari, East Champaran</div></div><div class="fg" style="gap:13px;margin-bottom:16px"><div><label class="flbl">Username</label><input class="fi" id="lu" placeholder="Enter username" onkeydown="if(event.key==='Enter')doLogin()"/></div><div><label class="flbl">Password</label><input class="fi" type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"/></div></div><button class="btn btn-p" style="width:100%;height:40px;font-size:14px" onclick="doLogin()">Sign In &rarr;</button><div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txl)">&#128309; All data stored locally &middot; Works 100% offline</div></div></div>`;
+  document.getElementById("app").innerHTML=`<div class="login-wrap login-pattern-${ec(pattern)}"${bgAttr}><div class="login-card"><div style="text-align:center;margin-bottom:28px"><div style="font-size:38px;margin-bottom:8px">&#127963;</div><div style="font-size:9.5px;font-weight:700;color:var(--sf);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:4px">Government of Bihar</div><div class="login-app-title" style="font-size:22px;font-weight:800">MDM Invoice Platform</div><div style="font-size:12px;color:var(--txl);margin-top:4px">MS Enterprises &middot; Motihari, East Champaran</div></div><div class="fg" style="gap:13px;margin-bottom:16px"><div><label class="flbl">Username</label><input class="fi" id="lu" placeholder="Enter username" onkeydown="if(event.key==='Enter')doLogin()"/></div><div><label class="flbl">Password</label><input class="fi" type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"/></div></div><button class="btn btn-p" style="width:100%;height:40px;font-size:14px" onclick="doLogin()">Sign In &rarr;</button><button class="btn btn-g btn-sm" style="width:100%;margin-top:8px" onclick="openAdminRecoveryLogin()">Forgot Admin Password?</button><div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txl)">&#128309; All data stored locally &middot; Works 100% offline</div></div></div>`;
+}
+function openAdminRecoveryLogin(){
+  const d=document.createElement("div");d.className="ov";d.id="admin-recovery-login";
+  d.innerHTML=`<div class="modal" style="max-width:430px"><div class="mhd"><div class="mt">Administrator Recovery</div><button class="btn btn-g btn-sm" onclick="document.getElementById('admin-recovery-login')?.remove()">&#10005;</button></div><div class="mbd"><div class="info inf-b" style="margin-bottom:12px">Use the recovery token from the restricted Admin Recovery file. This recovery path is for the administrator account only.</div><label class="flbl">Recovery Token</label><input class="fi" id="adm-rec-token" type="password" autocomplete="off"/><label class="flbl" style="margin-top:10px">New Password</label><input class="fi" id="adm-rec-new" type="password"/><label class="flbl" style="margin-top:10px">Confirm Password</label><input class="fi" id="adm-rec-confirm" type="password"/></div><div class="mft"><button class="btn btn-g" onclick="document.getElementById('admin-recovery-login')?.remove()">Cancel</button><button class="btn btn-p" onclick="confirmAdminRecoveryLogin()">Reset Admin Password</button></div></div>`;
+  document.body.appendChild(d);
+}
+function confirmAdminRecoveryLogin(){
+  const tok=document.getElementById("adm-rec-token")?.value||"",np=document.getElementById("adm-rec-new")?.value||"",cp=document.getElementById("adm-rec-confirm")?.value||"";
+  const admin=A.users.find(u=>u.role==="admin");if(!admin){toast("Administrator account not found","err");return;}
+  const valid=tok===A.adminRecoveryToken||tok===LS.get("art");
+  if(!valid){toast("Invalid recovery token","err");return;}
+  if(np.length<6){toast("Password must be at least 6 characters","err");return;}
+  if(np!==cp){toast("Passwords do not match","err");return;}
+  sv("us",A.users.map(u=>u.id===admin.id?{...u,password:np,updatedAt:new Date().toISOString()}:u));
+  auditLog("ADMIN_RECOVERY","user",admin.id,"Administrator password recovered",{username:admin.username});
+  saveAdminRecoveryState({type:"admin-recovery",accountId:admin.id,name:admin.name,username:admin.username,role:admin.role});
+  document.getElementById("admin-recovery-login")?.remove();
+  toast("Administrator password reset. Sign in with the new password.","ok");
 }
 window.doLogout=function(){
   try{ auditLog('LOGIN','user',A.currentUser?.id||'','User logged out: '+(A.currentUser?.name||''),null); }catch(e){}
@@ -4506,6 +4451,8 @@ function auditLog(action, entity, entityId, summary, data) {
 
 // Patch sv to init al if not present
 if (!A.al) { A.al = LS.get("al", []); }
+if (!Array.isArray(A.adminRecoveryHistory)) A.adminRecoveryHistory=LS.get("ar", []);
+if (!A.adminRecoveryToken) { try { A.adminRecoveryToken=Array.from(crypto.getRandomValues(new Uint8Array(18))).map(b=>b.toString(16).padStart(2,"0")).join(""); } catch(e){ A.adminRecoveryToken=uid()+uid(); } LS.set("art",A.adminRecoveryToken); } else if(!LS.get("art")) LS.set("art",A.adminRecoveryToken);
 
 // New default data for v2.0 keys
 if (!A.ro)  { A.ro  = LS.get("ro",  []); }
@@ -4983,7 +4930,7 @@ function admUsers(){
         <div class="mbd"><div class="fg fg2">
           <div><label class="flbl">Full Name *</label><input class="fi" id="usr-name" value="${ec(f.name)}"/></div>
           <div><label class="flbl">Username *</label><input class="fi" id="usr-uname" value="${ec(f.username)}"/></div>
-          <div><label class="flbl">Password</label>${USR.eid?`<div class="info inf-b" style="min-height:38px;display:flex;align-items:center">Password is hidden. Use <b style="margin:0 4px">Reset Password</b> from User Management to change it.</div>`:`<input class="fi" type="password" id="usr-pass" value="" autocomplete="new-password" placeholder="Enter password"/>`}</div>
+          <div><label class="flbl">Password ${USR.eid?"(optional reset)":"*"}</label><input class="fi" type="password" id="usr-pass" value="" placeholder="${USR.eid?"Enter new password to reset":"Enter password"}"/></div>
           <div><label class="flbl">Role</label>
             <select class="fi" id="usr-role">
               ${["admin","operator","accountant"].map(r=>`<option value="${r}"${r===f.role?" selected":""}>${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join("")}
@@ -4996,7 +4943,7 @@ function admUsers(){
   return `<div class="shd"><div><div class="stl">User Management</div><div class="sst">${A.users.length} users configured</div></div><button class="btn btn-p" onclick="usrAdd()">+ Add User</button></div>
   <div class="card tw">
     <table class="dt"><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
-    <tbody>${A.users.map((u,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:700">${ec(u.name)}</td><td class="mono">${ec(u.username)}</td><td><span class="bdg ${u.role==="admin"?"bo":u.role==="operator"?"bn":"bs"}">${u.role}</span></td><td><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="usrEdit('${u.id}')">Edit</button>${u.id!==A.currentUser?.id?`<button class="btn btn-g btn-sm" onclick="usrResetPassword('${u.id}')">Reset Password</button>`:""}${A.users.length>1?`<button class="btn btn-sm" style="background:var(--rlt);color:var(--rd);border:1px solid #FCA5A5" onclick="usrDel('${u.id}')">Del</button>`:""}</div></td></tr>`).join("")}</tbody>
+    <tbody>${A.users.map((u,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:700">${ec(u.name)}</td><td class="mono">${ec(u.username)}</td><td><span class="bdg ${u.role==="admin"?"bo":u.role==="operator"?"bn":"bs"}">${u.role}</span></td><td><div style="display:flex;gap:5px"><button class="btn btn-g btn-sm" onclick="usrEdit('${u.id}')">Edit</button><button class="btn btn-g btn-sm" onclick="usrReset('${u.id}')">Reset Password</button>${A.users.length>1?`<button class="btn btn-sm" style="background:var(--rlt);color:var(--rd);border:1px solid #FCA5A5" onclick="usrDel('${u.id}')">Del</button>`:""}</div></td></tr>`).join("")}</tbody>
     </table>
   </div>
   <div class="info inf-b" style="margin-top:12px">Roles: <b>Admin</b> = full access &nbsp;·&nbsp; <b>Operator</b> = invoice generation + schools &nbsp;·&nbsp; <b>Accountant</b> = read + export only</div>
@@ -5004,6 +4951,7 @@ function admUsers(){
 }
 function usrAdd(){USR.eid=null;USR.sf={username:"",password:"",role:"operator",name:""};USR.show=true;gP("admin");}
 function usrEdit(id){const u=A.users.find(x=>x.id===id);USR.eid=id;USR.sf={...u};USR.show=true;gP("admin");}
+function usrReset(id){if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}const u=A.users.find(x=>x.id===id);if(!u)return;const np=prompt("Enter a new password for "+u.name+" (minimum 6 characters):","");if(np===null)return;if(np.length<6){toast("Password must be at least 6 characters","err");return;}const cp=prompt("Confirm the new password:","");if(cp!==np){toast("Passwords do not match","err");return;}sv("us",A.users.map(x=>x.id===id?{...x,password:np,updatedAt:new Date().toISOString()}:x));auditLog("PASSWORD_RESET","user",id,"Password reset by administrator",{username:u.username});toast("Password reset successfully","ok");gP("admin");}
 function usrSave(){
   const name=(document.getElementById("usr-name")||{}).value?.trim()||"";
   const uname=(document.getElementById("usr-uname")||{}).value?.trim()||"";
@@ -5012,34 +4960,13 @@ function usrSave(){
   if(!name||!uname){toast("Name and username required","err");return;}
   if(!USR.eid&&!pass){toast("Password required for new user","err");return;}
   if(!USR.eid&&A.users.find(u=>u.username===uname)){toast("Username already exists","err");return;}
-  const existing=USR.eid?(A.users.find(u=>u.id===USR.eid)||{}):{};
-  const item={id:USR.eid||uid(),name,username:uname,role,password:pass||(USR.eid?existing.password:""),updatedAt:new Date().toISOString()};
+  const item={id:USR.eid||uid(),name,username:uname,role,password:pass||(USR.eid?(A.users.find(u=>u.id===USR.eid)||{}).password:""),updatedAt:new Date().toISOString()};
   const upd=USR.eid?A.users.map(u=>u.id===USR.eid?item:u):[...A.users,item];
+  const oldUser=USR.eid?A.users.find(u=>u.id===USR.eid):null;
   sv("us",upd);USR.show=false;
   auditLog(USR.eid?"UPDATE":"CREATE","user",item.id,(USR.eid?"Updated":"Added")+" user: "+name+" ("+role+")",{after:{name,username:uname,role}});
+  if(USR.eid&&oldUser&&pass&&pass!==oldUser.password) auditLog("PASSWORD_RESET","user",item.id,"Password reset by administrator",{username:uname});
   toast(USR.eid?"User updated":"User added","ok");gP("admin");
-}
-function usrResetPassword(id){
-  if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}
-  if(id===A.currentUser?.id){toast("Use My Account & Security to change your own password","info");return;}
-  const u=A.users.find(x=>x.id===id);
-  if(!u){toast("User not found","err");return;}
-  const np=prompt("Enter a new password for "+(u.name||u.username)+":");
-  if(np===null)return;
-  if(np.length<6){toast("Password must be at least 6 characters","err");return;}
-  const cp=prompt("Confirm the new password:");
-  if(cp===null)return;
-  if(np!==cp){toast("Passwords do not match","err");return;}
-  const old={...u};
-  const item={...u,password:np,updatedAt:new Date().toISOString()};
-  sv("us",A.users.map(x=>x.id===id?item:x));
-  if(old.role==="admin"){
-    recordAdminRecovery(old,"PREVIOUS ADMIN PASSWORD","Retained automatically before an administrator password reset.");
-    recordAdminRecovery(item,"ADMIN PASSWORD RESET","Password reset by authorized administrator.");
-  }
-  auditLog("PASSWORD_RESET","user",id,"Password reset for user: "+(u.name||u.username),{before:{username:u.username,role:u.role},after:{username:item.username,role:item.role}});
-  toast("Password reset successfully","ok");
-  gP("admin");
 }
 function usrDel(id){
   if(id===A.currentUser?.id){toast("Cannot delete currently logged-in user","err");return;}
@@ -5815,7 +5742,14 @@ function setShareBusy(id,busy,label){
   const st=document.getElementById("shr-status-"+id); if(st)st.innerHTML=busy?(label||"Preparing PDF..."):(preparedInvoicePdfReady(id)?"&#10003; PDF Ready — the same prepared file will be shared.":"");
 }
 let _sharePrepBusy=false;
-function markDeliveryState(id,method){const inv=A.invoices.find(i=>i.id===id);if(!inv)return;const at=new Date().toISOString();inv.delivery={status:"SENT",method:method||"Shared",at};inv.deliveryStatus="SENT";inv.deliveryMethod=method||"Shared";inv.deliveryAt=at;sv("iv",A.invoices);}
+function markDeliveryState(id,method){
+  const inv=A.invoices.find(i=>i.id===id);if(!inv)return;
+  const at=new Date().toISOString(),m=method||"Shared";
+  inv.delivery={status:"SENT",method:m,at};inv.deliveryStatus="SENT";inv.deliveryMethod=m;inv.deliveryAt=at;
+  inv.shareHistory=Array.isArray(inv.shareHistory)?inv.shareHistory.slice(-19):[];
+  inv.shareHistory.push({method:m,at});
+  sv("iv",A.invoices);
+}
 
 async function preparePdfUI(id){
   if(_sharePrepBusy)return;_sharePrepBusy=true;setShareBusy(id,true,"Generating and validating one-page PDF...");
@@ -7508,6 +7442,49 @@ html[data-theme="dark"] .hist-list-month-label{color:#C4B5FD!important}
   .hist-list-month-label{margin:12px 0 7px;padding:7px 9px;font-size:10.5px;min-height:28px}
 }
 
+
+
+/* FINAL CONSOLIDATED SURGICAL FIX — desktop history, recovery actions, dark school picker */
+@media(min-width:761px){
+  .hist-grid-row{align-items:stretch!important}
+  .hist-grid-cell{align-items:stretch!important;justify-content:flex-start!important}
+  .hist-grid-cell>.hist-data-block,.hist-grid-cell>.hist-actions{width:100%!important;min-height:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important;box-sizing:border-box!important}
+  .hist-data-label{line-height:1.15!important;margin-bottom:4px!important}
+  .hist-class-grid{align-items:start!important}
+  .hist-class-col{text-align:right!important}
+  .hist-class-col.hist-class-left{text-align:left!important}
+  .hist-class-col.hist-class-right{text-align:right!important}
+  .hist-class-left .hist-class-l,.hist-class-left .hist-class-v{text-align:left!important}
+  .hist-class-right .hist-class-l,.hist-class-right .hist-class-v{text-align:right!important}
+  .hist-actions{align-items:stretch!important;justify-content:center!important}
+  .hist-actions-label{display:block!important;font-size:9px!important;line-height:1.15!important;font-weight:850!important;letter-spacing:.3px!important;color:var(--hist-meta)!important;text-transform:uppercase!important;margin-bottom:5px!important}
+  .hist-action-buttons{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:6px!important}
+  .hist-syncshare-block{justify-content:center!important}
+  .hist-syncshare{display:grid!important;grid-template-columns:minmax(100px,1fr) minmax(150px,1.4fr)!important;gap:8px!important;align-items:center!important;width:100%!important}
+  .hist-sync-part,.hist-share-part{min-width:0!important;display:flex!important;flex-direction:column!important;gap:4px!important}
+  .hist-mini-label{font-size:8px!important;font-weight:850!important;letter-spacing:.35px!important;color:var(--hist-meta)!important}
+  .hist-sync-part .sync-badge{width:max-content!important;max-width:100%!important}
+  .hist-share-wrap{display:flex!important;flex-wrap:wrap!important;align-items:center!important;gap:4px!important}
+  .hist-share-chip{display:inline-flex!important;align-items:center!important;gap:3px!important;padding:3px 5px!important;border:1px solid var(--bd)!important;border-radius:6px!important;background:var(--slt)!important;color:var(--tx)!important;font-size:8.5px!important;font-weight:750!important;white-space:nowrap!important}
+  .hist-share-time{display:block!important;width:100%!important;font-size:8px!important;color:var(--hist-meta)!important;white-space:nowrap!important}
+  .hist-share-none{font-size:9px!important;color:var(--hist-meta)!important;font-weight:650!important}
+  .hist-grid-head .hg-class-sub{display:grid!important;grid-template-columns:1fr 1fr!important;gap:7px!important}
+  .hist-grid-head .hg-class-sub span:first-child{text-align:left!important}.hist-grid-head .hg-class-sub span:last-child{text-align:right!important}
+  .hist-grid-head .hg-syncshare-sub{display:grid!important;grid-template-columns:1fr 1.4fr!important;gap:8px!important}
+  .hist-grid-head .hg-syncshare-sub span{text-align:left!important}
+  .hist-grid-head>div{text-align:left!important}.hist-grid-head>div:first-child,.hist-grid-head>div:last-child{text-align:center!important}
+  .hist-grid-head>div:nth-child(3){text-align:left!important}
+}
+.hist-action-menu-sep{height:1px;background:var(--bd);margin:5px 6px}
+.hist-action-menu-item.admin-recovery{font-weight:800}
+.btn-danger{background:var(--rd)!important;color:#fff!important;border-color:var(--rd)!important}
+@media(max-width:760px){.hist-actions-label{display:none!important}}
+html[data-theme="dark"] .ni-school-picker-option:hover,
+html[data-theme="dark"] .ni-school-picker-option:focus{background:#243244!important;color:#F8FAFC!important}
+html[data-theme="dark"] .ni-school-picker-option.selected{background:#334155!important;color:#FFFFFF!important}
+.ni-batch-row{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important}
+.ni-batch-row>div{min-width:0!important}
+.ni-inline-more{flex:0 0 30px!important;width:30px!important;height:30px!important;border:1px solid var(--bd)!important;border-radius:8px!important;background:var(--slt)!important;color:var(--tx)!important;display:flex!important;align-items:center!important;justify-content:center!important;cursor:pointer!important}
 </style>
 </head>
 <body><div class="print-scale-wrap">${bodyContent}</div></body>
@@ -7956,6 +7933,7 @@ const CLOUD = {
       schools: A.schools,
       invoices: A.invoices,
       users: A.users.map(u=>({...u, password:"***"})),
+      adminRecovery: adminRecoveryHistory ? adminRecoveryHistory() : [],
       sett: A.sett || ST0,
       ro: A.ro || [],
       lpg: A.lpg || {},
@@ -8227,6 +8205,7 @@ sv = (function(origSv){
       if(SV_MODULE_MAP[k]) DRIVE.syncModule(SV_MODULE_MAP[k], v);
       else if(SV_SETTINGS_KEYS.indexOf(k) !== -1) DRIVE.syncModule("settings", {sett:A.sett||ST0, series:A.series, rates:A.rates, heads:A.heads});
       else if(SV_MDM_MAP[k]) DRIVE.syncModule(SV_MDM_MAP[k], v);
+      else if(k==="ar") DRIVE_ADAPTER.writeFile(DRIVE_ROOT+"/Security/Admin_Recovery.json",{type:"MDM_ADMIN_RECOVERY",version:1,updatedAt:new Date().toISOString(),records:v||[]});
       else if(k==="iv") DRIVE.syncInvoices(v);
     }catch(e){ /* never let Drive sync errors break the app */ }
   };
@@ -9121,7 +9100,7 @@ v2.8 — Definitive flat-light header + school category correction
       CLOUD.setSyncStatus('Syncing…','var(--am)');
       const q=await V42.flushQueue();
       if(q.failed) throw new Error('One or more pending records could not be synced');
-      const result=await V42.backend('backup',{snapshot:CLOUD.getPayload(),recoveryFile:buildAdminRecoveryFile(),appVersion:V42.version});
+      const result=await V42.backend('backup',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
       if(!result || !result.ok) throw new Error((result&&result.error)||'Master backup was not acknowledged');
       CLOUD.lastBackup=new Date().toISOString();
       localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);
