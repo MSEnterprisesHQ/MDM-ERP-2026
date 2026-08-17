@@ -65,7 +65,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
   /* Brand — modernized indigo/purple accent (was orange) */
-  --nv:#1e3a5f;--nv2:#243d6a;--nv3:#2d5282;--nvt:rgba(255,255,255,.08);
+  --nv:#1e3a5f;--nv2:#243d6a;--nv3:#2d5282;--nvt:rgba(255,255,255,.08);--nvtx:#243d6a;
   --sf:#4f46e5;--sfh:#4338ca;--slt:#eef2ff;--sll:#f5f3ff;
   --tl:#0d9488;--tlt:#f0fdfa;
   /* UI */
@@ -107,7 +107,12 @@ html[data-theme="dark"]{
   --ort:#31200c;--slx:#16213b;
   --sec-blue:#101a30;--sec-indigo:#171335;--sec-mint:#0c2018;--sec-cyan:#0a2028;--sec-lav:#1c1530;--sec-sky:#0d1e33;
   --shadow-float:0 8px 24px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
+  --nvtx:#8fb3e6;--sk:#7dd3fc;
   color-scheme:dark;
+}
+html[data-theme="dark"] .kpi-lbl{color:#b9c4de}
+html[data-theme="dark"] .bo{background:var(--glt);color:#86efac}
+html[data-theme="dark"] .bs{background:#1c2438;color:var(--txl)
 }
 html[data-theme="light"]{color-scheme:light}
 html[data-theme="light"] .hist-month-group{
@@ -121,6 +126,8 @@ html[data-theme="light"] .hist-month-group{
 html[data-theme="dark"] body{background:var(--bg);color:var(--tx)}
 html[data-theme="dark"] .fi,html[data-theme="dark"] .tb-search,html[data-theme="dark"] .ah-search{background:#0e1830;color:var(--tx)}
 html[data-theme="dark"] .modal,html[data-theme="dark"] .login-card{background:var(--card);color:var(--tx)}
+.login-app-title{color:var(--nv)}
+html[data-theme="dark"] .login-app-title{color:#ffffff;text-shadow:0 0 10px rgba(255,255,255,.25)}
 html[data-theme="dark"] .dt th{background:#0e1830}
 html[data-theme="dark"] .dt tbody tr:hover td{background:#101c34}
 html[data-theme="dark"] .btn-g{background:#111a2e;color:var(--txm);border-color:var(--bd)}
@@ -139,40 +146,7 @@ a{color:inherit;text-decoration:none}
 .shell{display:flex;height:100vh;overflow:hidden}
 
 /* ── SIDEBAR ───────────────────────────────────── */
-.sidebar{
-  width:var(--sb-w);background:var(--nv);
-  display:flex;flex-direction:column;
-  flex-shrink:0;height:100vh;overflow:hidden;
-  transition:width .22s ease;z-index:200;position:relative;
-}
-.sidebar.collapsed{width:var(--sb-w-col)}
-.sidebar.collapsed .sb-label{display:none}
-.sidebar.collapsed .sb-sec{display:none}
-.sidebar.collapsed .sb-name-block{display:none}
-.sidebar.collapsed .nv{justify-content:center;padding:10px 0}
-.sidebar.collapsed .sb-foot-text{display:none}
-.sidebar.collapsed .sb-collapse-btn span{transform:rotate(180deg)}
-
-.sb-header{padding:14px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;display:flex;align-items:center;gap:10px}
-.sb-logo-icon{width:36px;height:36px;background:var(--sf);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-.sb-name-block .sb-app{font-size:13px;font-weight:800;color:#fff;white-space:nowrap}
-.sb-name-block .sb-sub{font-size:10px;color:rgba(255,255,255,.5);white-space:nowrap}
-
-.sb-scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 0;scrollbar-width:none}
-.sb-scroll::-webkit-scrollbar{display:none}
-.sb-sec{font-size:9.5px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:1.2px;padding:14px 16px 5px;white-space:nowrap}
-.nv{display:flex;align-items:center;gap:10px;width:100%;padding:9px 14px;font-size:12.5px;font-weight:500;color:rgba(255,255,255,.7);cursor:pointer;transition:all .15s;border-left:3px solid transparent;text-align:left;position:relative;white-space:nowrap}
-.nv:hover{background:rgba(255,255,255,.06);color:#fff}
-.nv.on{background:rgba(232,93,4,.18);color:#fff;font-weight:700;border-left-color:var(--sf)}
-.nv-ico{font-size:16px;width:22px;text-align:center;flex-shrink:0;line-height:1}
-.sb-label{flex:1;overflow:hidden;text-overflow:ellipsis}
-
-/* Sidebar footer */
-.sb-foot{flex-shrink:0;border-top:1px solid rgba(255,255,255,.08);padding:10px 12px}
-.sb-foot-text{font-size:10px;color:rgba(255,255,255,.4);margin-bottom:8px}
-.sb-collapse-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 10px;border-radius:8px;color:rgba(255,255,255,.6);font-size:12px;font-weight:600;cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);transition:all .15s}
-.sb-collapse-btn:hover{background:rgba(255,255,255,.1);color:#fff}
-.sb-collapse-btn span{display:inline-block;transition:transform .22s}
+/* Legacy flat sidebar design (superseded by "FLOATING DARK SIDEBAR" block below) removed — was fully overridden and unused. */
 
 /* ── MAIN AREA ─────────────────────────────────── */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
@@ -379,10 +353,29 @@ a{color:inherit;text-decoration:none}
 .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px}
 .tab{padding:7px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:var(--txm);background:#fff;border:1.5px solid var(--bd);transition:all .15s}
 .tab.on{background:var(--sf);color:#fff;border-color:var(--sf)}
+html[data-theme="dark"] .tab:not(.on){background:var(--slt)}
 .empty{text-align:center;padding:60px 20px;color:var(--txl)}
 .ei{font-size:48px;margin-bottom:12px}.et{font-size:16px;font-weight:700;color:var(--txm);margin-bottom:6px}.esh{font-size:13px}
-.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--nv) 0%,var(--nv3) 100%);padding:20px}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--nv) 0%,var(--nv3) 100%);padding:20px;position:relative;overflow:hidden}
+.login-wrap::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0}
+.login-wrap>*{position:relative;z-index:1}
 .login-card{background:#fff;border-radius:var(--radius-lg);padding:38px 34px;width:100%;max-width:400px;box-shadow:0 25px 60px rgba(0,0,0,.35)}
+.login-pattern-none::before,.login-pattern-glow::before,.login-pattern-dots::before,.login-pattern-waves::before,.login-pattern-geometric::before{content:"";position:absolute;inset:0;pointer-events:none}
+.login-pattern-none::before{display:none}
+.login-pattern-glow::before{
+  background-image:
+    radial-gradient(circle at 15% -10%,rgba(255,255,255,.16),transparent 45%),
+    radial-gradient(circle at 105% 100%,rgba(255,255,255,.12),transparent 48%),
+    radial-gradient(circle at 50% 45%,rgba(255,255,255,.04),transparent 60%)}
+.login-pattern-dots::before{
+  background-image:radial-gradient(circle,rgba(255,255,255,.22) 1.6px,transparent 1.6px);
+  background-size:26px 26px}
+.login-pattern-waves::before{
+  background-image:repeating-radial-gradient(circle at 50% 130%,transparent 0,transparent 26px,rgba(255,255,255,.1) 27px,rgba(255,255,255,.1) 28px)}
+.login-pattern-geometric::before{
+  background-image:
+    repeating-linear-gradient(45deg,rgba(255,255,255,.08) 0px,rgba(255,255,255,.08) 1px,transparent 1px,transparent 26px),
+    repeating-linear-gradient(-45deg,rgba(255,255,255,.08) 0px,rgba(255,255,255,.08) 1px,transparent 1px,transparent 26px)}
 
 /* PRINT */
 @media print{
@@ -617,11 +610,11 @@ a{color:inherit;text-decoration:none}
 
 
 /* ── PHASE 1.5 — INVOICE HISTORY DATA GRID / VIEW THEMES ── */
-.hist-grid-head{display:grid;grid-template-columns:145px minmax(255px,1.45fr) 150px 88px 118px 118px 96px;gap:0;align-items:stretch;border:1px solid #C9D4E3;border-bottom:0;border-radius:9px 9px 0 0;overflow:hidden}
+.hist-grid-head{display:grid;gap:0;align-items:stretch;border:1px solid #C9D4E3;border-bottom:0;border-radius:9px 9px 0 0;overflow:hidden}
 .hist-grid-head>div{padding:9px 9px 8px;border-right:1px solid #C9D4E3;font-size:10.5px;font-weight:850;letter-spacing:.25px;color:#26364A;text-transform:uppercase;min-width:0;text-align:center;line-height:1.2}
 .hist-grid-head>div:last-child{border-right:0}
 .hist-grid-head .hg-sub{display:block;font-size:9.5px;font-weight:750;color:#52657A;text-transform:none;letter-spacing:0;margin-top:3px}
-.hist-grid-row{display:grid;grid-template-columns:145px minmax(255px,1.45fr) 150px 88px 118px 118px 96px;gap:0;align-items:center;border:1px solid #CBD5E1;border-top:0;background:var(--card);min-width:0}
+.hist-grid-row{display:grid;gap:0;align-items:center;border:1px solid #CBD5E1;border-top:0;background:var(--card);min-width:0}
 .hist-grid-row:last-child{border-radius:0 0 9px 9px}
 .hist-grid-cell{min-width:0;padding:10px 9px;border-right:1px solid #D5DEE9;height:100%;display:flex;align-items:center}
 .hist-grid-cell:last-child{border-right:0;justify-content:center}
@@ -661,7 +654,7 @@ a{color:inherit;text-decoration:none}
 .hist-view-off{background:var(--card)!important;color:var(--tx)!important;box-shadow:none!important;border:1px solid var(--bd)!important}
 .hist-view-wrap{background:var(--card);border:1px solid var(--bd);border-radius:9px;padding:2px;display:flex;gap:2px;position:relative}
 .hist-row-sep{box-shadow:inset 0 -1px 0 #C7D2E0}
-@media (max-width:1180px) and (min-width:761px){.hist-grid-head,.hist-grid-row{grid-template-columns:132px minmax(220px,1.35fr) 138px 78px 108px 108px 90px}.hist-grid-head>div,.hist-grid-cell{padding-left:7px;padding-right:7px}.hist-grid-head>div{font-size:10px}.hist-grid-head .hg-sub{font-size:9px}}
+@media (max-width:1180px) and (min-width:761px){.hist-grid-head>div,.hist-grid-cell{padding-left:7px;padding-right:7px}.hist-grid-head>div{font-size:10px}.hist-grid-head .hg-sub{font-size:9px}}
 /* LEGACY MOBILE HISTORY LAYOUT REMOVED IN v4.7. */
 
 .ni-school-select{position:relative;border-radius:8px;padding-left:4px;transition:.15s;background:var(--card)}
@@ -680,6 +673,7 @@ a{color:inherit;text-decoration:none}
 .ni-meta{display:flex;align-items:flex-start;gap:8px;margin-bottom:10px}
 .ni-meta-ico{width:24px;height:24px;border-radius:7px;background:var(--slx);color:var(--nv);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .ni-meta-ico svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8}
+html[data-theme="dark"] .ni-meta-ico{color:var(--nvtx)}
 .ni-meta-l{font-size:10.5px;color:var(--txl);line-height:1.25}
 .ni-meta-v{font-size:12.5px;font-weight:800;color:var(--tx);margin-top:2px}
 .ni-batch-row{display:flex;align-items:center;justify-content:space-between;padding:8px 9px;margin:2px 0 9px;background:var(--slx);border:1px solid var(--bd);border-radius:9px}
@@ -711,6 +705,7 @@ a{color:inherit;text-decoration:none}
 
 
 .ni-series-ico{background:var(--slt);color:var(--nv);border:1px solid var(--bdk)}
+html[data-theme="dark"] .ni-series-ico{color:var(--nvtx)}
 .ni-month-ico{background:var(--slx);color:var(--sf);border:1px solid var(--bd)}
 .ni-control-divider{border-top:1px solid var(--bd);margin:10px 0 9px}
 .ni-control-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0}
@@ -730,10 +725,10 @@ a{color:inherit;text-decoration:none}
 /* Category headings only: school options stay on the normal theme surface. */
 .ni-school-select,.ni-school-select.cat-GPS,.ni-school-select.cat-NPS,.ni-school-select.cat-GMS,.ni-school-select.cat-UMS,.ni-school-select.cat-Other{background:var(--card)!important}.ni-school-cat-label{background:transparent!important;border-width:1.5px!important}.ni-school-select.cat-GPS .ni-school-cat-dot{background:#3B82F6}.ni-school-select.cat-NPS .ni-school-cat-dot{background:#22C55E}.ni-school-select.cat-GMS .ni-school-cat-dot{background:#F97316}.ni-school-select.cat-UMS .ni-school-cat-dot{background:#8B5CF6}.ni-school-select.cat-Other .ni-school-cat-dot{background:#94A3B8}
 /* History: compact school, wider actions, stronger header/dividers, readable subheads. */
-.hist-grid-head,.hist-grid-row{grid-template-columns:1.05fr 1.85fr 1.05fr .65fr .9fr .85fr .95fr!important}.hist-grid-head{border-color:#17356F!important;border-bottom:2px solid #16356F!important;box-shadow:0 4px 12px rgba(24,59,140,.18)}.hist-grid-head>div{color:#fff!important;border-right:1px solid rgba(255,255,255,.28)!important;padding:11px 8px 9px!important;font-size:11px!important}.hist-grid-head .hg-sub{color:rgba(255,255,255,.86)!important;font-size:9.8px!important}.hist-grid-row{border-color:#B9C6D8!important;border-top:1px solid #C7D2E0!important;border-radius:9px!important;margin-top:5px;overflow:visible;box-shadow:0 1px 4px rgba(15,23,42,.05)}.hist-grid-cell{border-right:1px solid #C9D4E1!important}.hist-date{font-size:10.8px!important;color:#33465B!important;font-weight:700!important;overflow:visible!important;text-overflow:clip!important}.hist-class-grid{grid-template-columns:1fr 1fr!important;gap:12px!important}.hist-class-col:first-child{text-align:left!important}.hist-class-col:last-child{text-align:right!important}.hist-class-v{font-size:11.8px!important}.hist-class-col:first-child .hist-class-v{text-align:left!important}.hist-class-col:last-child .hist-class-v{text-align:right!important}.hist-class-l{font-size:9.7px!important}.hist-students,.hist-amount{text-align:right!important}.hist-status{justify-content:flex-start!important}.hist-actions{justify-content:space-between!important;gap:8px!important}.hist-actions .btn{min-width:52px}.hist-actions .btn:last-child{min-width:34px}.hist-timeline-group{font-size:12px!important;color:var(--sf)!important;margin:12px 0 6px!important}.hist-secondary,.hist-muted{color:#43556A!important}
+.hist-grid-head{border-color:#17356F!important;border-bottom:2px solid #16356F!important;box-shadow:0 4px 12px rgba(24,59,140,.18)}.hist-grid-head>div{color:#fff!important;border-right:1px solid rgba(255,255,255,.28)!important;padding:11px 8px 9px!important;font-size:11px!important}.hist-grid-head .hg-sub{color:rgba(255,255,255,.86)!important;font-size:9.8px!important}.hist-grid-row{border-color:#B9C6D8!important;border-top:1px solid #C7D2E0!important;border-radius:9px!important;margin-top:5px;overflow:visible;box-shadow:0 1px 4px rgba(15,23,42,.05)}.hist-grid-cell{border-right:1px solid #C9D4E1!important}.hist-date{font-size:10.8px!important;color:#33465B!important;font-weight:700!important;overflow:visible!important;text-overflow:clip!important}.hist-class-grid{grid-template-columns:1fr 1fr!important;gap:12px!important}.hist-class-col:first-child{text-align:left!important}.hist-class-col:last-child{text-align:right!important}.hist-class-v{font-size:11.8px!important}.hist-class-col:first-child .hist-class-v{text-align:left!important}.hist-class-col:last-child .hist-class-v{text-align:right!important}.hist-class-l{font-size:9.7px!important}.hist-students,.hist-amount{text-align:right!important}.hist-status{justify-content:flex-start!important}.hist-actions{justify-content:space-between!important;gap:8px!important}.hist-actions .btn{min-width:52px}.hist-actions .btn:last-child{min-width:34px}.hist-timeline-group{font-size:12px!important;color:var(--sf)!important;margin:12px 0 6px!important}.hist-secondary,.hist-muted{color:#43556A!important}
 /* semantic sync colors inside history rows */
 .hist-status .bdg.bp{background:#FFF1D6!important;color:#A65B00!important;border-color:#F2C27A!important}.hist-status .bdg.bb{background:#DCEEFF!important;color:#075A9C!important;border-color:#9BCBF2!important}.hist-status .bdg.bg{background:#DCFCE7!important;color:#166534!important;border-color:#A7F3D0!important}.hist-status .bdg.br{background:#FEE2E2!important;color:#B91C1C!important;border-color:#FECACA!important}.hist-status .bdg.bam{background:#FFF1D6!important;color:#A65B00!important;border-color:#F2C27A!important}
-@media (max-width:1180px) and (min-width:761px){.hist-grid-head,.hist-grid-row{grid-template-columns:1.0fr 1.75fr 1.0fr .62fr .88fr .82fr .95fr!important}.hist-grid-head>div,.hist-grid-cell{padding-left:7px!important;padding-right:7px!important}}
+@media (max-width:1180px) and (min-width:761px){.hist-grid-head>div,.hist-grid-cell{padding-left:7px!important;padding-right:7px!important}}
 @media (max-width:760px){.ni-class-card{flex:1 1 100%;min-width:0}.ni-basic-grid>div{padding:7px 8px}.ni-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 /* Legacy history mobile grid rules removed in v4.7. */
 .sync-badge{display:inline-flex!important;align-items:center;gap:5px}.sync-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:0 0 auto}.sync-orange{background:#F59E0B}.sync-blue{background:#2563EB}.sync-green{background:#16A34A}.sync-red{background:#DC2626}.sync-amber{background:#D97706}.sync-gray{background:#64748B}
@@ -1583,7 +1578,17 @@ html[data-theme="dark"] .inv-success-close:hover{background:#334155;border-color
 .hist-view-timeline{background:#2EA76C!important;background-image:none!important;color:#fff!important;border:1px solid #52C98A!important;box-shadow:none!important}
 .hist-view-off{background:var(--card)!important;background-image:none!important;color:var(--tx)!important;border:1px solid var(--bd)!important;box-shadow:none!important}
 .hist-more-btn{pointer-events:auto!important;touch-action:manipulation!important;cursor:pointer!important;position:relative!important;z-index:5!important}
-.hist-action-menu{pointer-events:auto!important;touch-action:manipulation!important}
+.hist-action-menu{pointer-events:auto!important;touch-action:manipulation!important;position:fixed!important;display:flex!important;flex-direction:column!important;min-width:170px!important;max-width:220px!important;padding:6px!important;border-radius:10px!important;border:1px solid var(--bd)!important;background:var(--card)!important;box-shadow:0 14px 32px rgba(15,23,42,.22)!important;z-index:9999!important}
+html[data-theme="dark"] .hist-action-menu{box-shadow:0 14px 32px rgba(0,0,0,.55)!important}
+.hist-action-menu-item{
+  display:block!important;width:100%!important;min-height:34px!important;
+  text-align:left!important;padding:8px 10px!important;margin:0!important;
+  background:transparent!important;border:0!important;border-radius:7px!important;
+  color:var(--tx)!important;font:600 12px/1.2 Inter,ui-sans-serif,system-ui,sans-serif!important;
+  cursor:pointer!important;
+}
+.hist-action-menu-item:hover,.hist-action-menu-item:focus-visible{background:var(--slt)!important;color:var(--sf)!important;outline:none!important}
+.hist-action-menu-item.danger{color:var(--rd)!important}
 
 .hist-list-month-label{
   display:flex!important;align-items:center!important;min-height:30px!important;box-sizing:border-box!important;
@@ -1719,9 +1724,44 @@ const IT0=[
 {id:"i21",name:"Jalawan (LPG Gas)",unit:"Kg",rate:67.11,gst:0,head:"fuel",dist:100,hsn:"2711",active:true}
 ];
 const SC0=[
-{id:"s01",name:"NPS PARSAUNA",udise:"10022703401",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran",mobile:"9100000001",active:true},
-{id:"s02",name:"GOVT PS MOTIHARI",udise:"10022703402",block:"Motihari",district:"East Champaran",address:"Motihari Sadar, East Champaran",mobile:"9100000002",active:true},
-{id:"s03",name:"GOVT MS RAMGARHWA",udise:"10022703403",block:"Ramgarhwa",district:"East Champaran",address:"Ramgarhwa Block, East Champaran",mobile:"9100000003",active:true}
+{id:"s01",name:"GMS SEMRA",udise:"10020703001",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s02",name:"GPS MASAHA",udise:"10020703501",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s03",name:"GPS PAREWA BRAHAMAN TOLI GIRLS",udise:"10020703302",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s04",name:"GPS SAGARDINA URDU BOYS",udise:"10020703002",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s05",name:"GPS DHEKAHA BELA COLONY",udise:"10022102001",block:"Piprakothi",district:"East Champaran",address:"Block-Piprakothi, East Champaran",mobile:"",active:true},
+{id:"s06",name:"GPS MATHURAPUR HUSAIN BABU KE TOLA",udise:"10022703602",block:"Turkauliya",district:"East Champaran",address:"Block-Turkauliya, East Champaran",mobile:"",active:true},
+{id:"s07",name:"GPS MATHURAPUR JANKI SINGH KE TOLA",udise:"10022703603",block:"Turkauliya",district:"East Champaran",address:"Block-Turkauliya, East Champaran",mobile:"",active:true},
+{id:"s08",name:"GPS SENUWARIA URDU",udise:"10020702709",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s09",name:"GPS CHAKRADHE PIPRAKOTHI",udise:"10022102004",block:"Piprakothi",district:"East Champaran",address:"Block-Piprakothi, East Champaran",mobile:"",active:true},
+{id:"s10",name:"GPS KATHMALIA URDU GIRL",udise:"10020703604",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s11",name:"GPS HARAJ KHAS",udise:"10020703102",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s12",name:"GPS CHAILAHA PARARIA",udise:"10020302405",block:"Banjaria",district:"East Champaran",address:"Block-Banjaria, East Champaran",mobile:"",active:true},
+{id:"s13",name:"GPS PARTAPUR",udise:"10020701601",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s14",name:"GPS MATH KOLASI",udise:"10020702802",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s15",name:"GPS JAYPAL TOLA",udise:"10020700901",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s16",name:"NPS SOHIL CHHAPRA",udise:"10022704801",block:"Turkauliya",district:"East Champaran",address:"Block-Turkauliya, East Champaran",mobile:"",active:true},
+{id:"s17",name:"NPS JAGIRAHA BHUTAHA TOLA",udise:"10022704701",block:"Turkauliya",district:"East Champaran",address:"Block-Turkauliya, East Champaran",mobile:"",active:true},
+{id:"s18",name:"NPS CHAILAHA PAKRIA",udise:"10020302407",block:"Banjaria",district:"East Champaran",address:"Block-Banjaria, East Champaran",mobile:"",active:true},
+{id:"s19",name:"NPS BAGAHI SC TOLA",udise:"10022704301",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran-845435",mobile:"",active:true},
+{id:"s20",name:"NPS BIJULPUR JIRAT",udise:"10022700803",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran",mobile:"",active:true},
+{id:"s21",name:"NPS MUSHAR TOLI BALGANGA",udise:"10022703004",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran-845437",mobile:"",active:true},
+{id:"s22",name:"NPS MATHURAPUR UTTARI WARD NO-07",udise:"10022703604",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s23",name:"NPS KHARTARI BHALA TOLA",udise:"10020702716",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s24",name:"NPS MADHUBANI WARD NO-05",udise:"10020701704",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s25",name:"NPS PAREWA TURHA TOLI",udise:"10020703305",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s26",name:"NPS KAWALPUR NAHAR TOLA",udise:"10022703701",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran",mobile:"",active:true},
+{id:"s27",name:"NPS KAWALPUR CHAUK",udise:"10022703702",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran",mobile:"",active:true},
+{id:"s28",name:"NPS RETWA SHEKH TOLI",udise:"10022704901",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran",mobile:"",active:true},
+{id:"s29",name:"NPS RAMNAGAR",udise:"10020700808",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true},
+{id:"s30",name:"NPS PARSAUNA",udise:"10022703401",block:"Turkaulia",district:"East Champaran",address:"Block-Turkaulia, East Champaran",mobile:"",active:true},
+{id:"s31",name:"NPS KURIYA CHAILAHA WARD NO-10",udise:"10020300303",block:"Banjaria",district:"East Champaran",address:"Block-Banjaria, East Champaran",mobile:"",active:true},
+{id:"s32",name:"NPS DHAROHARA",udise:"10020702717",block:"Chiraiya",district:"East Champaran",address:"Block-Chiraiya, East Champaran",mobile:"",active:true}
+];
+const SC_SAMPLE=[
+{id:"sample1",name:"GPS SAMPLE SCHOOL",udise:"00000000001",block:"Sample Block",district:"Sample District",address:"Sample Address, Sample District",mobile:"",active:true},
+{id:"sample2",name:"NPS SAMPLE SCHOOL",udise:"00000000002",block:"Sample Block",district:"Sample District",address:"Sample Address, Sample District",mobile:"",active:true},
+{id:"sample3",name:"GMS SAMPLE SCHOOL",udise:"00000000003",block:"Sample Block",district:"Sample District",address:"Sample Address, Sample District",mobile:"",active:true},
+{id:"sample4",name:"UMS SAMPLE SCHOOL",udise:"00000000004",block:"Sample Block",district:"Sample District",address:"Sample Address, Sample District",mobile:"",active:true}
 ];
 const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const US0=[{id:"u01",username:"admin",password:"admin123",role:"admin",name:"Administrator"},{id:"u02",username:"operator",password:"op123",role:"operator",name:"Operator"},{id:"u03",username:"accountant",password:"acc123",role:"accountant",name:"Accountant"}];
@@ -1750,7 +1790,9 @@ const ST0={
     border:"#CCD6E3",
     highlight:"#D6E2F0",
     borderMode:"black", // black = fixed black outer borders; theme = darkest active theme color
-    dataFontSize:6.65
+    dataFontSize:6.65,
+    loginCardBg:null,     // null = use default theme card color; else a hex string the user picked
+    loginPattern:"glow"   // none | glow | dots | waves | geometric
   },
 };
 const A={page:"dashboard",loggedIn:false,currentUser:null,flashId:null,firm:LS.get("f",F0),series:LS.get("sr",SR0),rates:LS.get("rt",RT0),heads:LS.get("hd",HD0),items:LS.get("it",IT0),schools:LS.get("sc",SC0),invoices:LS.get("iv",[]),users:LS.get("us",US0),rv:LS.get("rv",[]),dups:LS.get("dp",[]),sett:LS.get("st",ST0),batchCfg:LS.get("ib",{})};
@@ -2971,7 +3013,7 @@ function pgNew(){
       <option value="disabled"  ${(A.sett||ST0).gstMode==="disabled"?"selected":""}>Disabled</option>
     </select>
   </div>
-</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="niReset()" title="Clear form">&#10006; Clear</button><label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txl)"><label class="tog"><input type="checkbox" ${NI.doShuffle?"checked":""} onchange="NI.doShuffle=this.checked"><span class="tog-s"></span></label>Randomise</label>${NI.calc&&!NI.saved?`<button class="btn btn-g btn-sm" onclick="niVerifyOpen()">&#128190; Save</button>`:""}${NI.saved?`<span class="bdg bg">&#10003; Saved</span>`:""}${NI.calc?`<button class="btn btn-t btn-sm" onclick="niPr(NI.tab||'merged')">&#128424; Print (Preview)</button>`:""}</div></div><div class="ni-layout" style="display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start;margin-bottom:14px"><div class="card" style="margin:0"><div class="chd ni-section-head" style="background-image:none!important"><span class="cht">Invoice Details</span><span class="mono" style="font-weight:700;font-size:12px;color:var(--nv2)">${nxt}</span></div><div class="cbd"><div class="fg fg3 ni-basic-grid" style="margin-bottom:12px"><div><label class="flbl">School <span style="color:var(--rd)">*</span></label>${niSchoolPickerHTML(NI.schoolId)}</div><div><label class="flbl">Invoice Date</label><input class="fi" type="date" value="${NI.date}" onchange="NI.date=this.value;const _p=(NI.date||'').split('-');if(_p.length===3){const _mi=parseInt(_p[1],10)-1;if(_mi>=0&&_mi<12){NI.month=MN[_mi];NI.year=_p[0];}}NI.availableSearch='';gP('new')"/></div><div><label class="flbl">Bill Month / Year</label><div style="display:flex;gap:7px"><select class="fi" onchange="NI.month=this.value;NI.availableSearch='';gP('new')">${moO}</select><input class="fi" style="width:74px" type="number" value="${NI.year}" onchange="NI.year=this.value;NI.availableSearch='';gP('new')"/></div></div></div>${schI}${dupW}<div class="ni-entry-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch"><div class="ni-class-card"><div class="ni-class-card-title">Class 1–5 Students</div><input id="ni-s15" class="fi" type="number" min="0" value="${NI.s15}" oninput="NI.s15=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()" onchange="NI.s15=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()"/>${s15>0?`<div class="ni-alloc">Alloc: ${R(a15)}</div>`:""}</div><div class="ni-class-card"><div class="ni-class-card-title">Class 6–8 Students</div><input id="ni-s68" class="fi" type="number" min="0" value="${NI.s68}" oninput="NI.s68=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()" onchange="NI.s68=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()"/>${s68>0?`<div class="ni-alloc">Alloc: ${R(a68)}</div>`:""}</div><div class="ni-fruit-card" style="flex:0 0 auto;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 13px;min-width:230px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><label class="tog"><input type="checkbox" ${NI.useFruit?"checked":""} onchange="NI.useFruit=this.checked;gP('new')"><span class="tog-s"></span></label><span style="font-weight:600;font-size:12.5px">Egg / Fruit</span></div>${NI.useFruit?`<div style="display:flex;gap:8px"><div style="flex:1"><label class="flbl">Count</label><input class="fi fi-sm" type="number" min="0" value="${NI.sFruit}" onchange="NI.sFruit=this.value" placeholder="${s15+s68}"/></div><div style="flex:1"><label class="flbl">Rate</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[5,6,7].map(rv=>`<button class="btn btn-sm" style="background:${NI.fruitRate===String(rv)?"var(--sf)":"var(--bd)"};color:${NI.fruitRate===String(rv)?"#fff":"var(--tx)"};border:none;height:25px;padding:0 8px;font-size:11px" onclick="NI.fruitRate='${rv}';gP('new')">\u20B9${rv}</button>`).join("")}<input class="fi fi-sm" type="number" min="0" value="${NI.fruitRate}" onchange="NI.fruitRate=this.value" style="width:48px"/></div></div></div>${aFr>0?`<div style="font-size:10.5px;color:var(--sf);margin-top:5px;font-weight:600">Alloc: ${R(aFr)}</div>`:""}`:""}</div><div style="flex:1;min-width:180px"><div class="aband"><div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Total Allocation</div><div style="font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace">${R(grand)}</div></div><button id="ni-generate-btn" class="btn btn-p btn-lg" onclick="niGen()" ${(!NI.s15&&!NI.s68)||!NI.schoolId?"disabled":""}>&#9889; Generate</button></div></div></div><div style="margin-top:11px"><label class="flbl">Notes</label><input class="fi" value="${ec(NI.notes||"")}" onchange="NI.notes=this.value" placeholder="Optional remarks..."/></div></div></div>${niNumberCard()}</div>${calcH}${!NI.calc?`<div class="card"><div class="empty"><div class="ei">&#127979;</div><div class="et">Ready to generate</div><div class="es">Select a school, enter student counts, click Generate.</div></div></div>`:""}`;
+</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="niReset()" title="Clear form">&#10006; Clear</button><label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txl)"><label class="tog"><input type="checkbox" ${NI.doShuffle?"checked":""} onchange="NI.doShuffle=this.checked"><span class="tog-s"></span></label>Randomise</label>${NI.calc&&!NI.saved?`<button class="btn btn-g btn-sm" onclick="niVerifyOpen()">&#128190; Save</button>`:""}${NI.saved?`<span class="bdg bg">&#10003; Saved</span>`:""}${NI.calc?`<button class="btn btn-t btn-sm" onclick="niPr(NI.tab||'merged')">&#128424; Print (Preview)</button>`:""}</div></div><div class="ni-layout" style="display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start;margin-bottom:14px"><div class="card" style="margin:0"><div class="chd ni-section-head" style="background-image:none!important"><span class="cht">Invoice Details</span><span class="mono" style="font-weight:700;font-size:12px;color:var(--nvtx)">${nxt}</span></div><div class="cbd"><div class="fg fg3 ni-basic-grid" style="margin-bottom:12px"><div><label class="flbl">School <span style="color:var(--rd)">*</span></label>${niSchoolPickerHTML(NI.schoolId)}</div><div><label class="flbl">Invoice Date</label><input class="fi" type="date" value="${NI.date}" onchange="NI.date=this.value;const _p=(NI.date||'').split('-');if(_p.length===3){const _mi=parseInt(_p[1],10)-1;if(_mi>=0&&_mi<12){NI.month=MN[_mi];NI.year=_p[0];}}NI.availableSearch='';gP('new')"/></div><div><label class="flbl">Bill Month / Year</label><div style="display:flex;gap:7px"><select class="fi" onchange="NI.month=this.value;NI.availableSearch='';gP('new')">${moO}</select><input class="fi" style="width:74px" type="number" value="${NI.year}" onchange="NI.year=this.value;NI.availableSearch='';gP('new')"/></div></div></div>${schI}${dupW}<div class="ni-entry-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch"><div class="ni-class-card"><div class="ni-class-card-title">Class 1–5 Students</div><input id="ni-s15" class="fi" type="number" min="0" value="${NI.s15}" oninput="NI.s15=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()" onchange="NI.s15=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()"/>${s15>0?`<div class="ni-alloc">Alloc: ${R(a15)}</div>`:""}</div><div class="ni-class-card"><div class="ni-class-card-title">Class 6–8 Students</div><input id="ni-s68" class="fi" type="number" min="0" value="${NI.s68}" oninput="NI.s68=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()" onchange="NI.s68=this.value;NI.calc=null;NI.saved=false;niSyncGenerateButton()"/>${s68>0?`<div class="ni-alloc">Alloc: ${R(a68)}</div>`:""}</div><div class="ni-fruit-card" style="flex:0 0 auto;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 13px;min-width:230px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><label class="tog"><input type="checkbox" ${NI.useFruit?"checked":""} onchange="NI.useFruit=this.checked;gP('new')"><span class="tog-s"></span></label><span style="font-weight:600;font-size:12.5px">Egg / Fruit</span></div>${NI.useFruit?`<div style="display:flex;gap:8px"><div style="flex:1"><label class="flbl">Count</label><input class="fi fi-sm" type="number" min="0" value="${NI.sFruit}" onchange="NI.sFruit=this.value" placeholder="${s15+s68}"/></div><div style="flex:1"><label class="flbl">Rate</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[5,6,7].map(rv=>`<button class="btn btn-sm" style="background:${NI.fruitRate===String(rv)?"var(--sf)":"var(--bd)"};color:${NI.fruitRate===String(rv)?"#fff":"var(--tx)"};border:none;height:25px;padding:0 8px;font-size:11px" onclick="NI.fruitRate='${rv}';gP('new')">\u20B9${rv}</button>`).join("")}<input class="fi fi-sm" type="number" min="0" value="${NI.fruitRate}" onchange="NI.fruitRate=this.value" style="width:48px"/></div></div></div>${aFr>0?`<div style="font-size:10.5px;color:var(--sf);margin-top:5px;font-weight:600">Alloc: ${R(aFr)}</div>`:""}`:""}</div><div style="flex:1;min-width:180px"><div class="aband"><div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Total Allocation</div><div style="font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace">${R(grand)}</div></div><button id="ni-generate-btn" class="btn btn-p btn-lg" onclick="niGen()" ${(!NI.s15&&!NI.s68)||!NI.schoolId?"disabled":""}>&#9889; Generate</button></div></div></div><div style="margin-top:11px"><label class="flbl">Notes</label><input class="fi" value="${ec(NI.notes||"")}" onchange="NI.notes=this.value" placeholder="Optional remarks..."/></div></div></div>${niNumberCard()}</div>${calcH}${!NI.calc?`<div class="card"><div class="empty"><div class="ei">&#127979;</div><div class="et">Ready to generate</div><div class="es">Select a school, enter student counts, click Generate.</div></div></div>`:""}`;
 }
 function niSyncGenerateButton(){ const b=document.getElementById("ni-generate-btn"); if(b) b.disabled=!(Number(NI.s15)>0 || Number(NI.s68)>0) || !NI.schoolId; }
 function niGen(){
@@ -3194,7 +3236,7 @@ function pgHist(){
     vMod=`<div class="ov" onclick="if(event.target===this){HS.vId=null;gP('history')}"><div class="modal mxl"><div class="mhd"><div><div class="mt">Invoice &mdash; ${ec(inv.invNo)}</div>${inv.printCount?`<div class="pcnt" style="margin-top:3px">&#128424; Printed ${inv.printCount}x${inv.lastPrintedAt?" &middot; Last: "+new Date(inv.lastPrintedAt).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}</div>`:""}</div><div style="display:flex;gap:7px"><button class="btn btn-p btn-sm" onclick="hsPDF('${inv.id}',HS.vTab)">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="HS.vId=null;gP('history')">&#10005;</button></div></div><div class="mbd"><div class="tabs" style="margin-bottom:14px">${tabs.map(t=>`<div class="tab${HS.vTab===t.id?" on":""}" onclick="HS.vTab='${t.id}';gP('history')">${t.l}</div>`).join("")}</div>${tc}</div></div></div>`;
   }}
   let rMod="";
-  if(HS.rId){const inv=A.invoices.find(i=>i.id===HS.rId);if(inv){const revs=inv.revisions||[];rMod=`<div class="ov" onclick="if(event.target===this){HS.rId=null;gP('history')}"><div class="modal"><div class="mhd"><div class="mt">Revision History &mdash; ${ec(inv.invNo)}</div><button class="btn btn-g btn-sm" onclick="HS.rId=null;gP('history')">&#10005;</button></div><div class="mbd"><div style="padding:10px 14px;border:1.5px solid var(--nv2);border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-weight:700;color:var(--nv2)">Original (Rev 0)</span><span class="bdg bn">Original</span></div><div style="font-size:12px;color:var(--txl)">Saved: ${inv.savedAt?new Date(inv.savedAt).toLocaleString("en-IN"):"-"} &middot; Net: ${R(inv.net)}</div></div>${revs.length===0?`<div class="info inf-b">No revisions yet.</div>`:revs.map((rev,i)=>`<div style="padding:10px 14px;border:1.5px solid var(--am);border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-weight:700;color:var(--am)">Revision ${i+1}</span><span class="bdg bam">Revised</span></div><div style="font-size:12px"><b>By:</b> ${ec(rev.by||"")} &middot; <b>When:</b> ${rev.at?new Date(rev.at).toLocaleString("en-IN"):"-"}</div><div style="font-size:12px;margin-top:3px"><b>Reason:</b> ${ec(rev.reason||"")}</div></div>`).join("")}<button class="btn btn-am btn-sm" style="margin-top:8px" onclick="addRev('${inv.id}')">+ Add Revision</button></div></div></div>`;}}
+  if(HS.rId){const inv=A.invoices.find(i=>i.id===HS.rId);if(inv){const revs=inv.revisions||[];rMod=`<div class="ov" onclick="if(event.target===this){HS.rId=null;gP('history')}"><div class="modal"><div class="mhd"><div class="mt">Revision History &mdash; ${ec(inv.invNo)}</div><button class="btn btn-g btn-sm" onclick="HS.rId=null;gP('history')">&#10005;</button></div><div class="mbd"><div style="padding:10px 14px;border:1.5px solid var(--nv2);border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-weight:700;color:var(--nvtx)">Original (Rev 0)</span><span class="bdg bn">Original</span></div><div style="font-size:12px;color:var(--txl)">Saved: ${inv.savedAt?new Date(inv.savedAt).toLocaleString("en-IN"):"-"} &middot; Net: ${R(inv.net)}</div></div>${revs.length===0?`<div class="info inf-b">No revisions yet.</div>`:revs.map((rev,i)=>`<div style="padding:10px 14px;border:1.5px solid var(--am);border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-weight:700;color:var(--am)">Revision ${i+1}</span><span class="bdg bam">Revised</span></div><div style="font-size:12px"><b>By:</b> ${ec(rev.by||"")} &middot; <b>When:</b> ${rev.at?new Date(rev.at).toLocaleString("en-IN"):"-"}</div><div style="font-size:12px;margin-top:3px"><b>Reason:</b> ${ec(rev.reason||"")}</div></div>`).join("")}<button class="btn btn-am btn-sm" style="margin-top:8px" onclick="addRev('${inv.id}')">+ Add Revision</button></div></div></div>`;}}
   const moO=MN.map(m=>`<option${m===HS.fMo?" selected":""}>${m}</option>`).join("");
   const yrO=yrs.map(y=>`<option${y===HS.fYr?" selected":""}>${y}</option>`).join("");
   const stO=[["","All Statuses"],["active","Active"],["revised","Revised"],["synced","Synced"],["pending","Pending Sync"],["cancelled","Cancelled"]].map(([v,l])=>`<option value="${v}"${v===HS.fSt?" selected":""}>${l}</option>`).join("");
@@ -3491,10 +3533,24 @@ function canInv(id){const r=prompt("Enter cancellation reason:");if(r===null)ret
 function addRev(id){const r=prompt("Enter revision reason (min 10 chars):");if(r===null)return;if(!r||r.trim().length<10){toast("Reason must be at least 10 characters","err");return;}const inv=A.invoices.find(i=>i.id===id);if(!inv)return;const rev={by:A.currentUser?.name||"Admin",at:new Date().toISOString(),reason:r.trim()};sv("iv",A.invoices.map(i=>i.id===id?{...i,revisions:[...(i.revisions||[]),rev],status:"revised"}:i));toast("Revision recorded","ok");gP("history");}
 
 // ═══ SCHOOLS ═══
-let SC={q:"",blockFilter:"",eid:null,did:null,show:false,sf:{name:"",udise:"",block:"",district:"",address:"",mobile:"",active:true},draft:null,dirty:false};
+let SC={q:"",blockFilter:"",eid:null,did:null,show:false,sf:{name:"",udise:"",block:"",district:"",address:"",mobile:"",active:true},draft:null,dirty:false,resetShow:false,resetTyped:""};
 function scWorking(){ if(!Array.isArray(SC.draft)) SC.draft=A.schools.map(s=>({...s})); return SC.draft; }
 function scInitDraft(){ SC.draft=A.schools.map(s=>({...s})); SC.dirty=false; }
-function scSave(){ const list=scWorking().map(s=>({...s})); sv("sc",list); SC.draft=list.map(s=>({...s})); SC.dirty=false; toast("School Master changes saved","ok"); gP("schools"); }
+function schMasterResetOpen(){SC.resetShow=true;SC.resetTyped="";gP("schools");}
+function schMasterResetConfirm(){
+  if((SC.resetTyped||"").trim()!=="RESET SCHOOLS"){toast("Type the confirmation phrase exactly","err");return;}
+  const before=(A.schools||[]).map(s=>({...s}));
+  const sample=SC_SAMPLE.map(s=>({...s}));
+  sv("sc",sample);
+  SC.draft=sample.map(s=>({...s}));
+  SC.dirty=false;
+  SC.resetShow=false;
+  SC.resetTyped="";
+  auditLog("UPDATE","schools","sc","Master Reset — School Master reset to 4 sample schools ("+before.length+" real schools removed; invoices and all other data untouched)",{before,after:sample});
+  toast("School Master reset to sample data","ok");
+  gP("schools");
+}
+function scSave(){ const before=(A.schools||[]).map(s=>({...s})); const list=scWorking().map(s=>({...s})); sv("sc",list); SC.draft=list.map(s=>({...s})); SC.dirty=false; auditLog("UPDATE","schools","sc","School Master updated ("+list.length+" schools) — includes location/address/block/district changes",{before,after:list}); toast("School Master changes saved","ok"); gP("schools"); }
 function scReset(){ scInitDraft(); SC.eid=null; SC.did=null; SC.show=false; toast("School Master reset to last saved state","info"); gP("schools"); }
 function pgSch(){
   const work=scWorking();
@@ -3557,7 +3613,15 @@ function pgSch(){
       <div class="mft"><button class="btn btn-g" onclick="biClose()">Close</button><button class="btn btn-p" onclick="biRun()">${r?"Run Again":"Run Import"}</button></div>
     </div></div>`;
   }
-  return `<div class="shd"><div><div class="stl">School Master</div><div class="sst">${work.filter(s=>s.active).length} active &middot; ${work.length} total${SC.dirty?" &middot; <b style='color:var(--am)'>Unsaved changes</b>":""}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="scReset()" ${SC.dirty?"":"disabled style='opacity:.5'"}>↶ Reset</button><button class="btn btn-p btn-sm" onclick="scSave()" ${SC.dirty?"":"disabled style='opacity:.5'"}>💾 Save Changes</button><button class="btn btn-g btn-sm" onclick="schPrint()">🖨 Print List</button><button class="btn btn-g btn-sm" onclick="biOpen()">${ic("box",14)} Bulk Import</button><button class="btn btn-p" onclick="schAdd()">+ Add School</button></div></div><div class="info inf-g" style="margin-bottom:12px">Changes stay in draft until <b>Save Changes</b>. Reset restores the last saved master. Saved schools appear in the New Invoice dropdown.</div><div style="display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap"><input id="school-master-search" class="fi" style="max-width:280px" placeholder="Search name, UDISE, block..." value="${ec(SC.q)}" oninput="SC.q=this.value;gP('schools')"/><select class="fi" style="max-width:190px" onchange="SC.blockFilter=this.value.toLowerCase();gP('schools')"><option value="">All Blocks</option>${blocks.map(b=>`<option value="${ec(b.toLowerCase())}"${SC.blockFilter===b.toLowerCase()?" selected":""}>${ec(b)}</option>`).join("")}</select><button class="btn btn-g btn-sm" onclick="SC.q='';SC.blockFilter='';gP('schools')">Clear Filters</button></div><div class="card" style="overflow:hidden">${vis.length===0?`<div style="padding:30px;text-align:center;color:var(--txl)">No schools found</div>`:groupsHTML}</div>${mod}${dmod}${bimod}`;
+  let rmod="";
+  if(SC.resetShow){
+    rmod=`<div class="ov" onclick="if(event.target===this){SC.resetShow=false;SC.resetTyped='';gP('schools')}"><div class="modal" style="max-width:440px"><div class="mhd"><div class="mt" style="color:var(--rd)">&#9888; Master Reset — School Data</div><button class="btn btn-g btn-sm" onclick="SC.resetShow=false;SC.resetTyped='';gP('schools')">&#10005;</button></div><div class="mbd">
+      <div class="info inf-r" style="margin-bottom:12px">This replaces your entire School Master list (${A.schools.length} schools) with 4 generic sample entries (GPS, NPS, GMS, UMS). <b>Invoices, billing history, audit trail, and every other module are completely unaffected</b> — only the school list itself resets.</div>
+      <div style="font-size:12px;color:var(--txl);margin-bottom:10px">This cannot be undone. To confirm, type <b style="color:var(--rd)">RESET SCHOOLS</b> exactly below.</div>
+      <input class="fi" id="sc-reset-confirm-input" placeholder="Type RESET SCHOOLS to confirm" value="${ec(SC.resetTyped||"")}" oninput="SC.resetTyped=this.value;gP('schools')" style="border-color:var(--rd)"/>
+    </div><div class="mft"><button class="btn btn-g" onclick="SC.resetShow=false;SC.resetTyped='';gP('schools')">Cancel</button><button class="btn btn-d" ${((SC.resetTyped||"").trim()==="RESET SCHOOLS")?"":"disabled style='opacity:.4;cursor:not-allowed'"} onclick="schMasterResetConfirm()">Confirm Master Reset</button></div></div></div>`;
+  }
+  return `<div class="shd"><div><div class="stl">School Master</div><div class="sst">${work.filter(s=>s.active).length} active &middot; ${work.length} total${SC.dirty?" &middot; <b style='color:var(--am)'>Unsaved changes</b>":""}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="scReset()" ${SC.dirty?"":"disabled style='opacity:.5'"}>↶ Reset</button><button class="btn btn-p btn-sm" onclick="scSave()" ${SC.dirty?"":"disabled style='opacity:.5'"}>💾 Save Changes</button><button class="btn btn-g btn-sm" onclick="schPrint()">🖨 Print List</button><button class="btn btn-g btn-sm" onclick="biOpen()">${ic("box",14)} Bulk Import</button><button class="btn btn-p" onclick="schAdd()">+ Add School</button></div></div><div class="info inf-g" style="margin-bottom:12px">Changes stay in draft until <b>Save Changes</b>. Reset restores the last saved master. Saved schools appear in the New Invoice dropdown.</div><div style="display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap"><input id="school-master-search" class="fi" style="max-width:280px" placeholder="Search name, UDISE, block..." value="${ec(SC.q)}" oninput="SC.q=this.value;gP('schools')"/><select class="fi" style="max-width:190px" onchange="SC.blockFilter=this.value.toLowerCase();gP('schools')"><option value="">All Blocks</option>${blocks.map(b=>`<option value="${ec(b.toLowerCase())}"${SC.blockFilter===b.toLowerCase()?" selected":""}>${ec(b)}</option>`).join("")}</select><button class="btn btn-g btn-sm" onclick="SC.q='';SC.blockFilter='';gP('schools')">Clear Filters</button></div><div class="card" style="overflow:hidden">${vis.length===0?`<div style="padding:30px;text-align:center;color:var(--txl)">No schools found</div>`:groupsHTML}</div><div class="card" style="margin-top:16px;border:1.5px solid var(--rd)"><div class="chd" style="border-bottom:1px solid var(--rd)"><span class="cht" style="color:var(--rd)">&#9888; Danger Zone</span></div><div class="cbd"><div style="font-size:12px;color:var(--txl);margin-bottom:10px">Reset School Master to 4 generic sample schools (GPS, NPS, GMS, UMS). Does not affect invoices, billing data, or audit history.</div><button class="btn btn-d btn-sm" onclick="schMasterResetOpen()">Master Reset — School Data Only</button></div></div>${mod}${dmod}${bimod}${rmod}`;
 }
 function schAdd(){scWorking();SC.eid=null;SC.sf={name:"",udise:"",block:"",district:"",address:"",mobile:"",active:true};SC.show=true;gP("schools");}
 function schEd(id){const s=scWorking().find(x=>x.id===id);if(!s)return;SC.eid=id;SC.sf={...s};SC.show=true;gP("schools");}
@@ -3733,7 +3797,7 @@ function pgLed(){
       <span style="font-size:11px;color:var(--txl)">to</span>
       <input class="fi" type="date" value="${ec(LP.to)}" onchange="LP.to=this.value"/>`:""}
     <button class="btn btn-g btn-sm" onclick="printSchoolLedger('${sch.id}')">🖨 Print Selected Ledger</button>
-  </div><div class="stats s3" style="margin-bottom:14px"><div class="stat"><div class="sl-l">Total Invoices</div><div class="sv">${invs.length}</div></div><div class="stat"><div class="sl-l">Total Billed</div><div class="sv" style="font-size:17px">${R(tot)}</div></div><div class="stat"><div class="sl-l">Last Invoice</div><div class="sv" style="font-size:14px">${invs[0]?ec(invs[0].invNo):"&mdash;"}</div><div class="ss">${invs[0]?invs[0].date:"&mdash;"}</div></div></div><div class="card" style="margin-bottom:14px"><div class="chd"><span class="cht">Invoice Timeline</span></div><div class="tw"><table class="dt"><thead><tr><th>Invoice No.</th><th>Date</th><th>Month</th><th class="num">Class 1–5</th><th class="num">Class 6–8</th><th class="num">Net Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>${invs.length===0?`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txl)">No invoices yet</td></tr>`:invs.map(inv=>`<tr><td class="mono" style="font-weight:700;color:var(--nv2)">${ec(inv.invNo)}</td><td>${inv.date}</td><td><span class="bdg bn">${inv.month} ${inv.year}</span></td><td class="num">${inv.s15||0}</td><td class="num">${inv.s68||0}</td><td class="num" style="font-weight:700;color:var(--sf)">${R(inv.net)}</td><td>${sBdg(inv.status,inv.syncStatus)}</td><td><div style="display:flex;gap:5px"><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}')">Open</button><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></td></tr>`).join("")}</tbody></table></div></div><div class="card"><div class="chd"><span class="cht">PDF Archive &mdash; ${ec(sch.name)}</span></div><div class="cbd">${invs.filter(i=>i.mergedItems).length===0?`<div style="color:var(--txl);font-size:12px">No PDFs yet. Save invoices to populate.</div>`:invs.filter(i=>i.mergedItems).map(inv=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap;gap:6px"><div><span class="mono" style="font-weight:700;color:var(--nv2)">${ec(inv.invNo)}</span> &mdash; ${inv.month} ${inv.year}</div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button>${inv.annexA&&inv.annexA.length&&inv.annexB&&inv.annexB.length?`<button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexC';gP('history')">&#8595; Ann.C</button>`:""}</div></div>`).join("")}</div></div>`;
+  </div><div class="stats s3" style="margin-bottom:14px"><div class="stat"><div class="sl-l">Total Invoices</div><div class="sv">${invs.length}</div></div><div class="stat"><div class="sl-l">Total Billed</div><div class="sv" style="font-size:17px">${R(tot)}</div></div><div class="stat"><div class="sl-l">Last Invoice</div><div class="sv" style="font-size:14px">${invs[0]?ec(invs[0].invNo):"&mdash;"}</div><div class="ss">${invs[0]?invs[0].date:"&mdash;"}</div></div></div><div class="card" style="margin-bottom:14px"><div class="chd"><span class="cht">Invoice Timeline</span></div><div class="tw"><table class="dt"><thead><tr><th>Invoice No.</th><th>Date</th><th>Month</th><th class="num">Class 1–5</th><th class="num">Class 6–8</th><th class="num">Net Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>${invs.length===0?`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txl)">No invoices yet</td></tr>`:invs.map(inv=>`<tr><td class="mono" style="font-weight:700;color:var(--nvtx)">${ec(inv.invNo)}</td><td>${inv.date}</td><td><span class="bdg bn">${inv.month} ${inv.year}</span></td><td class="num">${inv.s15||0}</td><td class="num">${inv.s68||0}</td><td class="num" style="font-weight:700;color:var(--sf)">${R(inv.net)}</td><td>${sBdg(inv.status,inv.syncStatus)}</td><td><div style="display:flex;gap:5px"><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}')">Open</button><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></td></tr>`).join("")}</tbody></table></div></div><div class="card"><div class="chd"><span class="cht">PDF Archive &mdash; ${ec(sch.name)}</span></div><div class="cbd">${invs.filter(i=>i.mergedItems).length===0?`<div style="color:var(--txl);font-size:12px">No PDFs yet. Save invoices to populate.</div>`:invs.filter(i=>i.mergedItems).map(inv=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap;gap:6px"><div><span class="mono" style="font-weight:700;color:var(--nvtx)">${ec(inv.invNo)}</span> &mdash; ${inv.month} ${inv.year}</div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button>${inv.annexA&&inv.annexA.length&&inv.annexB&&inv.annexB.length?`<button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexC';gP('history')">&#8595; Ann.C</button>`:""}</div></div>`).join("")}</div></div>`;
 }
 
 function ledgerFYLabel(y){
@@ -3803,10 +3867,10 @@ function pgArc(){
   Object.keys(grp).sort().reverse().forEach(fy=>{
     tree+=`<div style="padding:9px 14px;background:var(--sll);font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--bd)">&#128193; FY ${fy}</div>`;
     MN.filter(m=>grp[fy][m]).forEach(mo=>{
-      tree+=`<div style="padding:6px 14px 6px 26px;background:var(--slx);font-size:12px;font-weight:600;color:var(--nv2);border-bottom:1px solid var(--bd)">&#9500; ${mo}</div>`;
+      tree+=`<div style="padding:6px 14px 6px 26px;background:var(--slx);font-size:12px;font-weight:600;color:var(--nvtx);border-bottom:1px solid var(--bd)">&#9500; ${mo}</div>`;
       Object.entries(grp[fy][mo]).forEach(([sc,invs])=>{
         tree+=`<div style="padding:6px 14px 6px 40px;font-size:12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px"><span style="font-weight:600">&#128193; ${ec(sc)}</span><span class="bdg bs">${invs.length} files</span></div>`;
-        invs.forEach(inv=>{tree+=`<div style="padding:5px 14px 5px 58px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px"><span class="mono" style="color:var(--nv2);font-weight:600">${ec(inv.invNo)}</span><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button>${inv.annexA&&inv.annexA.length&&inv.annexB&&inv.annexB.length?`<button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexC';gP('history')">&#8595; Ann.C</button>`:""}<button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></div>`;});
+        invs.forEach(inv=>{tree+=`<div style="padding:5px 14px 5px 58px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px"><span class="mono" style="color:var(--nvtx);font-weight:600">${ec(inv.invNo)}</span><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button>${inv.annexA&&inv.annexA.length&&inv.annexB&&inv.annexB.length?`<button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexC';gP('history')">&#8595; Ann.C</button>`:""}<button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></div>`;});
       });
     });
   });
@@ -3849,8 +3913,8 @@ function pgAud(){
 // ═══ ADMIN SETTINGS ═══
 // ADM_T defined in phase2
 /* pgAdm() replaced by Phase-2 version below */
-function admR(){const r15=parseFloat(document.getElementById("r15")?.value)||6.78,r68=parseFloat(document.getElementById("r68")?.value)||10.17;sv("rt",{r15,r68});toast("Rates saved","ok");gP("admin");}
-function admH(){const u=A.heads.map((h,i)=>({...h,v15:parseFloat(document.getElementById(`hv15-${i}`)?.value)||0,v68:parseFloat(document.getElementById(`hv68-${i}`)?.value)||0}));sv("hd",u);toast("Budget heads saved","ok");gP("admin");}
+function admR(){const before={...(A.rates||{})};const r15=parseFloat(document.getElementById("r15")?.value)||6.78,r68=parseFloat(document.getElementById("r68")?.value)||10.17;sv("rt",{r15,r68});auditLog("UPDATE","rates","rates","Per-meal rates updated: Class 1-5 ₹"+r15+", Class 6-8 ₹"+r68,{before,after:{r15,r68}});toast("Rates saved","ok");gP("admin");}
+function admH(){const before=(A.heads||[]).map(h=>({...h}));const u=A.heads.map((h,i)=>({...h,v15:parseFloat(document.getElementById(`hv15-${i}`)?.value)||0,v68:parseFloat(document.getElementById(`hv68-${i}`)?.value)||0}));sv("hd",u);auditLog("UPDATE","budgetHeads","hd","Budget heads updated",{before,after:u});toast("Budget heads saved","ok");gP("admin");}
 function admS(){sv("sr",{prefix:document.getElementById("sp")?.value||"MSE",fy:document.getElementById("sf2")?.value||"2526",sep:document.getElementById("ss")?.value||"-",counter:parseInt(document.getElementById("sc")?.value)||460,digits:parseInt(document.getElementById("sd")?.value)||3});toast("Numbering saved","ok");gP("admin");}
 function doExp(){const data={version:"2.0",exportedAt:new Date().toISOString(),firm:A.firm,series:A.series,rates:A.rates,heads:A.heads,items:A.items,schools:A.schools,invoices:A.invoices,users:A.users};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="MDM_Backup_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast("Backup downloaded","ok");}
 function doImp(){const inp=document.createElement("input");inp.type="file";inp.accept=".json";inp.onchange=ev=>{const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(!d.invoices||!d.firm){toast("Invalid backup file","err");return;}if(!confirm(`Restore backup from ${d.exportedAt}?\n\nThis replaces ALL current data (${d.invoices.length} invoices, ${d.schools.length} schools).\n\nThis cannot be undone!`))return;sv("f",d.firm);sv("sr",d.series);sv("rt",d.rates);sv("hd",d.heads);sv("it",d.items);sv("sc",d.schools);sv("iv",d.invoices);if(d.users)sv("us",d.users);toast(`Restored! ${d.invoices.length} invoices loaded.`,"ok");setTimeout(()=>gP("dashboard"),600);}catch(err){toast("Failed: "+err.message,"err");}};r.readAsText(file);};document.body.appendChild(inp);inp.click();document.body.removeChild(inp);}
@@ -3867,11 +3931,27 @@ function pgRep(){
   const byMo={};MN.forEach(m=>{byMo[m]={net:0};});invs.forEach(i=>{if(byMo[i.month])byMo[i.month].net+=i.net||0;});
   const maxB=Math.max(...Object.values(byMo).map(m=>m.net),1);
   const schArr=Object.entries(bySch).map(([k,v])=>({school:k,...v})).sort((a,b)=>b.net-a.net);
-  return `<div class="shd"><div><div class="stl">Reports &amp; Analytics</div><div class="sst">Invoice summary and GST breakdown</div></div><div class="sac"><button class="btn-back" onclick="goBack()">&#8592; Back</button><button class="btn-home" onclick="gP('dashboard')" title="Home">&#8962;</button></div></div><div class="stats s3" style="margin-bottom:16px"><div class="stat"><div class="sl-l">Net Payable Total</div><div class="sv" style="font-size:17px">${R(tot)}</div></div><div class="stat"><div class="sl-l">Total CGST</div><div class="sv" style="font-size:17px">${R(totC)}</div></div><div class="stat"><div class="sl-l">Total SGST</div><div class="sv" style="font-size:17px">${R(totS)}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px"><div class="card"><div class="chd"><span class="cht">Monthly Volume</span></div><div class="cbd">${MN.filter(m=>byMo[m].net>0).map(m=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><div style="width:64px;font-size:11px;color:var(--txl)">${m.slice(0,3)}</div><div style="flex:1;background:var(--bd);border-radius:3px;overflow:hidden;height:18px"><div class="rbar" style="width:${(byMo[m].net/maxB*100).toFixed(1)}%;height:100%"></div></div><div style="width:90px;text-align:right;font-size:11px;font-family:monospace;color:var(--nv2)">${R(byMo[m].net)}</div></div>`).join("")||`<div style="color:var(--txl);text-align:center;padding:20px 0;font-size:12px">No data yet</div>`}</div></div><div class="card"><div class="chd"><span class="cht">GST Summary</span></div><div class="cbd">${[["Total Invoices",String(invs.length)],["Taxable Value",R(invs.reduce((s,i)=>s+(i.taxable||0),0))],["Total CGST",R(totC)],["Total SGST",R(totS)],["Net Payable Total",R(tot)]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--txm)">${l}</span><span style="font-weight:700;font-family:monospace;color:var(--nv)">${v}</span></div>`).join("")}</div></div></div><div class="card tw"><div class="chd"><span class="cht">School-wise Summary</span></div><table class="dt"><thead><tr><th>#</th><th>School</th><th class="num">Invoices</th><th class="num">Students</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Net Amount</th></tr></thead><tbody>${schArr.length===0?`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txl)">No data yet</td></tr>`:schArr.map((r,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:600">${ec(r.school)}</td><td class="num">${r.count}</td><td class="num">${r.students}</td><td class="num">${R(r.taxable)}</td><td class="num">${R(r.cgst)}</td><td class="num">${R(r.sgst)}</td><td class="num" style="font-weight:700;color:var(--sf)">${R(r.net)}</td></tr>`).join("")}${schArr.length>0?`<tr class="tr-tot"><td colspan="4" style="text-align:right">TOTAL</td><td class="num">${R(schArr.reduce((s,r)=>s+r.taxable,0))}</td><td class="num">${R(schArr.reduce((s,r)=>s+r.cgst,0))}</td><td class="num">${R(schArr.reduce((s,r)=>s+r.sgst,0))}</td><td class="num" style="font-size:13px">${R(tot)}</td></tr>`:""}</tbody></table></div>`;
+  return `<div class="shd"><div><div class="stl">Reports &amp; Analytics</div><div class="sst">Invoice summary and GST breakdown</div></div><div class="sac"><button class="btn-back" onclick="goBack()">&#8592; Back</button><button class="btn-home" onclick="gP('dashboard')" title="Home">&#8962;</button></div></div><div class="stats s3" style="margin-bottom:16px"><div class="stat"><div class="sl-l">Net Payable Total</div><div class="sv" style="font-size:17px">${R(tot)}</div></div><div class="stat"><div class="sl-l">Total CGST</div><div class="sv" style="font-size:17px">${R(totC)}</div></div><div class="stat"><div class="sl-l">Total SGST</div><div class="sv" style="font-size:17px">${R(totS)}</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px"><div class="card"><div class="chd"><span class="cht">Monthly Volume</span></div><div class="cbd">${MN.filter(m=>byMo[m].net>0).map(m=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px"><div style="width:64px;font-size:11px;color:var(--txl)">${m.slice(0,3)}</div><div style="flex:1;background:var(--bd);border-radius:3px;overflow:hidden;height:18px"><div class="rbar" style="width:${(byMo[m].net/maxB*100).toFixed(1)}%;height:100%"></div></div><div style="width:90px;text-align:right;font-size:11px;font-family:monospace;color:var(--nvtx)">${R(byMo[m].net)}</div></div>`).join("")||`<div style="color:var(--txl);text-align:center;padding:20px 0;font-size:12px">No data yet</div>`}</div></div><div class="card"><div class="chd"><span class="cht">GST Summary</span></div><div class="cbd">${[["Total Invoices",String(invs.length)],["Taxable Value",R(invs.reduce((s,i)=>s+(i.taxable||0),0))],["Total CGST",R(totC)],["Total SGST",R(totS)],["Net Payable Total",R(tot)]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12.5px"><span style="color:var(--txm)">${l}</span><span style="font-weight:700;font-family:monospace;color:var(--nv)">${v}</span></div>`).join("")}</div></div></div><div class="card tw"><div class="chd"><span class="cht">School-wise Summary</span></div><table class="dt"><thead><tr><th>#</th><th>School</th><th class="num">Invoices</th><th class="num">Students</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Net Amount</th></tr></thead><tbody>${schArr.length===0?`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txl)">No data yet</td></tr>`:schArr.map((r,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:600">${ec(r.school)}</td><td class="num">${r.count}</td><td class="num">${r.students}</td><td class="num">${R(r.taxable)}</td><td class="num">${R(r.cgst)}</td><td class="num">${R(r.sgst)}</td><td class="num" style="font-weight:700;color:var(--sf)">${R(r.net)}</td></tr>`).join("")}${schArr.length>0?`<tr class="tr-tot"><td colspan="4" style="text-align:right">TOTAL</td><td class="num">${R(schArr.reduce((s,r)=>s+r.taxable,0))}</td><td class="num">${R(schArr.reduce((s,r)=>s+r.cgst,0))}</td><td class="num">${R(schArr.reduce((s,r)=>s+r.sgst,0))}</td><td class="num" style="font-size:13px">${R(tot)}</td></tr>`:""}</tbody></table></div>`;
 }
 
 // ═══ LOGIN + SYNC + INIT ═══
-function pgLogin(){document.getElementById("app").innerHTML=`<div class="login-wrap"><div class="login-card"><div style="text-align:center;margin-bottom:28px"><div style="font-size:38px;margin-bottom:8px">&#127963;</div><div style="font-size:9.5px;font-weight:700;color:var(--sf);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:4px">Government of Bihar</div><div style="font-size:22px;font-weight:800;color:var(--nv)">MDM Invoice Platform</div><div style="font-size:12px;color:var(--txl);margin-top:4px">MS Enterprises &middot; Motihari, East Champaran</div></div><div class="fg" style="gap:13px;margin-bottom:16px"><div><label class="flbl">Username</label><input class="fi" id="lu" placeholder="admin" value="admin" onkeydown="if(event.key==='Enter')doLogin()"/></div><div><label class="flbl">Password</label><input class="fi" type="password" id="lp" placeholder="Enter password" value="admin123" onkeydown="if(event.key==='Enter')doLogin()"/></div></div><button class="btn btn-p" style="width:100%;height:40px;font-size:14px" onclick="doLogin()">Sign In &rarr;</button><div style="margin-top:14px;padding:10px 12px;background:var(--sll);border-radius:7px;font-size:11.5px;color:var(--txl)">Default: <b>admin / admin123</b><br>Also: operator/op123 &middot; accountant/acc123</div><div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txl)">&#128309; All data stored locally &middot; Works 100% offline</div></div></div>`;}
+function pgLogin(){
+  const td=(A.sett&&A.sett.themeDesign)||ST0.themeDesign;
+  const pattern=td.loginPattern||"glow";
+  const bgAttr=td.loginCardBg?` style="background:${ec(td.loginCardBg)}"`:"";
+  document.getElementById("app").innerHTML=`<div class="login-wrap login-pattern-${ec(pattern)}"${bgAttr}><div class="login-card"><div style="text-align:center;margin-bottom:28px"><div style="font-size:38px;margin-bottom:8px">&#127963;</div><div style="font-size:9.5px;font-weight:700;color:var(--sf);letter-spacing:2.5px;text-transform:uppercase;margin-bottom:4px">Government of Bihar</div><div class="login-app-title" style="font-size:22px;font-weight:800">MDM Invoice Platform</div><div style="font-size:12px;color:var(--txl);margin-top:4px">MS Enterprises &middot; Motihari, East Champaran</div></div><div class="fg" style="gap:13px;margin-bottom:16px"><div><label class="flbl">Username</label><input class="fi" id="lu" placeholder="Enter username" onkeydown="if(event.key==='Enter')doLogin()"/></div><div><label class="flbl">Password</label><input class="fi" type="password" id="lp" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()"/></div></div><button class="btn btn-p" style="width:100%;height:40px;font-size:14px" onclick="doLogin()">Sign In &rarr;</button><div style="margin-top:10px;text-align:center;font-size:11px;color:var(--txl)">&#128309; All data stored locally &middot; Works 100% offline</div></div></div>`;
+}
+window.doLogout=function(){
+  try{ auditLog('LOGIN','user',A.currentUser?.id||'','User logged out: '+(A.currentUser?.name||''),null); }catch(e){}
+  A.loggedIn=false; A.currentUser=null;
+  CLOUD.user=null; CLOUD.ready=false; CLOUD.token=null; V42.idToken=null;
+  try{ localStorage.removeItem('mdm_local_user'); }catch(e){}
+  try{ localStorage.removeItem('cloud_user'); }catch(e){}
+  try{ V42.clearSession(); }catch(e){}
+  pgLogin();
+  try{ installGoogleLoginButton(); }catch(e){}
+  try{ toast('Logged out','ok'); }catch(e){}
+};
 function doLogin(){
   const user=(document.getElementById("lu")||{}).value?.trim()||"";
   const pass=(document.getElementById("lp")||{}).value||"";
@@ -3891,13 +3971,16 @@ function doLogin(){
    - version/migration manifest + local recovery snapshot
    - existing invoice/PDF/business logic remains untouched
    ═════════════════════════════════════════════════════════════════════ */
+const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec";
+const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
   version: "4.42",
   previousVersion: "4.41",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
-  apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : ""),
-  googleClientId: localStorage.getItem("mdm_google_client_id") || "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com",
+  apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
+  googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
+  showConfigModal: false,
   deviceId: localStorage.getItem("mdm_device_id") || ("dev_"+uid()),
   sessionKey: "mdm_v42_session",
   db: null,
@@ -3991,7 +4074,10 @@ sv = function(k,v){
   try{ V42.writeStateKey(k,v); }catch(e){}
   try{
     const cloudEligible=["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro"];
-    if(cloudEligible.includes(k)) V42.enqueue("state",k,{key:k,value:v});
+    if(cloudEligible.includes(k)){
+      V42.enqueue("state",k,{key:k,value:v});
+      if(k==="iv" && navigator.onLine && CLOUD.user) setTimeout(()=>V42.flushQueue(),400);
+    }
   }catch(e){}
 };
 
@@ -4014,20 +4100,40 @@ V42.saveSession = async function(user){
 };
 V42.clearSession = async function(){await V42.idbDelete("meta","session");localStorage.removeItem(V42.sessionKey);};
 
-V42.config = function(){
+V42.config = function(){ V42.openConfigModal(); };
+V42.openConfigModal = function(){ V42.showConfigModal=true; gP("backupsync"); };
+V42.closeConfigModal = function(){ V42.showConfigModal=false; gP("backupsync"); };
+V42.saveConfigForm = function(){
+  const urlEl=document.getElementById("v42-cfg-url"), cidEl=document.getElementById("v42-cfg-cid");
+  const url=(urlEl&&urlEl.value?urlEl.value.trim():"");
+  const cid=(cidEl&&cidEl.value?cidEl.value.trim():"");
+  if(!cid){ toast("Google OAuth Client ID cannot be blank","err"); return; }
   const hosted=!!(window.google && google.script && google.script.run);
-  if(!hosted){
-    const api=prompt("MDM API Web App URL\nLeave blank for local/offline mode:",V42.apiUrl||"");
-    if(api===null)return;
-    V42.apiUrl=api.trim(); localStorage.setItem("mdm_api_url",V42.apiUrl);
-  }else{
-    V42.apiUrl="APPS_SCRIPT_BRIDGE";
-    localStorage.setItem("mdm_api_url",V42.apiUrl);
-  }
-  const cid=prompt("Google OAuth / Identity Client ID\nExample: xxx.apps.googleusercontent.com",V42.googleClientId||"");
-  if(cid===null)return;
-  V42.googleClientId=cid.trim(); localStorage.setItem("mdm_google_client_id",V42.googleClientId);
+  V42.apiUrl = hosted ? "APPS_SCRIPT_BRIDGE" : url;
+  localStorage.setItem("mdm_api_url",V42.apiUrl);
+  V42.googleClientId=cid; localStorage.setItem("mdm_google_client_id",V42.googleClientId);
+  V42.showConfigModal=false;
   toast("Infrastructure configuration saved","ok");
+  gP("backupsync");
+};
+V42.restoreConfigDefaults = function(){
+  const urlEl=document.getElementById("v42-cfg-url"), cidEl=document.getElementById("v42-cfg-cid");
+  if(urlEl) urlEl.value=V42_DEFAULT_API_URL;
+  if(cidEl) cidEl.value=V42_DEFAULT_CLIENT_ID;
+  V42.apiUrl=V42_DEFAULT_API_URL; localStorage.setItem("mdm_api_url",V42.apiUrl);
+  V42.googleClientId=V42_DEFAULT_CLIENT_ID; localStorage.setItem("mdm_google_client_id",V42.googleClientId);
+  toast("Restored to default configuration and saved","ok");
+  V42.showConfigModal=false;
+  gP("backupsync");
+};
+V42.configModalHTML = function(){
+  if(!V42.showConfigModal) return "";
+  const hosted=!!(window.google && google.script && google.script.run);
+  return `<div class="ov" onclick="if(event.target===this){V42.closeConfigModal()}"><div class="modal"><div class="mhd"><div class="mt">Offline &amp; Cloud Infrastructure — Configure</div><button class="btn btn-g btn-sm" onclick="V42.closeConfigModal()">&#10005;</button></div><div class="mbd"><div class="fg" style="gap:13px">
+    <div><label class="flbl">MDM API Web App URL</label><input class="fi" id="v42-cfg-url" value="${ec(hosted?"APPS_SCRIPT_BRIDGE (hosted mode — URL not editable)":(V42.apiUrl||""))}" ${hosted?"disabled":""} placeholder="https://script.google.com/macros/s/.../exec"/></div>
+    <div><label class="flbl">Google OAuth Client ID</label><input class="fi" id="v42-cfg-cid" value="${ec(V42.googleClientId||"")}" placeholder="xxxxxxxxxx.apps.googleusercontent.com"/></div>
+    <div style="font-size:10.5px;color:var(--txl)">Restore Default resets both fields to the app's built-in fallback values and saves immediately.</div>
+  </div></div><div class="mft"><button class="btn btn-g" onclick="V42.restoreConfigDefaults()">Restore Default</button><button class="btn btn-g" onclick="V42.closeConfigModal()">Cancel</button><button class="btn btn-p" onclick="V42.saveConfigForm()">Save</button></div></div></div>`;
 };
 
 V42.loadGIS = function(){
@@ -4153,7 +4259,7 @@ V42.installUI = function(){
       const qCount="<span id=\"v42-q-count\">…</span>";
       const card=`<div class="card" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">⚙ Offline &amp; Cloud Infrastructure</span><span class="bdg bn">v4.42</span></div><div class="cbd"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px"><div><b>Local Database</b><div style="color:var(--txl);margin-top:3px">IndexedDB • offline-first</div></div><div><b>Sync Queue</b><div style="color:var(--txl);margin-top:3px">${qCount}</div></div><div><b>Google Identity</b><div style="color:${V42.googleClientId?"var(--gn)":"var(--am)"};margin-top:3px">${V42.googleClientId?"Configured":"Client ID required"}</div></div><div><b>Master API</b><div style="color:${V42.apiUrl?"var(--gn)":"var(--am)"};margin-top:3px">${V42.apiUrl?"Configured":"Endpoint required"}</div></div></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-g btn-sm" onclick="V42.config()">Configure</button><button class="btn btn-g btn-sm" onclick="V42.googleSignIn()">Google Login</button><button class="btn btn-g btn-sm" onclick="V42.flushQueue().then(()=>toast('Sync queue processed','ok'))">Sync Queue</button><button class="btn btn-g btn-sm" onclick="V42.createLocalSnapshot()">Local Snapshot</button><button class="btn btn-g btn-sm" onclick="V42.importRecovery()">Restore Local Snapshot</button></div></div></div>`;
       setTimeout(async()=>{const n=document.getElementById("v42-q-count");if(n)n.textContent=(await V42.queueCount())+" pending";},0);
-      return card+base;
+      return card+V42.configModalHTML()+base;
     };
   }catch(e){console.warn("v4.42 UI install skipped",e);}
 };
@@ -4170,6 +4276,7 @@ async function bootstrapV42(){
   V42.installUI();
   if(A.loggedIn){ renderShell(); gP("dashboard"); } else { pgLogin(); }
   if(navigator.onLine) setTimeout(()=>V42.flushQueue(),1200);
+  setInterval(()=>{ if(navigator.onLine && CLOUD.user) V42.flushQueue(); }, 5*60*1000);
 }
 
 /* v4.42: legacy synchronous Drive adapter is retained only as a local mirror.
@@ -4499,7 +4606,7 @@ function admRoster() {
     const f = RT.sf;
     const dayGrid = DAYS.map(day=>`
       <div style="padding:9px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--slx)">
-        <div style="font-weight:700;font-size:12px;color:var(--nv2);margin-bottom:7px;text-transform:capitalize">${day}</div>
+        <div style="font-weight:700;font-size:12px;color:var(--nvtx);margin-bottom:7px;text-transform:capitalize">${day}</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${HEAD_IDS.map(h=>{
             const hName=A.heads.find(x=>x.id===h)?.name||h;
@@ -4699,9 +4806,10 @@ function almSave(){
     updatedBy:A.currentUser?.name||"admin",
   };
   if(!ALM.eid)item.createdAt=new Date().toISOString();
+  const oldItem=ALM.eid?A.alm.find(a=>a.id===ALM.eid):null;
   const upd=ALM.eid?A.alm.map(a=>a.id===ALM.eid?item:a):[...A.alm,item];
   sv("alm",upd);ALM.show=false;
-  auditLog(ALM.eid?"UPDATE":"CREATE","allocation",item.id,(ALM.eid?"Updated":"Added")+" allocation: "+item.schoolName+" "+item.month+" "+item.year,{after:{approvedAmt:item.approvedAmt,status:item.status}});
+  auditLog(ALM.eid?"UPDATE":"CREATE","allocation",item.id,(ALM.eid?"Updated":"Added")+" allocation: "+item.schoolName+" "+item.month+" "+item.year,{before:oldItem?{approvedAmt:oldItem.approvedAmt,status:oldItem.status,students15:oldItem.students15,students68:oldItem.students68}:null,after:{approvedAmt:item.approvedAmt,status:item.status,students15:item.students15,students68:item.students68}});
   toast(ALM.eid?"Allocation updated":"Allocation added","ok");gP("admin");
 }
 function almDel(id){
@@ -4953,6 +5061,26 @@ function fnRestoreDefault(){
 }
 
 // ── TAB 11: BACKUP & DATA ─────────────────────────────────
+function rateAllocHistoryHTML(){
+  const al=A.al||[];
+  const items=al.filter(e=>e.entity==="rates"||e.entity==="allocation").slice(-25).reverse();
+  if(items.length===0) return `<div class="info inf-b">No rate or allocation changes recorded yet. Future changes to per-meal rates or monthly allocations will appear here with date, previous amount, and new amount.</div>`;
+  return `<div class="tw"><table class="dt"><thead><tr><th>Date</th><th>Changed By</th><th>Type</th><th>Details</th><th>Previous</th><th>Current</th></tr></thead><tbody>${items.map(e=>{
+    let prev="—",curr="—",details=ec(e.summary);
+    if(e.entity==="rates"){
+      const b=(e.data&&e.data.before)||{}, a=(e.data&&e.data.after)||{};
+      prev=`C1-5: ₹${b.r15!=null?b.r15:"—"} · C6-8: ₹${b.r68!=null?b.r68:"—"}`;
+      curr=`C1-5: ₹${a.r15!=null?a.r15:"—"} · C6-8: ₹${a.r68!=null?a.r68:"—"}`;
+      details="Per-meal rate update";
+    } else if(e.entity==="allocation"){
+      const b=e.data&&e.data.before, a=(e.data&&e.data.after)||{};
+      prev=b?`₹${b.approvedAmt} (${ec(b.status||"")})`:"New entry";
+      curr=`₹${a.approvedAmt!=null?a.approvedAmt:"—"} (${ec(a.status||"")})`;
+    }
+    return `<tr><td style="font-size:11px;white-space:nowrap">${new Date(e.ts).toLocaleString("en-IN")}</td><td style="font-weight:600">${ec(e.by)}</td><td><span class="bdg ${e.entity==="rates"?"bam":"bn"}" style="font-size:10px">${e.entity==="rates"?"Rate":"Allocation"}</span></td><td style="font-size:11.5px;color:var(--txl)">${details}</td><td style="font-size:11.5px;color:var(--rd)">${prev}</td><td style="font-size:11.5px;color:var(--gn);font-weight:600">${curr}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
 function admBackup(){
   const al = A.al || [];
   const recent = al.slice(-10).reverse();
@@ -4979,6 +5107,10 @@ function admBackup(){
         <button class="btn btn-n btn-sm" onclick="importCSV('items')">&#8593; Import Items CSV</button>
       </div>
     </div></div>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="chd"><span class="cht">Rate &amp; Allocation Change History</span></div>
+    <div class="cbd">${rateAllocHistoryHTML()}</div>
   </div>
   <div class="card" style="margin-bottom:14px">
     <div class="chd"><span class="cht">Storage Usage</span></div>
@@ -6026,6 +6158,28 @@ function invoiceThemeSaveFromUI(){
 }
 function invoiceThemeReset(){A._themeDraft=null;toast("Unsaved Theme Design changes reset","ok");gP("settings");}
 function invoiceThemeMasterReset(){const st={...(A.sett||ST0),themeDesign:{...ST0.themeDesign}};sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design restored to Master","ok");gP("settings");}
+function saveAsCustomSlot(n){
+  const hexEl=document.getElementById("td-bg-hex");
+  const seed=(hexEl&&hexToRgb(hexEl.value))?hexEl.value.toUpperCase():(A._themeDraft?.themeSeed||invoiceTheme().themeSeed);
+  if(!seed||!hexToRgb(seed)){toast("Pick a color first, then save it as a custom preset","err");return;}
+  const old=A.sett?.themeDesign||ST0.themeDesign;
+  const customSlots={...(old.customSlots||{}),["c"+n]:{name:"Custom "+n,seed:seed}};
+  const st={...(A.sett||ST0),themeDesign:{...old,customSlots}};
+  sv("st",st);A.sett=st;
+  toast("Saved as Custom "+n,"ok");
+  gP("settings");
+}
+function setCustomSlotPreset(n){
+  const slot=((A.sett?.themeDesign?.customSlots)||{})["c"+n];
+  if(!slot||!slot.seed){toast("Custom "+n+" is empty — pick a color and save it first","err");return;}
+  const fam=invoiceThemeFamily(slot.seed);
+  A._themeDraft={...(A.sett?.themeDesign||ST0.themeDesign),invoicePreset:"customSlot"+n,themeSeed:slot.seed,headerBg:fam.light,headerText:"auto",accent:fam.dark,border:"#CCD6E3",highlight:fam.light};
+  const bg=document.getElementById("td-bg"),bh=document.getElementById("td-bg-hex"),ac=document.getElementById("td-accent"),ach=document.getElementById("td-accent-hex"),bo=document.getElementById("td-border"),boh=document.getElementById("td-border-hex"),hi=document.getElementById("td-highlight"),hih=document.getElementById("td-highlight-hex"),tx=document.getElementById("td-text");
+  if(bg){bg.value=fam.light;bh.value=fam.light;ac.value=fam.dark;ach.value=fam.dark;bo.value="#CCD6E3";boh.value="#CCD6E3";hi.value=fam.light;hih.value=fam.light;tx.value="auto";updateThemePreview();}
+  document.querySelectorAll(".theme-preset").forEach(el=>el.classList.remove("on"));
+  const btn=[...document.querySelectorAll(".theme-preset")].find(el=>el.textContent.includes("Custom "+n));if(btn)btn.classList.add("on");
+  toast("Custom "+n+" selected — press Save Theme to apply","ok");
+}
 function setInvoicePreset(id){const p=INVOICE_THEME_PRESETS[id];if(!p)return;
   const fam=invoiceThemeFamily(p.seed);
   A._themeDraft={...(A.sett?.themeDesign||ST0.themeDesign),invoicePreset:id,themeSeed:p.seed,headerBg:fam.light,headerText:p.text,accent:fam.dark,border:p.border,highlight:fam.light};
@@ -6050,14 +6204,52 @@ function fontSafeRange(){
   const min=5.25,max=7.65,current=6.65;
   return {min,max,current};
 }
+function setLoginPattern(id){
+  const st={...(A.sett||ST0)};
+  const td={...(st.themeDesign||ST0.themeDesign)};
+  td.loginPattern=id;
+  st.themeDesign=td;
+  sv("st",st); A.sett=st;
+  toast("Login pattern set to "+id.charAt(0).toUpperCase()+id.slice(1),"ok");
+  gP("settings");
+}
+function loginBgApply(){
+  const val=(document.getElementById("la-bg")||{}).value||"#1e3a5f";
+  const st={...(A.sett||ST0)};
+  const td={...(st.themeDesign||ST0.themeDesign)};
+  td.loginCardBg=val;
+  st.themeDesign=td;
+  sv("st",st); A.sett=st;
+  toast("Login page background updated","ok");
+  gP("settings");
+}
+function loginBgReset(){
+  const st={...(A.sett||ST0)};
+  const td={...(st.themeDesign||ST0.themeDesign)};
+  td.loginCardBg=null;
+  st.themeDesign=td;
+  sv("st",st); A.sett=st;
+  toast("Login page background reset to default","ok");
+  gP("settings");
+}
 function renderThemeDesignCard(){
   const t=invoiceTheme(), r=fontSafeRange();
   const textChoice=t.headerText||"auto", smart=smartHeaderText(t.headerBg,textChoice);
   const presets=Object.entries(INVOICE_THEME_PRESETS).map(([id,p])=>{const f=invoiceThemeFamily(p.seed);return `<button type="button" class="theme-preset ${t.invoicePreset===id?"on":""}" onclick="setInvoicePreset('${id}')"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">${p.name}</div><div class="theme-preset-note">Auto Dark · Medium · Light</div></button>`}).join("");
-  return `<div class="card theme-section"><div class="chd"><span class="cht">🎨 Theme Design — Level 2</span></div><div class="cbd">
+  const custSlots=(A.sett?.themeDesign?.customSlots)||{};
+  const customPresets=[1,2].map(n=>{
+    const slot=custSlots["c"+n];
+    if(slot&&slot.seed){
+      const f=invoiceThemeFamily(slot.seed);
+      const active=t.invoicePreset==="customSlot"+n;
+      return `<button type="button" class="theme-preset ${active?"on":""}" onclick="setCustomSlotPreset(${n})"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Saved custom color</div></button>`;
+    }
+    return `<button type="button" class="theme-preset" style="opacity:.5;border-style:dashed" onclick="toast('Pick a color below, then tap Save as Custom ${n}','warn')"><div class="theme-swatch"><span style="background:var(--bd)"></span><span style="background:var(--bd)"></span><span style="background:var(--bd)"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Not set yet</div></button>`;
+  }).join("");
+  return `<div class="card theme-section"><div class="chd"><span class="cht">🎨 Theme Design</span></div><div class="cbd">
     <div style="font-size:12px;color:var(--txl);margin-bottom:12px">Theme customization is isolated from the locked Master Invoice geometry. Application appearance and Invoice PDF theme are independent.</div>
     <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Invoice Header Presets</div><div style="font-size:10.5px;color:var(--txl);line-height:1.4;margin:-2px 0 8px">Each preset is a single reference color. The engine automatically generates and maps Dark = all major invoice headers, Medium = Amount in Words + Net Payable, and Light = Amount in Words content card.</div>
-    <div class="theme-preset-grid">${presets}</div>
+    <div class="theme-preset-grid">${presets}${customPresets}</div>
     <div style="margin-top:14px;font-size:12px;font-weight:800;color:var(--tx)">Custom Theme</div>
     <div class="theme-custom-grid" style="margin-top:8px">
       <div class="theme-color-row"><div class="theme-color-label">Header Background</div><div class="theme-color-control"><input type="color" id="td-bg" value="${t.headerBg}"><input class="fi theme-hex" id="td-bg-hex" value="${t.headerBg}"></div></div>
@@ -6070,12 +6262,25 @@ function renderThemeDesignCard(){
     </div>
     <div class="theme-picker-wrap" style="margin-top:12px">
       <div><div style="font-size:11px;font-weight:800;margin-bottom:7px">Custom Color Picker</div><div style="font-size:10px;color:var(--txl);line-height:1.35;margin-bottom:7px">One selected base color generates the matched 3-shade family automatically: Dark (headers) · Medium (60% toward Light) · Light (content card).</div><div class="theme-wheel" id="td-wheel"><span class="theme-wheel-pointer" id="td-wheel-p"></span></div></div>
-      <div><div class="theme-sv" id="td-sv"><span class="theme-sv-pointer" id="td-sv-p"></span></div><div class="theme-slider-row"><span style="font-size:10.5px;font-weight:750">Hue</span><input class="theme-range" id="td-hue" type="range" min="0" max="360" value="210"><span class="theme-mini-value" id="td-hue-val">210°</span></div><div class="theme-slider-row"><span style="font-size:10.5px;font-weight:750">Lightness</span><input class="theme-range" id="td-light" type="range" min="0" max="100" value="70"><span class="theme-mini-value" id="td-light-val">70%</span></div></div>
+      <div><div class="theme-sv" id="td-sv"><span class="theme-sv-pointer" id="td-sv-p"></span></div><div class="theme-slider-row"><span style="font-size:10.5px;font-weight:750">Hue</span><input class="theme-range" id="td-hue" type="range" min="0" max="360" value="210"><span class="theme-mini-value" id="td-hue-val">210°</span></div><div class="theme-slider-row"><span style="font-size:10.5px;font-weight:750">Lightness</span><input class="theme-range" id="td-light" type="range" min="0" max="100" value="70"><span class="theme-mini-value" id="td-light-val">70%</span></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="btn btn-g btn-sm" onclick="saveAsCustomSlot(1)">💾 Save as Custom 1</button><button type="button" class="btn btn-g btn-sm" onclick="saveAsCustomSlot(2)">💾 Save as Custom 2</button></div></div>
     </div>
     <div id="td-contrast" class="theme-contrast ok">Smart contrast ready</div>
     <div class="theme-preview" id="td-preview"><div class="theme-preview-head"><div class="theme-preview-title">MS ENTERPRISES</div><div class="theme-preview-sub">TAX INVOICE · ORIGINAL COPY</div><div class="theme-preview-meta">Invoice No. &nbsp;&nbsp; Invoice Date &nbsp;&nbsp; Billing Month</div></div><div style="display:flex;gap:6px;margin-top:8px"><div class="theme-preview-medium" style="flex:1;padding:7px;border-radius:6px;font-size:9px;font-weight:800">MEDIUM · TOTAL / NET PAYABLE</div><div class="theme-preview-light" style="flex:1;padding:7px;border-radius:6px;font-size:9px;font-weight:800">LIGHT · AMOUNT CARD</div></div></div>
     <div class="theme-lock-note">Locked by design: invoice coordinates, column widths, row heights, header font sizes, PDF page size, and sharing/print logic are not modified by Theme Design.</div>
     <div class="theme-btn-row"><button class="btn btn-g btn-sm" onclick="invoiceThemeReset()">Reset</button><button class="btn btn-g btn-sm" onclick="invoiceThemeMasterReset()">Reset to Master</button><button class="btn btn-p btn-sm" onclick="invoiceThemeSaveFromUI()">Save Theme</button></div>
+
+    <div style="height:1px;background:var(--bd);margin:18px 0"></div>
+    <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Login Screen Appearance</div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <input type="color" id="la-bg" value="${(A.sett&&A.sett.themeDesign&&A.sett.themeDesign.loginCardBg)||"#1e3a5f"}" onchange="loginBgApply()" style="width:44px;height:34px;border-radius:7px;border:1px solid var(--bd);cursor:pointer;padding:2px">
+      <div style="font-size:11.5px;color:var(--txl)">Page Background — ${(A.sett&&A.sett.themeDesign&&A.sett.themeDesign.loginCardBg)?"Custom":"Default (navy gradient)"}</div>
+      <button class="btn btn-g btn-sm" onclick="loginBgReset()">Reset to Default</button>
+    </div>
+    <label class="flbl">Background Pattern (applies behind the login card)</label>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:8px 0 4px">
+      ${["none","glow","dots","waves","geometric"].map(id=>`<div onclick="setLoginPattern('${id}')" style="cursor:pointer;text-align:center;padding:6px;border-radius:9px;border:2px solid ${((A.sett&&A.sett.themeDesign&&A.sett.themeDesign.loginPattern)||"glow")===id?"var(--sf)":"var(--bd)"};background:var(--bg)"><div class="login-pattern-${id}" style="height:34px;border-radius:6px;background:linear-gradient(135deg,#1e3a5f,#2d5282);position:relative;overflow:hidden"></div><div style="font-size:9.5px;font-weight:700;margin-top:4px;color:var(--txl);text-transform:capitalize">${id}</div></div>`).join("")}
+    </div>
 
     <div style="height:1px;background:var(--bd);margin:18px 0"></div>
     <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Product Table — Data Font Size</div>
@@ -6976,6 +7181,7 @@ function buildPrintHTML(bodyContent, title, pageSize, orientation) {
 
 
 /* v4.5 legacy mobile history de-duplication rules removed in v4.8. */
+@media(max-width:760px){
   /* Two-column summary layout is more stable than four cramped cards. */
   .stats.s4{
     grid-template-columns:repeat(2,minmax(0,1fr))!important;
@@ -7463,7 +7669,7 @@ function niVerifyRender(){
     lastSavedBlock=`<div style="margin:10px 22px 14px;padding:10px 14px;background:var(--bg);border:1px solid var(--bd);border-radius:9px">
       <div style="font-size:10px;font-weight:800;color:var(--txl);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px">Last Saved Invoice</div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--tx)">
-        <span class="mono" style="font-weight:700;color:var(--nv2)">${ec(m.invNo)}</span>
+        <span class="mono" style="font-weight:700;color:var(--nvtx)">${ec(m.invNo)}</span>
         <span>${ec(m.schoolName)}</span>
         <span>${(m.s15||0)+(m.s68||0)} students</span>
         <span>${m.sFr?Math.round(m.sFr).toLocaleString("en-IN")+" eggs/fruits":""}</span>
@@ -8683,10 +8889,12 @@ v2.8 — Definitive flat-light header + school category correction
       }
       if(!authResult || !authResult.ok) throw new Error((authResult&&authResult.error)||'Master authentication rejected');
 
-      await V42.saveSession(user);
-      localStorage.setItem('cloud_user',JSON.stringify(user));
+      const prevRole=(A.currentUser&&A.currentUser.role)?A.currentUser.role:'admin';
+      const mergedUser={...user,role:prevRole,username:(A.currentUser&&A.currentUser.username)||user.email};
+      await V42.saveSession(mergedUser);
+      localStorage.setItem('cloud_user',JSON.stringify(mergedUser));
       localStorage.removeItem('mdm_local_user');
-      A.loggedIn=true; A.currentUser=user;
+      A.loggedIn=true; A.currentUser=mergedUser;
       auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
       CLOUD.ready=true;
       CLOUD.updateUI();
