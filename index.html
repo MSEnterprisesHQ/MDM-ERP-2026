@@ -2257,6 +2257,7 @@ const NAV=[
 ];
 const LB={dashboard:"Dashboard",new:"New Invoice",history:"Invoice History",schools:"School Master",items:"Item Master",ledger:"School Ledger",archive:"MDM Engine",audit:"Breakup Sheets",admin:"Admin Control",settings:"Settings",controls:"Invoice Control",backupsync:"Backup & Sync",profile:"Profile",reports:"Reports"};
 function renderShell(){
+  try{ensureAdminRecoveryRecord();}catch(e){}
   const pnd=A.invoices.filter(i=>i.syncStatus==="pending").length;
   const sy=pnd>0
     ?`<span class="sy sy-p">&#128995; ${pnd} Pending</span>`
@@ -3920,8 +3921,158 @@ function doExp(){const data={version:"2.0",exportedAt:new Date().toISOString(),f
 function doImp(){const inp=document.createElement("input");inp.type="file";inp.accept=".json";inp.onchange=ev=>{const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(!d.invoices||!d.firm){toast("Invalid backup file","err");return;}if(!confirm(`Restore backup from ${d.exportedAt}?\n\nThis replaces ALL current data (${d.invoices.length} invoices, ${d.schools.length} schools).\n\nThis cannot be undone!`))return;sv("f",d.firm);sv("sr",d.series);sv("rt",d.rates);sv("hd",d.heads);sv("it",d.items);sv("sc",d.schools);sv("iv",d.invoices);if(d.users)sv("us",d.users);toast(`Restored! ${d.invoices.length} invoices loaded.`,"ok");setTimeout(()=>gP("dashboard"),600);}catch(err){toast("Failed: "+err.message,"err");}};r.readAsText(file);};document.body.appendChild(inp);inp.click();document.body.removeChild(inp);}
 
 // ═══ PROFILE ═══
-function pgPro(){const f=A.firm;return `<div class="shd"><div><div class="stl">Profile &amp; Firm Details</div><div class="sst">Printed on every invoice and PDF</div></div><button class="btn btn-p" onclick="svPro()">Save Profile</button></div><div style="display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start"><div class="card"><div class="cbd" style="text-align:center"><div style="width:76px;height:76px;background:var(--slt);border:2px dashed var(--sf);border-radius:11px;display:flex;align-items:center;justify-content:center;margin:0 auto 11px;font-size:28px">&#127970;</div><div style="font-weight:800;font-size:13px;color:var(--nv);margin-bottom:2px">${ec(f.name)}</div><div style="font-size:10px;color:var(--txl)">${ec(f.gstin)}</div></div></div><div style="display:flex;flex-direction:column;gap:13px"><div class="card"><div class="chd"><span class="cht">Business Details</span></div><div class="cbd"><div class="fg fg2">${[["name","Business Name",true],["gstin","GSTIN",true],["pan","PAN"],["stateCode","State Code"],["phone","Phone"],["email","Email"]].map(([k,l,req])=>`<div><label class="flbl">${l}${req?`<span style="color:var(--rd)">*</span>`:""}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Full Address</label><textarea class="fi" id="pr-address" rows="2">${ec(f.address||"")}</textarea></div></div></div></div><div class="card"><div class="chd"><span class="cht">Bank Details</span></div><div class="cbd"><div class="fg fg2">${[["accountName","Account Name"],["accountNo","Account Number"],["bankName","Bank Name"],["ifsc","IFSC Code"],["signatory","Authorised Signatory"]].map(([k,l])=>`<div><label class="flbl">${l}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Branch Address</label><input class="fi" id="pr-branch" value="${ec(f.branch||"")}"/></div></div></div></div><div class="card"><div class="chd"><span class="cht">Terms &amp; Conditions</span></div><div class="cbd"><textarea class="fi" id="pr-terms" rows="2">${ec(f.terms||"")}</textarea></div></div></div></div>`;}
+function pgPro(){
+  const f=A.firm;
+  const me=A.currentUser||{};
+  const isAdmin=me.role==="admin";
+  return `<div class="shd"><div><div class="stl">Profile &amp; Firm Details</div><div class="sst">Printed on every invoice and PDF</div></div><button class="btn btn-p" onclick="svPro()">Save Profile</button></div>
+  <div style="display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start">
+    <div class="card"><div class="cbd" style="text-align:center"><div style="width:76px;height:76px;background:var(--slt);border:2px dashed var(--sf);border-radius:11px;display:flex;align-items:center;justify-content:center;margin:0 auto 11px;font-size:28px">&#127970;</div><div style="font-weight:800;font-size:13px;color:var(--nv);margin-bottom:2px">${ec(f.name)}</div><div style="font-size:10px;color:var(--txl)">${ec(f.gstin)}</div></div></div>
+    <div style="display:flex;flex-direction:column;gap:13px">
+      <div class="card"><div class="chd"><span class="cht">Business Details</span></div><div class="cbd"><div class="fg fg2">${[["name","Business Name",true],["gstin","GSTIN",true],["pan","PAN"],["stateCode","State Code"],["phone","Phone"],["email","Email"]].map(([k,l,req])=>`<div><label class="flbl">${l}${req?`<span style="color:var(--rd)">*</span>`:""}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Full Address</label><textarea class="fi" id="pr-address" rows="2">${ec(f.address||"")}</textarea></div></div></div></div>
+      <div class="card"><div class="chd"><span class="cht">Bank Details</span></div><div class="cbd"><div class="fg fg2">${[["accountName","Account Name"],["accountNo","Account Number"],["bankName","Bank Name"],["ifsc","IFSC Code"],["signatory","Authorised Signatory"]].map(([k,l])=>`<div><label class="flbl">${l}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Branch Address</label><input class="fi" id="pr-branch" value="${ec(f.branch||"")}"/></div></div></div></div>
+      <div class="card"><div class="chd"><span class="cht">Terms &amp; Conditions</span></div><div class="cbd"><textarea class="fi" id="pr-terms" rows="2">${ec(f.terms||"")}</textarea></div></div>
+      ${isAdmin||me.id?`<div class="card"><div class="chd"><div><span class="cht">Account &amp; Security</span><div style="font-size:10px;color:var(--txl);margin-top:2px">Manage the credentials for the currently signed-in account.</div></div></div><div class="cbd">
+        <div class="fg fg2">
+          <div><label class="flbl">Full Name</label><input class="fi" id="sec-name" value="${ec(me.name||"")}"/></div>
+          <div><label class="flbl">Username</label><input class="fi" id="sec-uname" value="${ec(me.username||"")}"/></div>
+          <div><label class="flbl">Current Password</label><input class="fi" type="password" id="sec-current" autocomplete="current-password" placeholder="Required to change credentials"/></div>
+          <div><label class="flbl">New Password</label><input class="fi" type="password" id="sec-new" autocomplete="new-password" placeholder="Minimum 6 characters"/></div>
+          <div><label class="flbl">Confirm New Password</label><input class="fi" type="password" id="sec-confirm" autocomplete="new-password" placeholder="Re-enter new password"/></div>
+        </div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn btn-p btn-sm" onclick="saveMyAccountSecurity()">Save Account &amp; Password</button>
+          ${isAdmin?`<button class="btn btn-g btn-sm" onclick="downloadAdminRecoveryFile(true)">Download Recovery File</button><button class="btn btn-g btn-sm" onclick="syncAdminRecoveryNow()">Sync Recovery to Master Backup</button>`:""}
+        </div>
+        <div class="info inf-b" style="margin-top:10px">Admin recovery keeps the current credential plus the two most recent previous credential states in a restricted recovery record. The recovery record contains credentials and must be treated as highly confidential.</div>
+      </div></div>`:""}
+    </div>
+  </div>`;
+}
 function svPro(){const keys=["name","gstin","pan","stateCode","phone","email","address","accountName","accountNo","bankName","ifsc","signatory","branch","terms"];const upd={...A.firm};keys.forEach(k=>{const el=document.getElementById("pr-"+k);if(el)upd[k]=el.value;});sv("f",upd);toast("Profile saved","ok");}
+
+function adminRecoveryRead(){
+  try{
+    const raw=localStorage.getItem("mdm_admin_recovery");
+    const v=raw?JSON.parse(raw):null;
+    return v&&Array.isArray(v.history)?v:{version:1,updatedAt:"",history:[]};
+  }catch(e){return {version:1,updatedAt:"",history:[]};}
+}
+function adminRecoveryWrite(history){
+  const rec={version:1,updatedAt:new Date().toISOString(),history:(history||[]).slice(0,3)};
+  try{localStorage.setItem("mdm_admin_recovery",JSON.stringify(rec));}catch(e){throw new Error("Unable to save admin recovery record");}
+  return rec;
+}
+function adminRecoveryEntry(user,reason,comment){
+  return {ts:new Date().toISOString(),userId:user.id||"",name:user.name||"",username:user.username||"",password:user.password||"",reason:reason||"",comment:comment||""};
+}
+function adminRecoveryText(){
+  const rec=adminRecoveryRead(),h=rec.history||[];
+  const lines=[
+    "MDM ERP — ADMIN CREDENTIAL RECOVERY RECORD",
+    "===========================================",
+    "CONFIDENTIAL / RESTRICTED ACCESS",
+    "",
+    "This file is an emergency credential recovery record.",
+    "Keep it only in the authorized Master Drive location.",
+    "Do not forward, email, or share it outside the administrator group.",
+    "",
+    "Record Updated: "+(rec.updatedAt||new Date().toISOString()),
+    "Records Retained: "+h.length+" (current + up to 2 previous)",
+    ""
+  ];
+  h.forEach((x,i)=>{
+    lines.push((i===0?"CURRENT CREDENTIAL":"PREVIOUS CREDENTIAL #"+i));
+    lines.push("-------------------------------------------");
+    lines.push("Full Name: "+(x.name||""));
+    lines.push("Username: "+(x.username||""));
+    lines.push("Password: "+(x.password||""));
+    lines.push("Recorded At: "+(x.ts||""));
+    lines.push("Reason: "+(x.reason||"Initial recovery record"));
+    if(x.comment)lines.push("Comment: "+x.comment);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+function buildAdminRecoveryFile(){
+  return {name:"MDM_ERP_Admin_Recovery.txt",content:adminRecoveryText(),updatedAt:new Date().toISOString()};
+}
+function recordAdminRecovery(user,reason,comment){
+  if(!user||user.role!=="admin")return;
+  const rec=adminRecoveryRead();
+  const entry=adminRecoveryEntry(user,reason,comment);
+  const h=[entry,...(rec.history||[]).filter(x=>x.username!==entry.username||x.password!==entry.password)];
+  const saved=adminRecoveryWrite(h.slice(0,3));
+  try{
+    const file=buildAdminRecoveryFile();
+    if(typeof V42!=="undefined"&&typeof V42.enqueue==="function"){
+      V42.enqueue("admin_recovery","admin_recovery",{fileName:file.name,content:file.content,updatedAt:file.updatedAt,deviceId:V42.deviceId});
+    }
+  }catch(e){}
+  return saved;
+}
+function downloadAdminRecoveryFile(silent){
+  if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}
+  try{
+    const file=buildAdminRecoveryFile();
+    const blob=new Blob([file.content],{type:"text/plain;charset=utf-8"});
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+    auditLog("EXPORT","admin_recovery","local","Admin recovery file exported",{file:file.name,updatedAt:file.updatedAt});
+    if(!silent)toast("Admin recovery file downloaded","ok");
+  }catch(e){toast("Recovery file export failed: "+e.message,"err");}
+}
+async function syncAdminRecoveryNow(){
+  if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}
+  try{
+    const file=buildAdminRecoveryFile();
+    if(typeof V42!=="undefined"&&typeof V42.enqueue==="function"){
+      await V42.enqueue("admin_recovery","admin_recovery",{fileName:file.name,content:file.content,updatedAt:file.updatedAt,deviceId:V42.deviceId});
+    }
+    if(typeof CLOUD!=="undefined"&&CLOUD.user&&typeof V42!=="undefined"&&V42.idToken&&typeof V42.backend==="function"){
+      await V42.backend("backup",{snapshot:CLOUD.getPayload(),recoveryFile:file});
+    }
+    auditLog("EXPORT","admin_recovery","cloud","Admin recovery record queued for Master Backup",{file:file.name,updatedAt:file.updatedAt});
+    toast("Admin recovery record queued for Master Backup","ok");
+    if(navigator.onLine&&typeof V42!=="undefined")setTimeout(()=>V42.flushQueue(),250);
+  }catch(e){toast("Recovery sync failed: "+e.message,"err");}
+}
+function ensureAdminRecoveryRecord(){
+  if(A.currentUser?.role!=="admin")return;
+  const rec=adminRecoveryRead();
+  const u=A.users.find(x=>x.id===A.currentUser.id)||A.currentUser;
+  if(!u||!u.password)return;
+  if(!rec.history.length){
+    try{adminRecoveryWrite([adminRecoveryEntry(u,"INITIAL ADMIN RECOVERY RECORD","Created automatically from the existing administrator credential.")]);}catch(e){}
+  }
+}
+async function saveMyAccountSecurity(){
+  const me=A.currentUser;
+  if(!me){toast("No active user session","err");return;}
+  const name=(document.getElementById("sec-name")||{}).value?.trim()||"";
+  const uname=(document.getElementById("sec-uname")||{}).value?.trim()||"";
+  const current=(document.getElementById("sec-current")||{}).value||"";
+  const np=(document.getElementById("sec-new")||{}).value||"";
+  const cp=(document.getElementById("sec-confirm")||{}).value||"";
+  if(!name||!uname){toast("Name and username are required","err");return;}
+  if(current!==me.password){toast("Current password is incorrect","err");return;}
+  if(uname!==me.username&&A.users.some(u=>u.id!==me.id&&String(u.username).toLowerCase()===uname.toLowerCase())){toast("Username already exists","err");return;}
+  if((np||cp)&&(!np||!cp||np!==cp)){toast("New password and confirmation must match","err");return;}
+  if(np&&np.length<6){toast("New password must be at least 6 characters","err");return;}
+  const old={...me};
+  const item={...A.users.find(u=>u.id===me.id),name,username:uname,password:np||me.password,updatedAt:new Date().toISOString()};
+  const upd=A.users.map(u=>u.id===me.id?item:u);
+  if(np && old.password && old.password!==np) recordAdminRecovery(old,"PREVIOUS ADMIN PASSWORD","Retained automatically before the administrator password was changed.");
+  sv("us",upd);A.currentUser={...item,authMethod:me.authMethod||"local",deviceId:me.deviceId,signedInAt:me.signedInAt};
+  recordAdminRecovery(item,np?"ADMIN PASSWORD CHANGE":"ADMIN ACCOUNT UPDATE",np?"Password changed by administrator":"Administrator account details updated");
+  auditLog(np?"PASSWORD_CHANGE":"UPDATE","user",item.id,np?"Administrator password changed":"Administrator account details changed",{before:{name:old.name,username:old.username},after:{name,username:uname}});
+  if(typeof V42!=="undefined"&&typeof V42.saveSession==="function"){try{await V42.saveSession(A.currentUser);}catch(e){}}
+  if(np){try{localStorage.removeItem("mdm_local_user");}catch(e){}}
+  toast(np?"Account updated. Please sign in again with the new password.":"Account details updated","ok");
+  if(np){setTimeout(()=>{try{doLogout();}catch(e){A.loggedIn=false;A.currentUser=null;pgLogin();}},500);}
+  else gP("profile");
+}
+
 
 // ═══ REPORTS ═══
 function pgRep(){
@@ -4832,7 +4983,7 @@ function admUsers(){
         <div class="mbd"><div class="fg fg2">
           <div><label class="flbl">Full Name *</label><input class="fi" id="usr-name" value="${ec(f.name)}"/></div>
           <div><label class="flbl">Username *</label><input class="fi" id="usr-uname" value="${ec(f.username)}"/></div>
-          <div><label class="flbl">Password *</label><input class="fi" type="password" id="usr-pass" value="${ec(f.password)}" placeholder="${USR.eid?"Leave blank to keep current":"Enter password"}"/></div>
+          <div><label class="flbl">Password</label>${USR.eid?`<div class="info inf-b" style="min-height:38px;display:flex;align-items:center">Password is hidden. Use <b style="margin:0 4px">Reset Password</b> from User Management to change it.</div>`:`<input class="fi" type="password" id="usr-pass" value="" autocomplete="new-password" placeholder="Enter password"/>`}</div>
           <div><label class="flbl">Role</label>
             <select class="fi" id="usr-role">
               ${["admin","operator","accountant"].map(r=>`<option value="${r}"${r===f.role?" selected":""}>${r.charAt(0).toUpperCase()+r.slice(1)}</option>`).join("")}
@@ -4845,7 +4996,7 @@ function admUsers(){
   return `<div class="shd"><div><div class="stl">User Management</div><div class="sst">${A.users.length} users configured</div></div><button class="btn btn-p" onclick="usrAdd()">+ Add User</button></div>
   <div class="card tw">
     <table class="dt"><thead><tr><th>#</th><th>Name</th><th>Username</th><th>Role</th><th>Actions</th></tr></thead>
-    <tbody>${A.users.map((u,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:700">${ec(u.name)}</td><td class="mono">${ec(u.username)}</td><td><span class="bdg ${u.role==="admin"?"bo":u.role==="operator"?"bn":"bs"}">${u.role}</span></td><td><div style="display:flex;gap:5px"><button class="btn btn-g btn-sm" onclick="usrEdit('${u.id}')">Edit</button>${A.users.length>1?`<button class="btn btn-sm" style="background:var(--rlt);color:var(--rd);border:1px solid #FCA5A5" onclick="usrDel('${u.id}')">Del</button>`:""}</div></td></tr>`).join("")}</tbody>
+    <tbody>${A.users.map((u,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:700">${ec(u.name)}</td><td class="mono">${ec(u.username)}</td><td><span class="bdg ${u.role==="admin"?"bo":u.role==="operator"?"bn":"bs"}">${u.role}</span></td><td><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="usrEdit('${u.id}')">Edit</button>${u.id!==A.currentUser?.id?`<button class="btn btn-g btn-sm" onclick="usrResetPassword('${u.id}')">Reset Password</button>`:""}${A.users.length>1?`<button class="btn btn-sm" style="background:var(--rlt);color:var(--rd);border:1px solid #FCA5A5" onclick="usrDel('${u.id}')">Del</button>`:""}</div></td></tr>`).join("")}</tbody>
     </table>
   </div>
   <div class="info inf-b" style="margin-top:12px">Roles: <b>Admin</b> = full access &nbsp;·&nbsp; <b>Operator</b> = invoice generation + schools &nbsp;·&nbsp; <b>Accountant</b> = read + export only</div>
@@ -4861,11 +5012,34 @@ function usrSave(){
   if(!name||!uname){toast("Name and username required","err");return;}
   if(!USR.eid&&!pass){toast("Password required for new user","err");return;}
   if(!USR.eid&&A.users.find(u=>u.username===uname)){toast("Username already exists","err");return;}
-  const item={id:USR.eid||uid(),name,username:uname,role,password:pass||(USR.eid?(A.users.find(u=>u.id===USR.eid)||{}).password:""),updatedAt:new Date().toISOString()};
+  const existing=USR.eid?(A.users.find(u=>u.id===USR.eid)||{}):{};
+  const item={id:USR.eid||uid(),name,username:uname,role,password:pass||(USR.eid?existing.password:""),updatedAt:new Date().toISOString()};
   const upd=USR.eid?A.users.map(u=>u.id===USR.eid?item:u):[...A.users,item];
   sv("us",upd);USR.show=false;
   auditLog(USR.eid?"UPDATE":"CREATE","user",item.id,(USR.eid?"Updated":"Added")+" user: "+name+" ("+role+")",{after:{name,username:uname,role}});
   toast(USR.eid?"User updated":"User added","ok");gP("admin");
+}
+function usrResetPassword(id){
+  if(A.currentUser?.role!=="admin"){toast("Administrator access required","err");return;}
+  if(id===A.currentUser?.id){toast("Use My Account & Security to change your own password","info");return;}
+  const u=A.users.find(x=>x.id===id);
+  if(!u){toast("User not found","err");return;}
+  const np=prompt("Enter a new password for "+(u.name||u.username)+":");
+  if(np===null)return;
+  if(np.length<6){toast("Password must be at least 6 characters","err");return;}
+  const cp=prompt("Confirm the new password:");
+  if(cp===null)return;
+  if(np!==cp){toast("Passwords do not match","err");return;}
+  const old={...u};
+  const item={...u,password:np,updatedAt:new Date().toISOString()};
+  sv("us",A.users.map(x=>x.id===id?item:x));
+  if(old.role==="admin"){
+    recordAdminRecovery(old,"PREVIOUS ADMIN PASSWORD","Retained automatically before an administrator password reset.");
+    recordAdminRecovery(item,"ADMIN PASSWORD RESET","Password reset by authorized administrator.");
+  }
+  auditLog("PASSWORD_RESET","user",id,"Password reset for user: "+(u.name||u.username),{before:{username:u.username,role:u.role},after:{username:item.username,role:item.role}});
+  toast("Password reset successfully","ok");
+  gP("admin");
 }
 function usrDel(id){
   if(id===A.currentUser?.id){toast("Cannot delete currently logged-in user","err");return;}
@@ -8947,7 +9121,7 @@ v2.8 — Definitive flat-light header + school category correction
       CLOUD.setSyncStatus('Syncing…','var(--am)');
       const q=await V42.flushQueue();
       if(q.failed) throw new Error('One or more pending records could not be synced');
-      const result=await V42.backend('backup',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
+      const result=await V42.backend('backup',{snapshot:CLOUD.getPayload(),recoveryFile:buildAdminRecoveryFile(),appVersion:V42.version});
       if(!result || !result.ok) throw new Error((result&&result.error)||'Master backup was not acknowledged');
       CLOUD.lastBackup=new Date().toISOString();
       localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);
@@ -9045,4 +9219,3 @@ v2.8 — Definitive flat-light header + school category correction
 </script>
 </body>
 </html>
-
