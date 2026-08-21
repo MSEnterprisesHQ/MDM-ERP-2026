@@ -3077,6 +3077,12 @@ html[data-theme="dark"] .hist-view-off{
   border-color:var(--bd) !important;
 }
 </style>
+<style id="desktop-auto-return-fix">
+@media (min-width:761px){
+  html.viewport-desktop .mobile-bottom-nav{display:none!important}
+  html.viewport-desktop .mobile-sidebar-scrim{display:none!important}
+}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -11991,6 +11997,26 @@ function toggleDotMenu() {
 
 // ── Sidebar: desktop collapse + mobile drawer ─────────────
 function isMobileViewport(){return window.matchMedia&&window.matchMedia("(max-width:760px)").matches}
+let __LAST_VIEWPORT_MOBILE=null;
+function syncResponsiveShell(force=false){
+  const mobile=isMobileViewport();
+  if(!force && mobile===__LAST_VIEWPORT_MOBILE)return;
+  __LAST_VIEWPORT_MOBILE=mobile;
+  const sb=document.getElementById("main-sidebar");
+  const sc=document.getElementById("mobile-sidebar-scrim");
+  const bn=document.getElementById("mobile-bottom-nav");
+  if(mobile){
+    if(bn)bn.style.removeProperty("display");
+    if(sc)sc.style.removeProperty("display");
+  }else{
+    if(sb)sb.classList.remove("mobile-open");
+    if(sc)sc.style.display="none";
+    if(bn)bn.style.display="none";
+  }
+  document.documentElement.classList.toggle("viewport-mobile",mobile);
+  document.documentElement.classList.toggle("viewport-desktop",!mobile);
+}
+
 function openMobileSidebar(){const sb=document.getElementById("main-sidebar"),sc=document.getElementById("mobile-sidebar-scrim");if(!sb||!isMobileViewport())return;sb.classList.add("mobile-open");if(sc)sc.style.display="block"}
 function closeMobileSidebar(){const sb=document.getElementById("main-sidebar"),sc=document.getElementById("mobile-sidebar-scrim");if(sb)sb.classList.remove("mobile-open");if(sc)sc.style.display="none"}
 function toggleSidebarCollapse(){if(isMobileViewport()){const sb=document.getElementById("main-sidebar");if(sb?.classList.contains("mobile-open"))closeMobileSidebar();else openMobileSidebar();return}A._sbCollapsed=!A._sbCollapsed;const sb=document.getElementById("main-sidebar");if(sb)sb.classList.toggle("collapsed",A._sbCollapsed)}
@@ -12001,7 +12027,14 @@ function mobileDashRender(){const tr=document.getElementById("m-dash-track");if(
 function mobileDashGo(i){MDASH_PAGE=Math.max(0,Math.min(2,Number(i)||0));mobileDashRender()} function mobileDashStep(d){mobileDashGo(MDASH_PAGE+(d||0))}
 function initMobileDashboardGestures(){const vp=document.getElementById("m-dash-viewport");if(!vp||MDASH_READY)return;MDASH_READY=true;vp.addEventListener("touchstart",e=>{if(e.touches.length!==1)return;const t=e.touches[0];MDASH_TOUCH={x:t.clientX,y:t.clientY,edge:t.clientX<=22}},{passive:true});vp.addEventListener("touchend",e=>{if(!MDASH_TOUCH)return;const t=e.changedTouches[0],dx=t.clientX-MDASH_TOUCH.x,dy=t.clientY-MDASH_TOUCH.y,edge=MDASH_TOUCH.edge;MDASH_TOUCH=null;if(Math.abs(dx)<50||Math.abs(dx)<Math.abs(dy)*1.15)return;if(edge&&dx>0){openMobileSidebar();return}mobileDashStep(dx<0?1:-1)},{passive:true});mobileDashRender()}
 function syncMobileBottomNav(){const n=document.getElementById("mobile-bottom-nav");if(!n)return;const p=A.page;n.querySelectorAll("button").forEach((b,i)=>b.classList.toggle("active",(i===0&&p==="dashboard")||(i===1&&p==="new")||(i===2&&p==="history")))}
-window.addEventListener("resize",()=>{if(isMobileViewport()){setTimeout(initMobileDashboardGestures,0);setTimeout(syncMobileDashboardHeight,40)}else closeMobileSidebar()});window.addEventListener("orientationchange",()=>setTimeout(()=>{initMobileDashboardGestures();syncMobileDashboardHeight()},150));
+window.addEventListener("resize",()=>{
+  syncResponsiveShell();
+  if(isMobileViewport()){
+    setTimeout(initMobileDashboardGestures,0);
+    setTimeout(syncMobileDashboardHeight,40);
+  }else closeMobileSidebar();
+});
+window.addEventListener("pageshow",()=>syncResponsiveShell(true));window.addEventListener("orientationchange",()=>setTimeout(()=>{initMobileDashboardGestures();syncMobileDashboardHeight()},150));
 
 // ── Topbar search ───────────────────────────────────
 function tbSearch(q) {
