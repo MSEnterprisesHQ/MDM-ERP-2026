@@ -4897,9 +4897,30 @@ V42.googleSignIn = async function(){
   if(!V42.googleClientId){V42.config();if(!V42.googleClientId){toast("Set Google Client ID first","err");return;}}
   try{
     await V42.loadGIS();
-    google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{await V42.acceptGoogleCredential(resp.credential);}});
-    google.accounts.id.prompt(n=>{if(n.isNotDisplayed()||n.isSkippedMoment()) toast("Google sign-in popup was not displayed. Check Client ID / browser settings.","err");});
-  }catch(e){toast("Google authentication unavailable: "+e.message,"err");}
+    google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});
+    // Do not rely on GIS One Tap prompt() for an explicit user action. Browsers
+    // may suppress that prompt/FedCM even when the OAuth client is valid.
+    // The official rendered GIS button is the supported interactive sign-in
+    // surface and opens Google's account chooser/sign-in flow from a user click.
+    const host=document.getElementById('mdm-google-gis-button');
+    if(host){
+      host.innerHTML='';
+      google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:host.clientWidth||360});
+      host.scrollIntoView({block:'nearest'});
+      return;
+    }
+    // Settings/secondary entry point: render a temporary official GIS button
+    // rather than treating a suppressed One Tap prompt as a login failure.
+    let overlay=document.getElementById('mdm-google-gis-overlay');
+    if(!overlay){
+      overlay=document.createElement('div');overlay.id='mdm-google-gis-overlay';
+      overlay.style.cssText='position:fixed;inset:0;z-index:20000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+      overlay.innerHTML=`<div style="background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:18px;min-width:280px;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.22)"><div style="font-weight:800;font-size:14px;margin-bottom:10px">Continue with Google</div><div id="mdm-google-gis-overlay-button"></div><button type="button" class="btn btn-g btn-sm" style="margin-top:10px;width:100%" onclick="this.closest('#mdm-google-gis-overlay')?.remove()">Cancel</button></div>`;
+      document.body.appendChild(overlay);
+    }
+    const oh=document.getElementById('mdm-google-gis-overlay-button');
+    if(oh){oh.innerHTML='';google.accounts.id.renderButton(oh,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});}
+  }catch(e){toast("Google authentication unavailable: "+e.message,"err");console.error('[MDM] GIS sign-in setup failed',e);}
 };
 V42.acceptGoogleCredential = async function(credential){
   try{
@@ -11055,9 +11076,9 @@ v2.8 — Definitive flat-light header + school category correction
       const wrap=document.createElement('div');
       wrap.id='mdm-google-login-wrap';
       wrap.style.cssText='margin-top:9px';
-      wrap.innerHTML='<button id="mdm-google-login-btn" class="btn btn-g" style="width:100%;height:40px;font-size:13px" type="button">Continue with Google</button><div style="margin-top:7px;text-align:center;font-size:10.5px;color:var(--txl)">Google = cloud account &nbsp;•&nbsp; Username/password = emergency offline login</div>';
+      wrap.innerHTML='<div id="mdm-google-gis-button" style="min-height:40px;display:flex;justify-content:center"></div><div style="margin-top:7px;text-align:center;font-size:10.5px;color:var(--txl)">Google = cloud account &nbsp;•&nbsp; Username/password = emergency offline login</div>';
       localBtn.parentNode.insertBefore(wrap,localBtn.nextSibling);
-      document.getElementById('mdm-google-login-btn').addEventListener('click',()=>V42.googleSignIn());
+      (async()=>{try{await V42.loadGIS();google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});const host=document.getElementById('mdm-google-gis-button');if(host)google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:host.clientWidth||360});}catch(e){console.warn('[MDM v4.51] GIS button unavailable',e);}})();
     }catch(e){ console.warn('[MDM v4.51] Google login button skipped',e); }
   }
 
