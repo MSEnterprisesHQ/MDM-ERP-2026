@@ -4923,6 +4923,7 @@ V42.googleSignIn = async function(){
   }catch(e){toast("Google authentication unavailable: "+e.message,"err");console.error('[MDM] GIS sign-in setup failed',e);}
 };
 V42.acceptGoogleCredential = async function(credential){
+  try{ document.getElementById("mdm-google-gis-overlay")?.remove(); }catch(e){}
   try{
     const payload=JSON.parse(atob(credential.split(".")[1].replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(credential.split(".")[1].length/4)*4,"=")));
     if(payload.aud && V42.googleClientId && payload.aud!==V42.googleClientId) throw new Error("Google client mismatch");
@@ -4931,7 +4932,7 @@ V42.acceptGoogleCredential = async function(credential){
     await V42.saveSession(user);
     localStorage.setItem("cloud_user",JSON.stringify(user));
     auditLog("LOGIN","cloud","google","Google account authenticated: "+user.email,null);
-    try{await V42.backend("auth",{idToken:credential,user});}catch(e){console.warn("Backend auth not configured/reachable",e);}
+    await V42.backend("auth",{idToken:credential,user});
     await V42.flushQueue();
     CLOUD.updateUI();
     toast("Signed in as "+(user.name||user.email),"ok");
@@ -4959,11 +4960,20 @@ V42.backend = async function(action,payload){
     });
   }
 
-  // Standalone/local HTML fallback: keep the existing HTTP API path.
+  // Standalone/GitHub fallback: call the configured Apps Script Web App directly.
+  // The Apps Script deployment must be configured as a Web App accessible to
+  // the intended users. We require a readable JSON ACK; no-cors is never used.
   if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  const r=await fetch(V42.apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error("API HTTP "+r.status);
-  const d=await r.json(); if(!d.ok) throw new Error(d.error||"API request failed"); return d;
+  try{
+    const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
+    if(!r.ok) throw new Error('API HTTP '+r.status);
+    const d=await r.json();
+    if(!d.ok) throw new Error(d.error||'API request failed');
+    return d;
+  }catch(fetchError){
+    const detail=(fetchError&&fetchError.message)||String(fetchError);
+    throw new Error('Master API transport failed: '+detail);
+  }
 };
 
 V42.ensureBackendAuth = async function(){
@@ -10938,6 +10948,10 @@ v2.8 — Definitive flat-light header + school category correction
   V42.acceptGoogleCredential = async function(credential){
     try{
       if(!credential) throw new Error('Google credential was not returned');
+      // The credential callback means the user has already selected an account.
+      // Remove ONLY our temporary chooser immediately; never cancel Google's own
+      // account/sign-in window, which has its own lifecycle.
+      try{ document.getElementById('mdm-google-gis-overlay')?.remove(); }catch(e){}
       const part=String(credential).split('.')[1];
       if(!part) throw new Error('Invalid Google credential');
       const payload=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'=')));
@@ -10967,6 +10981,8 @@ v2.8 — Definitive flat-light header + school category correction
       A.loggedIn=true; A.currentUser=mergedUser;
       auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
       CLOUD.ready=true;
+      // Our temporary chooser was removed at credential receipt. Do not call
+      // google.accounts.id.cancel() here; that API belongs to Google's prompt lifecycle.
       CLOUD.updateUI();
       const q=await V42.flushQueue();
       if(A.page==='backupsync') gP('backupsync');
@@ -11004,6 +11020,34 @@ v2.8 — Definitive flat-light header + school category correction
     return {sent,failed};
   };
 
+  /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
+  V42.ensureBackendAuthInteractive = async function(){
+    try{
+      await V42.loadGIS();
+      if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
+      return await new Promise(resolve=>{
+        let done=false;
+        const finish=v=>{if(done)return;done=true;try{document.getElementById('mdm-google-gis-overlay')?.remove();}catch(e){};resolve(!!v);};
+        google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{
+          try{if(!resp?.credential) return finish(false); await V42.acceptGoogleCredential(resp.credential); finish(!!V42.idToken);}
+          catch(e){console.error('[MDM] interactive Google re-auth failed',e);finish(false);}
+        }});
+        const overlay=document.createElement('div');
+        overlay.id='mdm-google-gis-overlay';
+        overlay.style.cssText='position:fixed;inset:0;z-index:20000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+        overlay.innerHTML='<div style="background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:18px;min-width:280px;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.22)"><div style="font-weight:800;font-size:14px;margin-bottom:10px">Continue with Google</div><div id="mdm-google-gis-overlay-button"></div><button type="button" class="btn btn-g btn-sm" style="margin-top:10px;width:100%">Cancel</button></div>';
+        document.body.appendChild(overlay);
+        overlay.querySelector('button')?.addEventListener('click',()=>finish(false));
+        // When the GIS button opens Google's own account popup, the parent window
+        // loses focus. Hide only our wrapper at that moment; Google's popup remains.
+        const hideOnBlur=()=>{try{overlay.remove();}catch(_){}};
+        window.addEventListener('blur',hideOnBlur,{once:true});
+        const host=document.getElementById('mdm-google-gis-overlay-button');
+        if(host) google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});
+      });
+    }catch(e){console.error('[MDM] GIS re-auth setup failed',e);return false;}
+  };
+
   /* ---- Backup Now: real cloud backup for Google users; local snapshot for emergency login ---- */
   window.cloudBackupNow = async function(){
     try{
@@ -11013,7 +11057,14 @@ v2.8 — Definitive flat-light header + school category correction
         toast('Local backup created. Sign in with Google to send it to Master Drive.','ok');
         return;
       }
-      if(!isGoogleUser(CLOUD.user) || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
+      if(!isGoogleUser(CLOUD.user)) throw new Error('Google authentication is required for Master Drive backup');
+      // A Google session is persisted for UI continuity, but the raw GIS credential is
+      // intentionally not persisted in localStorage. After a page reload, re-authenticate
+      // interactively before touching Master Drive rather than showing a false Connected state.
+      if(!V42.idToken){
+        const ok=await V42.ensureBackendAuthInteractive();
+        if(!ok || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
+      }
       CLOUD.setSyncStatus('Syncing…','var(--am)');
 
       // Queue sync and full backup are intentionally decoupled. A single
