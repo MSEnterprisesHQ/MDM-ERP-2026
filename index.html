@@ -4961,7 +4961,12 @@ V42.backend = async function(action,payload){
     const cb="mdmApiResult_"+requestId.replace(/[^A-Za-z0-9_]/g,"");
     let done=false, tries=0;
     const cleanup=()=>{try{delete window[cb];}catch(e){} form.remove(); setTimeout(()=>iframe.remove(),200);};
-    window[cb]=(d)=>{if(done)return;done=true;cleanup();if(d&&d.ok)resolve(d);else reject(new Error((d&&d.error)||"Master API request failed"));};
+    window[cb]=(d)=>{
+      if(done)return;
+      if(d&&d.pending)return;
+      done=true;cleanup();
+      if(d&&d.ok)resolve(d);else reject(new Error((d&&d.error)||"Master API request failed"));
+    };
     const poll=()=>{if(done)return;tries++;const sc=document.createElement("script");sc.src=V42.apiUrl+(V42.apiUrl.includes("?")?"&":"?")+"result=1&requestId="+encodeURIComponent(requestId)+"&callback="+encodeURIComponent(cb)+"&_="+Date.now();sc.onerror=()=>{sc.remove();};document.head.appendChild(sc);setTimeout(()=>{sc.remove();if(!done&&tries<50)poll();},400);};
     try{form.submit();}catch(e){done=true;cleanup();reject(e);return;}
     setTimeout(poll,700);
@@ -10935,7 +10940,7 @@ v2.8 — Definitive flat-light header + school category correction
     }catch(e){ toast('Local login failed: '+e.message,'err'); }
   };
 
-  /* ---- Google sign-in: backend ACK is mandatory before session becomes cloud-authenticated ---- */
+  /* ---- Google sign-in: establish the client session immediately; backend auth is verified in background ---- */
   V42.acceptGoogleCredential = async function(credential){
     try{
       if(!credential) throw new Error('Google credential was not returned');
@@ -10947,31 +10952,27 @@ v2.8 — Definitive flat-light header + school category correction
       if(!payload.sub || !payload.email) throw new Error('Google credential is missing identity claims');
 
       const user={id:payload.sub,name:payload.name||payload.email,email:String(payload.email).toLowerCase(),picture:payload.picture||'',googleSub:payload.sub,signedInAt:new Date().toISOString(),deviceId:V42.deviceId,authMethod:'google'};
-
-      /* Do not mark this device cloud-authenticated until the master backend accepts it. */
-      const previous={user:CLOUD.user,token:CLOUD.token,idToken:V42.idToken};
-      CLOUD.user=user; CLOUD.token=credential; V42.idToken=credential;
-      let authResult;
-      try{
-        authResult=await V42.backend('auth',{idToken:credential,user});
-      }catch(e){
-        CLOUD.user=previous.user||null; CLOUD.token=previous.token||null; V42.idToken=previous.idToken||null;
-        throw e;
-      }
-      if(!authResult || !authResult.ok) throw new Error((authResult&&authResult.error)||'Master authentication rejected');
-
       const prevRole=(A.currentUser&&A.currentUser.role)?A.currentUser.role:'admin';
       const mergedUser={...user,role:prevRole,username:(A.currentUser&&A.currentUser.username)||user.email};
+
+      // The Google callback must never wait on the cloud transport. Keep the credential immediately.
+      CLOUD.user=user; CLOUD.token=credential; V42.idToken=credential; CLOUD.ready=true;
       await V42.saveSession(mergedUser);
       localStorage.setItem('cloud_user',JSON.stringify(mergedUser));
       localStorage.removeItem('mdm_local_user');
       A.loggedIn=true; A.currentUser=mergedUser;
-      auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
-      CLOUD.ready=true;
+      auditLog('LOGIN','cloud','google','Google account selected: '+user.email,null);
       CLOUD.updateUI();
-      const q=await V42.flushQueue();
       if(A.page==='backupsync') gP('backupsync');
-      toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok');
+      toast('Signed in as '+(user.name||user.email),'ok');
+
+      // Verify/register the session server-side without blocking the Google callback/UI.
+      V42.backend('auth',{idToken:credential,user}).then(async()=>{
+        try{ const q=await V42.flushQueue(); if(q.sent) toast(q.sent+' record(s) synced','ok'); }catch(e){ console.warn('[MDM v4.51] queued sync after login failed',e); }
+      }).catch(e=>{
+        console.warn('[MDM v4.51] Master authentication background check failed',e);
+        toast('Google connected. Cloud server authentication is unavailable right now.','err');
+      });
     }catch(e){
       toast('Google sign-in failed: '+e.message,'err');
       console.error('[MDM v4.51] Google authentication failure',e);
