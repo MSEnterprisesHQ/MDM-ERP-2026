@@ -4721,7 +4721,9 @@ function doLogin(){
    - version/migration manifest + local recovery snapshot
    - existing invoice/PDF/business logic remains untouched
    ═════════════════════════════════════════════════════════════════════ */
-const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec";
+const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz0-INFivW6YLisKHGErbWzkT_jOoZq51zCv393n_u_53zgH7_qTxqWrkOXusvXrTM/exec";
+const V42_LEGACY_API_URL = "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec";
+try{ if(localStorage.getItem("mdm_api_url")===V42_LEGACY_API_URL) localStorage.setItem("mdm_api_url",V42_DEFAULT_API_URL); }catch(e){}
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
   version: "4.42",
@@ -4897,33 +4899,11 @@ V42.googleSignIn = async function(){
   if(!V42.googleClientId){V42.config();if(!V42.googleClientId){toast("Set Google Client ID first","err");return;}}
   try{
     await V42.loadGIS();
-    google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});
-    // Do not rely on GIS One Tap prompt() for an explicit user action. Browsers
-    // may suppress that prompt/FedCM even when the OAuth client is valid.
-    // The official rendered GIS button is the supported interactive sign-in
-    // surface and opens Google's account chooser/sign-in flow from a user click.
-    const host=document.getElementById('mdm-google-gis-button');
-    if(host){
-      host.innerHTML='';
-      google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:host.clientWidth||360});
-      host.scrollIntoView({block:'nearest'});
-      return;
-    }
-    // Settings/secondary entry point: render a temporary official GIS button
-    // rather than treating a suppressed One Tap prompt as a login failure.
-    let overlay=document.getElementById('mdm-google-gis-overlay');
-    if(!overlay){
-      overlay=document.createElement('div');overlay.id='mdm-google-gis-overlay';
-      overlay.style.cssText='position:fixed;inset:0;z-index:20000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
-      overlay.innerHTML=`<div style="background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:18px;min-width:280px;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.22)"><div style="font-weight:800;font-size:14px;margin-bottom:10px">Continue with Google</div><div id="mdm-google-gis-overlay-button"></div><button type="button" class="btn btn-g btn-sm" style="margin-top:10px;width:100%" onclick="this.closest('#mdm-google-gis-overlay')?.remove()">Cancel</button></div>`;
-      document.body.appendChild(overlay);
-    }
-    const oh=document.getElementById('mdm-google-gis-overlay-button');
-    if(oh){oh.innerHTML='';google.accounts.id.renderButton(oh,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});}
-  }catch(e){toast("Google authentication unavailable: "+e.message,"err");console.error('[MDM] GIS sign-in setup failed',e);}
+    google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{try{if(google.accounts.id.cancel)google.accounts.id.cancel();}catch(e){} await V42.acceptGoogleCredential(resp.credential);}});
+    google.accounts.id.prompt(n=>{if(n.isNotDisplayed()||n.isSkippedMoment()) toast("Google sign-in popup was not displayed. Check Client ID / browser settings.","err");});
+  }catch(e){toast("Google authentication unavailable: "+e.message,"err");}
 };
 V42.acceptGoogleCredential = async function(credential){
-  try{ document.getElementById("mdm-google-gis-overlay")?.remove(); }catch(e){}
   try{
     const payload=JSON.parse(atob(credential.split(".")[1].replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(credential.split(".")[1].length/4)*4,"=")));
     if(payload.aud && V42.googleClientId && payload.aud!==V42.googleClientId) throw new Error("Google client mismatch");
@@ -4932,7 +4912,7 @@ V42.acceptGoogleCredential = async function(credential){
     await V42.saveSession(user);
     localStorage.setItem("cloud_user",JSON.stringify(user));
     auditLog("LOGIN","cloud","google","Google account authenticated: "+user.email,null);
-    await V42.backend("auth",{idToken:credential,user});
+    try{await V42.backend("auth",{idToken:credential,user});}catch(e){console.warn("Backend auth not configured/reachable",e);}
     await V42.flushQueue();
     CLOUD.updateUI();
     toast("Signed in as "+(user.name||user.email),"ok");
@@ -4960,20 +4940,11 @@ V42.backend = async function(action,payload){
     });
   }
 
-  // Standalone/GitHub fallback: call the configured Apps Script Web App directly.
-  // The Apps Script deployment must be configured as a Web App accessible to
-  // the intended users. We require a readable JSON ACK; no-cors is never used.
+  // Standalone/local HTML fallback: keep the existing HTTP API path.
   if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  try{
-    const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
-    if(!r.ok) throw new Error('API HTTP '+r.status);
-    const d=await r.json();
-    if(!d.ok) throw new Error(d.error||'API request failed');
-    return d;
-  }catch(fetchError){
-    const detail=(fetchError&&fetchError.message)||String(fetchError);
-    throw new Error('Master API transport failed: '+detail);
-  }
+  const r=await fetch(V42.apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error("API HTTP "+r.status);
+  const d=await r.json(); if(!d.ok) throw new Error(d.error||"API request failed"); return d;
 };
 
 V42.ensureBackendAuth = async function(){
@@ -4984,7 +4955,7 @@ V42.ensureBackendAuth = async function(){
     if(!V42.googleClientId) return false;
     return await new Promise(resolve=>{
       let done=false; const finish=v=>{if(done)return;done=true;resolve(v);};
-      google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{try{await V42.acceptGoogleCredential(resp.credential);finish(true);}catch(e){finish(false);}}});
+      google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{try{try{if(google.accounts.id.cancel)google.accounts.id.cancel();}catch(e){} await V42.acceptGoogleCredential(resp.credential);finish(true);}catch(e){finish(false);}}});
       google.accounts.id.prompt(n=>{if(n.isNotDisplayed()||n.isSkippedMoment())finish(false);});
       setTimeout(()=>finish(false),7000);
     });
@@ -7375,22 +7346,12 @@ function invoiceThemeFamily(seedHex){
   const medium=mixRgb(dark,light,.60);
   return {seed:rgbToHex(seed),dark:rgbToHex(dark),medium:rgbToHex(medium),light:rgbToHex(light)};
 }
-function customThemeFamily(primary,secondary,tertiary){
-  const p=hexToRgb(primary)||[154,184,214];
-  const autoSecondary=rgbToHex(mixRgb(p,[255,255,255],.40));
-  const autoTertiary=rgbToHex(mixRgb(p,[255,255,255],.70));
-  return {seed:rgbToHex(p),dark:rgbToHex(primary||p),medium:secondary&&hexToRgb(secondary)?rgbToHex(secondary):autoSecondary,light:tertiary&&hexToRgb(tertiary)?rgbToHex(tertiary):autoTertiary};
-}
 function invoiceTheme(){
   const base={...ST0.themeDesign,...(A.sett?.themeDesign||{})};
   const p=INVOICE_THEME_PRESETS[base.invoicePreset];
   if(base.invoicePreset&&base.invoicePreset!=="custom"&&p){
     const fam=invoiceThemeFamily(p.seed);
     return {...base,invoicePreset:base.invoicePreset,themeSeed:p.seed,headerBg:fam.light,accent:fam.dark,highlight:fam.light,border:p.border,headerText:p.text,_themeFamily:fam};
-  }
-  if(base.invoicePreset==="custom" || base.customTheme){
-    const fam=customThemeFamily(base.customPrimary||base.themeSeed||base.accent,base.customSecondary,base.customTertiary);
-    return {...base,invoicePreset:"custom",themeSeed:fam.seed,headerBg:fam.light,accent:fam.dark,highlight:fam.light,_themeFamily:fam};
   }
   if(base.themeSeed){
     const fam=invoiceThemeFamily(base.themeSeed);
@@ -7405,33 +7366,34 @@ function invoiceThemeSaveFromUI(){
   const old={...(A.sett?.themeDesign||ST0.themeDesign)};
   const draft=A._themeDraft||{};
   const preset=draft.invoicePreset||"custom";
-  const isCustom=preset==="custom";
-  const primary=(document.getElementById("td-accent-hex")||{}).value||draft.customPrimary||old.customPrimary||old.accent;
-  const secondary=(document.getElementById("td-medium-hex")||{}).value||draft.customSecondary||old.customSecondary;
-  const tertiary=(document.getElementById("td-bg-hex")||{}).value||draft.customTertiary||old.customTertiary||old.headerBg;
-  const upd=isCustom?{...old,invoicePreset:"custom",customTheme:true,customPrimary:primary.toUpperCase(),customSecondary:secondary.toUpperCase(),customTertiary:tertiary.toUpperCase(),customSecondaryManual:!!draft.customSecondaryManual,customTertiaryManual:!!draft.customTertiaryManual,themeSeed:primary.toUpperCase(),headerBg:tertiary.toUpperCase(),accent:primary.toUpperCase(),highlight:tertiary.toUpperCase(),headerText:(document.getElementById("td-text")||{}).value||old.headerText,border:(document.getElementById("td-border-hex")||{}).value||old.border,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize)}:{...old,invoicePreset:preset,themeSeed:draft.themeSeed||old.themeSeed,headerText:(document.getElementById("td-text")||{}).value||old.headerText,border:(document.getElementById("td-border-hex")||{}).value||old.border,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize)};
+  const seed=draft.themeSeed||old.themeSeed||((document.getElementById("td-bg-hex")||{}).value)||old.headerBg;
+  const fam=invoiceThemeFamily(seed);
+  const upd={...old,invoicePreset:preset,themeSeed:seed,headerBg:fam.light,headerText:(document.getElementById("td-text")||{}).value||old.headerText,accent:fam.dark,border:(document.getElementById("td-border-hex")||{}).value||old.border,highlight:fam.light,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize)};
   const st={...(A.sett||ST0),themeDesign:upd};sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design saved","ok");gP("settings");
 }
 function invoiceThemeReset(){A._themeDraft=null;toast("Unsaved Theme Design changes reset","ok");gP("settings");}
 function invoiceThemeMasterReset(){const st={...(A.sett||ST0),themeDesign:{...ST0.themeDesign}};sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design restored to Master","ok");gP("settings");}
 function saveAsCustomSlot(n){
-  const primary=(document.getElementById("td-accent-hex")||{}).value;
-  const secondary=(document.getElementById("td-medium-hex")||{}).value;
-  const tertiary=(document.getElementById("td-bg-hex")||{}).value;
-  if(n<1||n>6||!hexToRgb(primary)||!hexToRgb(secondary)||!hexToRgb(tertiary)){toast("Pick valid theme colors first","err");return;}
+  const hexEl=document.getElementById("td-bg-hex");
+  const seed=(hexEl&&hexToRgb(hexEl.value))?hexEl.value.toUpperCase():(A._themeDraft?.themeSeed||invoiceTheme().themeSeed);
+  if(!seed||!hexToRgb(seed)){toast("Pick a color first, then save it as a custom preset","err");return;}
   const old=A.sett?.themeDesign||ST0.themeDesign;
-  const customSlots={...(old.customSlots||{}),["c"+n]:{name:"Custom "+n,primary:primary.toUpperCase(),secondary:secondary.toUpperCase(),tertiary:tertiary.toUpperCase(),secondaryManual:!!A._themeDraft?.customSecondaryManual,tertiaryManual:!!A._themeDraft?.customTertiaryManual}};
+  const customSlots={...(old.customSlots||{}),["c"+n]:{name:"Custom "+n,seed:seed}};
   const st={...(A.sett||ST0),themeDesign:{...old,customSlots}};
-  sv("st",st);A.sett=st;toast("Saved as Custom "+n,"ok");gP("settings");
+  sv("st",st);A.sett=st;
+  toast("Saved as Custom "+n,"ok");
+  gP("settings");
 }
 function setCustomSlotPreset(n){
   const slot=((A.sett?.themeDesign?.customSlots)||{})["c"+n];
-  if(!slot){toast("Custom "+n+" is empty — pick colors and save it first","err");return;}
-  const fam=customThemeFamily(slot.primary||slot.seed,slot.secondary,slot.tertiary);
-  A._themeDraft={...(A.sett?.themeDesign||ST0.themeDesign),invoicePreset:"custom",customTheme:true,customSlotActive:n,customPrimary:fam.dark,customSecondary:fam.medium,customTertiary:fam.light,customSecondaryManual:!!slot.secondaryManual,customTertiaryManual:!!slot.tertiaryManual,themeSeed:fam.seed,headerBg:fam.light,headerText:"auto",accent:fam.dark,highlight:fam.light,border:"#CCD6E3"};
-  const bg=document.getElementById("td-bg"),bh=document.getElementById("td-bg-hex"),ac=document.getElementById("td-accent"),ach=document.getElementById("td-accent-hex"),me=document.getElementById("td-medium"),meh=document.getElementById("td-medium-hex"),bo=document.getElementById("td-border"),boh=document.getElementById("td-border-hex"),hi=document.getElementById("td-highlight"),hih=document.getElementById("td-highlight-hex"),tx=document.getElementById("td-text");
-  if(bg){bg.value=fam.light;bh.value=fam.light;ac.value=fam.dark;ach.value=fam.dark;if(me){me.value=fam.medium;meh.value=fam.medium;}bo.value="#CCD6E3";boh.value="#CCD6E3";hi.value=fam.light;hih.value=fam.light;tx.value="auto";updateThemePreview();}
-  document.querySelectorAll(".theme-preset").forEach(el=>el.classList.remove("on"));const btn=[...document.querySelectorAll(".theme-preset")].find(el=>el.textContent.includes("Custom "+n));if(btn)btn.classList.add("on");toast("Custom "+n+" selected — press Save Theme to apply","ok");
+  if(!slot||!slot.seed){toast("Custom "+n+" is empty — pick a color and save it first","err");return;}
+  const fam=invoiceThemeFamily(slot.seed);
+  A._themeDraft={...(A.sett?.themeDesign||ST0.themeDesign),invoicePreset:"customSlot"+n,themeSeed:slot.seed,headerBg:fam.light,headerText:"auto",accent:fam.dark,border:"#CCD6E3",highlight:fam.light};
+  const bg=document.getElementById("td-bg"),bh=document.getElementById("td-bg-hex"),ac=document.getElementById("td-accent"),ach=document.getElementById("td-accent-hex"),bo=document.getElementById("td-border"),boh=document.getElementById("td-border-hex"),hi=document.getElementById("td-highlight"),hih=document.getElementById("td-highlight-hex"),tx=document.getElementById("td-text");
+  if(bg){bg.value=fam.light;bh.value=fam.light;ac.value=fam.dark;ach.value=fam.dark;bo.value="#CCD6E3";boh.value="#CCD6E3";hi.value=fam.light;hih.value=fam.light;tx.value="auto";updateThemePreview();}
+  document.querySelectorAll(".theme-preset").forEach(el=>el.classList.remove("on"));
+  const btn=[...document.querySelectorAll(".theme-preset")].find(el=>el.textContent.includes("Custom "+n));if(btn)btn.classList.add("on");
+  toast("Custom "+n+" selected — press Save Theme to apply","ok");
 }
 function setInvoicePreset(id){const p=INVOICE_THEME_PRESETS[id];if(!p)return;
   const fam=invoiceThemeFamily(p.seed);
@@ -7444,7 +7406,7 @@ function setInvoicePreset(id){const p=INVOICE_THEME_PRESETS[id];if(!p)return;
 function updateThemePreview(){
   const bg=(document.getElementById("td-bg-hex")||{}).value||"#9AB8D6";const t=smartHeaderText(bg,(document.getElementById("td-text")||{}).value||"auto");
   const a=(document.getElementById("td-accent-hex")||{}).value||"#1F486F";const b=document.getElementById("td-border-hex")?.value||"#CCD6E3";const h=document.getElementById("td-highlight-hex")?.value||"#D6E2F0";const bm=document.getElementById("td-border-mode")?.checked!==false;const darkest=invoiceThemeDarkest({accent:a,headerBg:bg,highlight:h});const outer=bm?"#000000":rgbToHex(darkest);
-  const fam=(A._themeDraft?.invoicePreset==="custom")?customThemeFamily((document.getElementById("td-accent-hex")||{}).value,(document.getElementById("td-medium-hex")||{}).value,(document.getElementById("td-bg-hex")||{}).value):invoiceThemeFamily((A._themeDraft?.themeSeed)||a);
+  const fam=invoiceThemeFamily((A._themeDraft?.themeSeed)||a);
   const p=document.getElementById("td-preview");if(p){p.style.background=fam.dark;p.style.color=smartHeaderText(fam.dark,(document.getElementById("td-text")||{}).value||"auto");p.querySelector(".theme-preview-title").style.color=p.style.color;p.querySelector(".theme-preview-sub").style.color=p.style.color;p.querySelector(".theme-preview-meta").style.color=p.style.color;p.style.borderColor=outer;const ac=p.querySelector(".theme-preview-meta");if(ac)ac.style.borderTop="2px solid "+outer;const med=p.querySelector(".theme-preview-medium");if(med){med.style.background=fam.medium;med.style.color=smartHeaderText(fam.medium,"auto");}const light=p.querySelector(".theme-preview-light");if(light){light.style.background=fam.light;light.style.color=smartHeaderText(fam.light,"auto");}}
   const c=document.getElementById("td-contrast");if(c){const ratio=contrastRatio(hexToRgb(bg)||[154,184,214],hexToRgb(t)||[17,24,39]);c.className="theme-contrast "+(ratio>=4.5?"ok":"warn");c.textContent=ratio.toFixed(2)+":1 contrast — "+(ratio>=4.5?"Good readability":"Low contrast; consider Auto/White/Black");}
 }
@@ -7490,12 +7452,12 @@ function renderThemeDesignCard(){
   const textChoice=t.headerText||"auto", smart=smartHeaderText(t.headerBg,textChoice);
   const presets=Object.entries(INVOICE_THEME_PRESETS).map(([id,p])=>{const f=invoiceThemeFamily(p.seed);return `<button type="button" class="theme-preset ${t.invoicePreset===id?"on":""}" onclick="setInvoicePreset('${id}')"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">${p.name}</div><div class="theme-preset-note">Auto Dark · Medium · Light</div></button>`}).join("");
   const custSlots=(A.sett?.themeDesign?.customSlots)||{};
-  const customPresets=[1,2,3,4,5,6].map(n=>{
+  const customPresets=[1,2].map(n=>{
     const slot=custSlots["c"+n];
     if(slot&&slot.seed){
       const f=invoiceThemeFamily(slot.seed);
       const active=t.invoicePreset==="customSlot"+n;
-      return `<button type="button" class="theme-preset ${active?"on":""}" onclick="setCustomSlotPreset(${n})"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Saved custom palette</div></button>`;
+      return `<button type="button" class="theme-preset ${active?"on":""}" onclick="setCustomSlotPreset(${n})"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Saved custom color</div></button>`;
     }
     return `<button type="button" class="theme-preset" style="opacity:.5;border-style:dashed" onclick="toast('Pick a color below, then tap Save as Custom ${n}','warn')"><div class="theme-swatch"><span style="background:var(--bd)"></span><span style="background:var(--bd)"></span><span style="background:var(--bd)"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Not set yet</div></button>`;
   }).join("");
@@ -7505,19 +7467,18 @@ function renderThemeDesignCard(){
     <div class="theme-preset-grid">${presets}${customPresets}</div>
     <div style="margin-top:14px;font-size:12px;font-weight:800;color:var(--tx)">Custom Theme</div>
     <div class="theme-custom-grid" style="margin-top:8px">
-      <div class="theme-color-row"><div class="theme-color-label">Tertiary / Light — 30%</div><div class="theme-color-control"><input type="color" id="td-bg" value="${t.headerBg}"><input class="fi theme-hex" id="td-bg-hex" value="${t.headerBg}"></div></div>
+      <div class="theme-color-row"><div class="theme-color-label">Header Background</div><div class="theme-color-control"><input type="color" id="td-bg" value="${t.headerBg}"><input class="fi theme-hex" id="td-bg-hex" value="${t.headerBg}"></div></div>
       <div class="theme-color-row"><div class="theme-color-label">Header Text</div><div class="theme-color-control"><select class="fi" id="td-text" onchange="updateThemePreview()"><option value="auto" ${textChoice==="auto"?"selected":""}>Auto / Smart</option><option value="#111827" ${textChoice==="#111827"?"selected":""}>Black / Dark</option><option value="#FFFFFF" ${textChoice==="#FFFFFF"?"selected":""}>White</option><option value="#6B7280" ${textChoice==="#6B7280"?"selected":""}>Custom Gray</option></select></div></div>
-      <div class="theme-color-row"><div class="theme-color-label">Primary / Header — 100%</div><div class="theme-color-control"><input type="color" id="td-accent" value="${t.accent}"><input class="fi theme-hex" id="td-accent-hex" value="${t.accent}"></div></div>
-      <div class="theme-color-row"><div class="theme-color-label">Secondary / Medium — 60%</div><div class="theme-color-control"><input type="color" id="td-medium" value="${t._themeFamily?.medium||t.accent}"><input class="fi theme-hex" id="td-medium-hex" value="${t._themeFamily?.medium||t.accent}"></div></div>
+      <div class="theme-color-row"><div class="theme-color-label">Primary Accent</div><div class="theme-color-control"><input type="color" id="td-accent" value="${t.accent}"><input class="fi theme-hex" id="td-accent-hex" value="${t.accent}"></div></div>
       <div class="theme-color-row"><div class="theme-color-label">Border / Grid</div><div class="theme-color-control"><input type="color" id="td-border" value="${t.border}"><input class="fi theme-hex" id="td-border-hex" value="${t.border}"></div></div>
       <div class="theme-color-row"><div class="theme-color-label">Outer Border — Default Black</div><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div style="font-size:10.5px;color:var(--txl);line-height:1.35">ON = pure black. OFF = darkest color from the selected theme.</div><label class="tog"><input type="checkbox" id="td-border-mode" ${t.borderMode!=="theme"?"checked":""} onchange="updateThemePreview()"><span class="tog-s"></span></label></div></div>
       <div class="theme-color-row"><div class="theme-color-label">Highlight / Total</div><div class="theme-color-control"><input type="color" id="td-highlight" value="${t.highlight}"><input class="fi theme-hex" id="td-highlight-hex" value="${t.highlight}"></div></div>
       <div class="theme-color-row"><div class="theme-color-label">Header Text Mode</div><div style="font-size:10.5px;color:var(--txl)">Auto selects black/white using contrast. Manual override is available above.</div></div>
     </div>
     <div class="theme-picker-wrap" style="margin-top:12px">
-      <div><div style="font-size:11px;font-weight:800;margin-bottom:7px">Custom Color Picker</div><div style="font-size:10px;color:var(--txl);line-height:1.35;margin-bottom:7px">Pick the Primary / Header color at 100%. Secondary (60%) and Tertiary (30%) are generated automatically. You can manually adjust either shade before saving.</div><div class="theme-wheel" id="td-wheel"><span class="theme-wheel-pointer" id="td-wheel-p"></span></div></div>
+      <div><div style="font-size:11px;font-weight:800;margin-bottom:7px">Custom Color Picker</div><div style="font-size:10px;color:var(--txl);line-height:1.35;margin-bottom:7px">One selected base color generates the matched 3-shade family automatically: Dark (headers) · Medium (60% toward Light) · Light (content card).</div><div class="theme-wheel" id="td-wheel"><span class="theme-wheel-pointer" id="td-wheel-p"></span></div></div>
       <div><div class="theme-sv" id="td-sv"><span class="theme-sv-pointer" id="td-sv-p"></span></div><div class="theme-slider-row"><span style="font-size:10.5px;font-weight:750">Hue</span><input class="theme-range" id="td-hue" type="range" min="0" max="360" value="210"><span class="theme-mini-value" id="td-hue-val">210°</span></div><div class="theme-slider-row"><span style="font-size:10.5px;font-weight:750">Lightness</span><input class="theme-range" id="td-light" type="range" min="0" max="100" value="70"><span class="theme-mini-value" id="td-light-val">70%</span></div>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">${[1,2,3,4,5,6].map(n=>`<button type="button" class="btn btn-g btn-sm" onclick="saveAsCustomSlot(${n})">💾 Save Custom ${n}</button>`).join("")}</div></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><button type="button" class="btn btn-g btn-sm" onclick="saveAsCustomSlot(1)">💾 Save as Custom 1</button><button type="button" class="btn btn-g btn-sm" onclick="saveAsCustomSlot(2)">💾 Save as Custom 2</button></div></div>
     </div>
     <div id="td-contrast" class="theme-contrast ok">Smart contrast ready</div>
     <div class="theme-preview" id="td-preview"><div class="theme-preview-head"><div class="theme-preview-title">MS ENTERPRISES</div><div class="theme-preview-sub">TAX INVOICE · ORIGINAL COPY</div><div class="theme-preview-meta">Invoice No. &nbsp;&nbsp; Invoice Date &nbsp;&nbsp; Billing Month</div></div><div style="display:flex;gap:6px;margin-top:8px"><div class="theme-preview-medium" style="flex:1;padding:7px;border-radius:6px;font-size:9px;font-weight:800">MEDIUM · TOTAL / NET PAYABLE</div><div class="theme-preview-light" style="flex:1;padding:7px;border-radius:6px;font-size:9px;font-weight:800">LIGHT · AMOUNT CARD</div></div></div>
@@ -7542,12 +7503,7 @@ function renderThemeDesignCard(){
   </div></div>`;
 }
 function bindThemePicker(){
-  bindColorInput("td-bg","td-bg-hex");bindColorInput("td-accent","td-accent-hex");bindColorInput("td-medium","td-medium-hex");bindColorInput("td-border","td-border-hex");bindColorInput("td-highlight","td-highlight-hex");
-  const markCustom=(id,flag)=>{const el=document.getElementById(id);if(el){el.addEventListener("input",()=>{if(A._themeDraft?.invoicePreset==="custom"){A._themeDraft[flag]=true;updateThemePreview();}});}};
-  markCustom("td-medium","customSecondaryManual");markCustom("td-bg","customTertiaryManual");
-  const primaryEl=document.getElementById("td-accent");
-  if(primaryEl)primaryEl.addEventListener("input",()=>{if(A._themeDraft?.invoicePreset!=="custom")return;const p=hexToRgb(primaryEl.value);if(!p)return;A._themeDraft.customPrimary=rgbToHex(p);if(!A._themeDraft.customSecondaryManual){const v=rgbToHex(mixRgb(p,[255,255,255],.40));document.getElementById("td-medium").value=v;document.getElementById("td-medium-hex").value=v;}if(!A._themeDraft.customTertiaryManual){const v=rgbToHex(mixRgb(p,[255,255,255],.70));document.getElementById("td-bg").value=v;document.getElementById("td-bg-hex").value=v;document.getElementById("td-highlight").value=v;document.getElementById("td-highlight-hex").value=v;}updateThemePreview();});
-  updateThemePreview();
+  bindColorInput("td-bg","td-bg-hex");bindColorInput("td-accent","td-accent-hex");bindColorInput("td-border","td-border-hex");bindColorInput("td-highlight","td-highlight-hex");updateThemePreview();
   const wheel=document.getElementById("td-wheel"),sv=document.getElementById("td-sv");if(!wheel||!sv)return;
   function hsvRgb(h,s,v){s/=100;v/=100;const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let r=0,g=0,b=0;if(h<60)[r,g,b]=[c,x,0];else if(h<120)[r,g,b]=[x,c,0];else if(h<180)[r,g,b]=[0,c,x];else if(h<240)[r,g,b]=[0,x,c];else if(h<300)[r,g,b]=[x,0,c];else[r,g,b]=[c,0,x];return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)];}
   function rgbHsv(rgb){let r=rgb[0]/255,g=rgb[1]/255,b=rgb[2]/255,max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min,h=0,s=max===0?0:d/max,v=max;if(d!==0){if(max===r)h=((g-b)/d)%6;else if(max===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360;}return [h,s*100,v*100];}
@@ -7557,10 +7513,21 @@ function bindThemePicker(){
   function pickWheel(e){const r=wheel.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2;let h=Math.atan2(y,x)*180/Math.PI+90;if(h<0)h+=360;hue=h;document.getElementById("td-hue").value=hue;paintSV();}
   function applyWheelPalette(seedHex){
     const seed=hexToRgb(seedHex)||[154,184,214];
-    const primary=rgbToHex(seed), secondary=rgbToHex(mixRgb(seed,[255,255,255],.40)), tertiary=rgbToHex(mixRgb(seed,[255,255,255],.70));
-    const bg=document.getElementById("td-bg"),bh=document.getElementById("td-bg-hex"),ac=document.getElementById("td-accent"),ach=document.getElementById("td-accent-hex"),me=document.getElementById("td-medium"),meh=document.getElementById("td-medium-hex"),hi=document.getElementById("td-highlight"),hih=document.getElementById("td-highlight-hex");
-    if(ac){ac.value=primary;ach.value=primary;} if(me){me.value=secondary;meh.value=secondary;} if(bg){bg.value=tertiary;bh.value=tertiary;} if(hi){hi.value=tertiary;hih.value=tertiary;}
-    A._themeDraft={...(A._themeDraft||A.sett?.themeDesign||ST0.themeDesign),invoicePreset:"custom",customTheme:true,customPrimary:primary,customSecondary:secondary,customTertiary:tertiary,customSecondaryManual:false,customTertiaryManual:false,themeSeed:primary};
+    // One selected hue becomes a coherent 3-level invoice palette:
+    // Dark = major headers, Medium = 60% toward Light, Light = content card.
+    const dark=mixRgb(seed,[0,0,0],.55);
+    const light=mixRgb(seed,[255,255,255],.72);
+    const medium=mixRgb(dark,light,.60);
+    // The stored fields intentionally keep the same master architecture:
+    // headerBg/light + accent/dark + highlight/light. Medium is derived, not
+    // stored separately, so every preset/custom theme stays mathematically consistent.
+    const bgHex=rgbToHex(light), darkHex=rgbToHex(dark), lightHex=rgbToHex(light);
+    const bg=document.getElementById("td-bg"),bh=document.getElementById("td-bg-hex"),ac=document.getElementById("td-accent"),ach=document.getElementById("td-accent-hex"),hi=document.getElementById("td-highlight"),hih=document.getElementById("td-highlight-hex");
+    if(bg){bg.value=bgHex;bh.value=bgHex;ac.value=darkHex;ach.value=darkHex;hi.value=lightHex;hih.value=lightHex;}
+    const previewMedium=rgbToHex(medium);
+    const pv=document.getElementById("td-preview");
+    if(pv) pv.dataset.mediumShade=previewMedium;
+    A._themeDraft={...(A._themeDraft||A.sett?.themeDesign||ST0.themeDesign),invoicePreset:"custom",themeSeed:seedHex.toUpperCase()};
     document.querySelectorAll(".theme-preset").forEach(el=>el.classList.remove("on"));
   }
   function pickSV(e){const r=sv.getBoundingClientRect(),x=Math.max(0,Math.min(r.width,e.clientX-r.left)),y=Math.max(0,Math.min(r.height,e.clientY-r.top));sat=x/r.width*100;val=100-y/r.height*100;const hx=rgbToHex(hsvRgb(hue,sat,val));applyWheelPalette(hx);paintPointers();updateThemePreview();}
@@ -10948,10 +10915,6 @@ v2.8 — Definitive flat-light header + school category correction
   V42.acceptGoogleCredential = async function(credential){
     try{
       if(!credential) throw new Error('Google credential was not returned');
-      // The credential callback means the user has already selected an account.
-      // Remove ONLY our temporary chooser immediately; never cancel Google's own
-      // account/sign-in window, which has its own lifecycle.
-      try{ document.getElementById('mdm-google-gis-overlay')?.remove(); }catch(e){}
       const part=String(credential).split('.')[1];
       if(!part) throw new Error('Invalid Google credential');
       const payload=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'=')));
@@ -10981,8 +10944,6 @@ v2.8 — Definitive flat-light header + school category correction
       A.loggedIn=true; A.currentUser=mergedUser;
       auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
       CLOUD.ready=true;
-      // Our temporary chooser was removed at credential receipt. Do not call
-      // google.accounts.id.cancel() here; that API belongs to Google's prompt lifecycle.
       CLOUD.updateUI();
       const q=await V42.flushQueue();
       if(A.page==='backupsync') gP('backupsync');
@@ -11020,34 +10981,6 @@ v2.8 — Definitive flat-light header + school category correction
     return {sent,failed};
   };
 
-  /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
-  V42.ensureBackendAuthInteractive = async function(){
-    try{
-      await V42.loadGIS();
-      if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
-      return await new Promise(resolve=>{
-        let done=false;
-        const finish=v=>{if(done)return;done=true;try{document.getElementById('mdm-google-gis-overlay')?.remove();}catch(e){};resolve(!!v);};
-        google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{
-          try{if(!resp?.credential) return finish(false); await V42.acceptGoogleCredential(resp.credential); finish(!!V42.idToken);}
-          catch(e){console.error('[MDM] interactive Google re-auth failed',e);finish(false);}
-        }});
-        const overlay=document.createElement('div');
-        overlay.id='mdm-google-gis-overlay';
-        overlay.style.cssText='position:fixed;inset:0;z-index:20000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
-        overlay.innerHTML='<div style="background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:18px;min-width:280px;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.22)"><div style="font-weight:800;font-size:14px;margin-bottom:10px">Continue with Google</div><div id="mdm-google-gis-overlay-button"></div><button type="button" class="btn btn-g btn-sm" style="margin-top:10px;width:100%">Cancel</button></div>';
-        document.body.appendChild(overlay);
-        overlay.querySelector('button')?.addEventListener('click',()=>finish(false));
-        // When the GIS button opens Google's own account popup, the parent window
-        // loses focus. Hide only our wrapper at that moment; Google's popup remains.
-        const hideOnBlur=()=>{try{overlay.remove();}catch(_){}};
-        window.addEventListener('blur',hideOnBlur,{once:true});
-        const host=document.getElementById('mdm-google-gis-overlay-button');
-        if(host) google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});
-      });
-    }catch(e){console.error('[MDM] GIS re-auth setup failed',e);return false;}
-  };
-
   /* ---- Backup Now: real cloud backup for Google users; local snapshot for emergency login ---- */
   window.cloudBackupNow = async function(){
     try{
@@ -11057,45 +10990,20 @@ v2.8 — Definitive flat-light header + school category correction
         toast('Local backup created. Sign in with Google to send it to Master Drive.','ok');
         return;
       }
-      if(!isGoogleUser(CLOUD.user)) throw new Error('Google authentication is required for Master Drive backup');
-      // A Google session is persisted for UI continuity, but the raw GIS credential is
-      // intentionally not persisted in localStorage. After a page reload, re-authenticate
-      // interactively before touching Master Drive rather than showing a false Connected state.
-      if(!V42.idToken){
-        const ok=await V42.ensureBackendAuthInteractive();
-        if(!ok || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
-      }
+      if(!isGoogleUser(CLOUD.user) || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
       CLOUD.setSyncStatus('Syncing…','var(--am)');
-
-      // Queue sync and full backup are intentionally decoupled. A single
-      // pending/failed queue operation must NOT prevent creation of a full
-      // Master Drive snapshot. The failed operation remains pending and is
-      // retried on the next sync attempt.
       const q=await V42.flushQueue();
-      const pending=await V42.queueCount();
-
+      if(q.failed) throw new Error('One or more pending records could not be synced');
       const result=await V42.backend('backup',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
       if(!result || !result.ok) throw new Error((result&&result.error)||'Master backup was not acknowledged');
-
       CLOUD.lastBackup=new Date().toISOString();
       localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);
-
-      if(pending>0){
-        CLOUD.setSyncStatus('Backup saved · '+pending+' pending','var(--am)');
-      }else{
-        CLOUD.setSyncStatus('Synced ✓','var(--gn)');
-      }
-      CLOUD.updateUI();
+      CLOUD.setSyncStatus('Synced ✓','var(--gn)'); CLOUD.updateUI();
       if(A.page==='backupsync') gP('backupsync');
-      auditLog('EXPORT','backup','cloud','Master cloud backup completed: '+result.fileName+(pending?' ('+pending+' sync item(s) pending)':''),null);
-
-      if(pending>0){
-        toast('Backup completed — saved to Master Drive. '+pending+' sync item(s) remain pending.','ok');
-      }else{
-        toast('Backup completed — saved to Master Drive','ok');
-      }
+      auditLog('EXPORT','backup','cloud','Master cloud backup completed: '+result.fileName,null);
+      toast('Backup completed — saved to Master Drive','ok');
     }catch(e){
-      CLOUD.setSyncStatus('Cloud backup failed','var(--rd)');
+      CLOUD.setSyncStatus('Backup failed','var(--rd)');
       toast('Backup failed: '+e.message,'err');
       console.error('[MDM v4.51] Backup failure',e);
     }
@@ -11127,9 +11035,9 @@ v2.8 — Definitive flat-light header + school category correction
       const wrap=document.createElement('div');
       wrap.id='mdm-google-login-wrap';
       wrap.style.cssText='margin-top:9px';
-      wrap.innerHTML='<div id="mdm-google-gis-button" style="min-height:40px;display:flex;justify-content:center"></div><div style="margin-top:7px;text-align:center;font-size:10.5px;color:var(--txl)">Google = cloud account &nbsp;•&nbsp; Username/password = emergency offline login</div>';
+      wrap.innerHTML='<button id="mdm-google-login-btn" class="btn btn-g" style="width:100%;height:40px;font-size:13px" type="button">Continue with Google</button><div style="margin-top:7px;text-align:center;font-size:10.5px;color:var(--txl)">Google = cloud account &nbsp;•&nbsp; Username/password = emergency offline login</div>';
       localBtn.parentNode.insertBefore(wrap,localBtn.nextSibling);
-      (async()=>{try{await V42.loadGIS();google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});const host=document.getElementById('mdm-google-gis-button');if(host)google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:host.clientWidth||360});}catch(e){console.warn('[MDM v4.51] GIS button unavailable',e);}})();
+      document.getElementById('mdm-google-login-btn').addEventListener('click',()=>V42.googleSignIn());
     }catch(e){ console.warn('[MDM v4.51] Google login button skipped',e); }
   }
 
