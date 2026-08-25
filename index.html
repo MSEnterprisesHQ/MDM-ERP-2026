@@ -4722,13 +4722,10 @@ function doLogin(){
    - existing invoice/PDF/business logic remains untouched
    ═════════════════════════════════════════════════════════════════════ */
 const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz0-INFivW6YLisKHGErbWzkT_jOoZq51zCv393n_u_53zgH7_qTxqWrkOXusvXrTM/exec";
-const V42_LEGACY_API_URL = "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec";
-const V42_STORED_API_URL = localStorage.getItem("mdm_api_url");
-if(V42_STORED_API_URL === V42_LEGACY_API_URL){ try{ localStorage.setItem("mdm_api_url",V42_DEFAULT_API_URL); }catch(e){} }
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
-  version: "4.42-GIS-POPUP-FIX",
-  previousVersion: "4.42",
+  version: "4.42",
+  previousVersion: "4.41",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
   apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
@@ -4746,6 +4743,7 @@ const V42 = {
   idToken: null,
 };
 localStorage.setItem("mdm_device_id", V42.deviceId);
+if(V42.apiUrl!=="APPS_SCRIPT_BRIDGE" && /AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/.test(String(V42.apiUrl||""))){ V42.apiUrl=V42_DEFAULT_API_URL; localStorage.setItem("mdm_api_url",V42.apiUrl); }
 
 V42.openDB = function(){
   return new Promise((resolve,reject)=>{
@@ -4897,58 +4895,29 @@ V42.loadGIS = function(){
   });
 };
 V42.googleSignIn = async function(){
-  if(!V42.googleClientId){
-    V42.config();
-    if(!V42.googleClientId){toast("Set Google Client ID first","err");return false;}
-  }
-  if(V42._googleAuthPromise) return V42._googleAuthPromise;
-  V42._googleAuthPromise = new Promise(async resolve=>{
-    let settled=false;
-    const finish=v=>{if(settled)return;settled=true;V42._googleAuthPromise=null;resolve(!!v);};
-    try{
-      await V42.loadGIS();
-      google.accounts.id.initialize({
-        client_id:V42.googleClientId,
-        ux_mode:'popup',
-        auto_select:false,
-        use_fedcm_for_button:false,
-        callback:async resp=>{
-          try{
-            if(!resp || !resp.credential) throw new Error("Google did not return a credential");
-            await V42.acceptGoogleCredential(resp.credential);
-            finish(true);
-          }catch(e){
-            toast("Google sign-in failed: "+(e.message||e),"err");
-            finish(false);
-          }
-        }
-      });
-
-      // Never call google.accounts.id.prompt() here. That is One Tap, not the
-      // user-requested popup sign-in flow, and browsers may legitimately suppress it.
-      let overlay=document.getElementById('mdm-google-auth-overlay');
-      if(!overlay){
-        overlay=document.createElement('div');
-        overlay.id='mdm-google-auth-overlay';
-        overlay.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;padding:20px;';
-        overlay.innerHTML='<div style="width:min(390px,100%);background:var(--bg,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:16px;box-shadow:0 18px 60px rgba(0,0,0,.28)"><div style="font-weight:800;font-size:15px;margin-bottom:12px">Continue with Google</div><div id="mdm-google-auth-gis-host" style="display:flex;justify-content:center;min-height:44px"></div><button type="button" id="mdm-google-auth-cancel" class="btn btn-g" style="width:100%;margin-top:10px">Cancel</button><div id="mdm-google-auth-help" style="font-size:10px;color:var(--txl);text-align:center;margin-top:8px"></div></div>';
-        document.body.appendChild(overlay);
+  if(!V42.googleClientId){V42.config();if(!V42.googleClientId){toast("Set Google Client ID first","err");return;}}
+  try{
+    await V42.loadGIS();
+    const wrap=document.getElementById("mdm-google-login-wrap");
+    if(wrap){
+      const host=document.getElementById("mdm-google-rendered");
+      if(host && !host.dataset.rendered){
+        google.accounts.id.initialize({client_id:V42.googleClientId,ux_mode:"popup",callback:async resp=>{await V42.acceptGoogleCredential(resp.credential);}});
+        host.innerHTML="";
+        google.accounts.id.renderButton(host,{type:"standard",theme:"outline",size:"large",text:"signin_with",shape:"rectangular",width:320});
+        host.dataset.rendered="1";
       }
-      const host=document.getElementById('mdm-google-auth-gis-host');
-      if(!host) throw new Error('Google sign-in button container unavailable');
-      host.innerHTML='';
-      google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:360,logo_alignment:'left'});
-      const cancel=document.getElementById('mdm-google-auth-cancel');
-      if(cancel) cancel.onclick=()=>{try{google.accounts.id.cancel();}catch(e){};overlay.remove();finish(false);};
-      const help=document.getElementById('mdm-google-auth-help');
-      if(help) help.textContent='If Google does not open, the OAuth Client ID must allow this GitHub Pages origin.';
-    }catch(e){
-      try{document.getElementById('mdm-google-auth-overlay')?.remove();}catch(_){ }
-      toast("Google authentication unavailable: "+(e.message||e),"err");
-      finish(false);
+      const btn=host&&host.querySelector("div[role=button]");
+      if(btn) btn.focus();
+      toast("Choose your Google account to continue","ok");
+      return;
     }
-  });
-  return V42._googleAuthPromise;
+    google.accounts.id.initialize({client_id:V42.googleClientId,ux_mode:"popup",callback:async resp=>{await V42.acceptGoogleCredential(resp.credential);}});
+    const host=document.createElement("div"); host.id="mdm-google-popup-host"; host.style.cssText="position:fixed;left:-9999px;top:-9999px;width:320px;height:50px;z-index:-1"; document.body.appendChild(host);
+    google.accounts.id.renderButton(host,{type:"standard",theme:"outline",size:"large",text:"signin_with",shape:"rectangular",width:320});
+    const btn=host.querySelector("div[role=button]");
+    if(btn) btn.click();
+  }catch(e){toast("Google authentication unavailable: "+e.message,"err");}
 };
 V42.acceptGoogleCredential = async function(credential){
   try{
@@ -4956,7 +4925,6 @@ V42.acceptGoogleCredential = async function(credential){
     if(payload.aud && V42.googleClientId && payload.aud!==V42.googleClientId) throw new Error("Google client mismatch");
     const user={id:payload.sub,name:payload.name||payload.email||"Google User",email:(payload.email||"").toLowerCase(),picture:payload.picture||"",googleSub:payload.sub,signedInAt:new Date().toISOString(),deviceId:V42.deviceId,authMethod:"google"};
     CLOUD.user=user; CLOUD.ready=true; CLOUD.token=credential; V42.idToken=credential;
-    try{ document.getElementById("mdm-google-login-wrap")?.remove(); document.getElementById("mdm-google-auth-overlay")?.remove(); google.accounts.id.cancel(); }catch(e){}
     await V42.saveSession(user);
     localStorage.setItem("cloud_user",JSON.stringify(user));
     auditLog("LOGIN","cloud","google","Google account authenticated: "+user.email,null);
@@ -4969,36 +4937,53 @@ V42.acceptGoogleCredential = async function(credential){
 };
 
 V42.backend = async function(action,payload){
-  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
+  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null),requestId:"req_"+uid()+"_"+Date.now().toString(36)};
 
-  // Apps Script hosted mode: use the server-side bridge directly.
+  // Apps Script-hosted mode keeps the native server-side bridge.
   if(window.google && google.script && google.script.run){
     return await new Promise((resolve,reject)=>{
-      google.script.run
-        .withSuccessHandler(d=>{
-          try{
-            if(!d || !d.ok) throw new Error((d && d.error) || "API request failed");
-            resolve(d);
-          }catch(e){ reject(e); }
-        })
-        .withFailureHandler(e=>{
-          reject(new Error((e && e.message) || String(e) || "Apps Script request failed"));
-        })
-        .apiRequest(body);
+      google.script.run.withSuccessHandler(d=>{try{if(!d||!d.ok)throw new Error((d&&d.error)||"API request failed");resolve(d);}catch(e){reject(e);}}).withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||"Apps Script request failed"))).apiRequest(body);
     });
   }
 
-  // Standalone/local HTML fallback: keep the existing HTTP API path.
   if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  const r=await fetch(V42.apiUrl,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});
-  if(!r.ok) throw new Error("API HTTP "+r.status);
-  const d=await r.json(); if(!d.ok) throw new Error(d.error||"API request failed"); return d;
+
+  // GitHub Pages cannot reliably read Apps Script POST responses because the Web App
+  // response is cross-origin. Use a normal HTML form POST (no CORS preflight) and
+  // poll a tiny JSONP result endpoint for the server ACK. This preserves real ACKs
+  // without adding a third bridge file.
+  return await new Promise((resolve,reject)=>{
+    const requestId=body.requestId;
+    const frameName="mdm_api_frame_"+requestId;
+    const iframe=document.createElement("iframe"); iframe.name=frameName; iframe.style.cssText="position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0"; document.body.appendChild(iframe);
+    const form=document.createElement("form"); form.method="POST"; form.action=V42.apiUrl; form.target=frameName; form.style.display="none";
+    const input=document.createElement("input"); input.type="hidden"; input.name="body"; input.value=JSON.stringify(body); form.appendChild(input); document.body.appendChild(form);
+    const cb="mdmApiResult_"+requestId.replace(/[^A-Za-z0-9_]/g,"");
+    let done=false, tries=0;
+    const cleanup=()=>{try{delete window[cb];}catch(e){} form.remove(); setTimeout(()=>iframe.remove(),200);};
+    window[cb]=(d)=>{if(done)return;done=true;cleanup();if(d&&d.ok)resolve(d);else reject(new Error((d&&d.error)||"Master API request failed"));};
+    const poll=()=>{if(done)return;tries++;const sc=document.createElement("script");sc.src=V42.apiUrl+(V42.apiUrl.includes("?")?"&":"?")+"result=1&requestId="+encodeURIComponent(requestId)+"&callback="+encodeURIComponent(cb)+"&_="+Date.now();sc.onerror=()=>{sc.remove();};document.head.appendChild(sc);setTimeout(()=>{sc.remove();if(!done&&tries<50)poll();},400);};
+    try{form.submit();}catch(e){done=true;cleanup();reject(e);return;}
+    setTimeout(poll,700);
+    setTimeout(()=>{if(!done){done=true;cleanup();reject(new Error("Master API transport timeout"));}},22000);
+  });
 };
 
 V42.ensureBackendAuth = async function(){
-  if(!CLOUD.user) return false;
+  if(!V42.apiUrl || !CLOUD.user) return false;
   if(V42.idToken || CLOUD.token) return true;
-  return await V42.googleSignIn();
+  try{
+    await V42.loadGIS();
+    if(!V42.googleClientId) return false;
+    return await new Promise(resolve=>{
+      let done=false; const finish=v=>{if(done)return;done=true;resolve(v);};
+      google.accounts.id.initialize({client_id:V42.googleClientId,ux_mode:"popup",callback:async resp=>{try{await V42.acceptGoogleCredential(resp.credential);finish(true);}catch(e){finish(false);}}});
+      const host=document.createElement("div"); host.style.cssText="position:fixed;left:-9999px;top:-9999px;width:320px;height:50px"; document.body.appendChild(host);
+      google.accounts.id.renderButton(host,{type:"standard",theme:"outline",size:"large",text:"signin_with",shape:"rectangular",width:320});
+      const btn=host.querySelector("div[role=button]"); if(btn) btn.click();
+      setTimeout(()=>{host.remove();finish(false);},20000);
+    });
+  }catch(e){return false;}
 };
 
 V42.createLocalSnapshot = async function(){
@@ -11068,24 +11053,15 @@ v2.8 — Definitive flat-light header + school category correction
   function installGoogleLoginButton(){
     try{
       const card=document.getElementById('lu')?.closest('.card');
-      if(!card || document.getElementById('mdm-google-login-wrap')) return;
+      if(!card || document.getElementById('mdm-google-login-btn')) return;
       const localBtn=document.querySelector('button[onclick="doLogin()"]');
       if(!localBtn) return;
       const wrap=document.createElement('div');
       wrap.id='mdm-google-login-wrap';
-      wrap.style.cssText='margin-top:9px;text-align:center';
-      wrap.innerHTML='<div id="mdm-google-login-gis-host" style="display:flex;justify-content:center"></div><div style="margin-top:7px;text-align:center;font-size:10.5px;color:var(--txl)">Google = cloud account &nbsp;•&nbsp; Username/password = emergency offline login</div>';
+      wrap.style.cssText='margin-top:9px';
+      wrap.innerHTML='<div id="mdm-google-rendered" style="display:flex;justify-content:center;min-height:40px"></div><div style="margin-top:7px;text-align:center;font-size:10.5px;color:var(--txl)">Google = cloud account &nbsp;•&nbsp; Username/password = emergency offline login</div>';
       localBtn.parentNode.insertBefore(wrap,localBtn.nextSibling);
-      V42.loadGIS().then(()=>{
-        google.accounts.id.initialize({
-          client_id:V42.googleClientId,
-          callback:async resp=>{ await V42.acceptGoogleCredential(resp.credential); },
-          auto_select:false,
-          cancel_on_tap_outside:true,
-          use_fedcm_for_prompt:true
-        });
-        google.accounts.id.renderButton(document.getElementById('mdm-google-login-gis-host'),{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:360,logo_alignment:'left'});
-      }).catch(e=>console.warn('[MDM v4.51] GIS render failed',e));
+      setTimeout(()=>{try{V42.googleSignIn();}catch(e){}},0);
     }catch(e){ console.warn('[MDM v4.51] Google login button skipped',e); }
   }
 
