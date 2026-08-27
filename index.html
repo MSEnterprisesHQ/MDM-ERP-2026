@@ -4926,7 +4926,7 @@ V42.googleSignIn = async function(){
    Only enqueue modules that have never received a successful cloud ACK on this device.
    Existing save/queue behavior remains unchanged. */
 V42.enqueueInitialCloudSync = async function(){
-  if(!CLOUD.user || !isGoogleUser(CLOUD.user) || !V42.idToken) return {queued:0};
+  if(!CLOUD.user || CLOUD.user.authMethod !== "google" || !CLOUD.user.email || !V42.idToken) return {queued:0};
   const keys=["f","sc","it","iv","us","st","sr","rt","hd","alm","lpg","ro"];
   let queued=0;
   for(const k of keys){
