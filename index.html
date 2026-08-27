@@ -2539,7 +2539,7 @@ function pgDash(){
   const invMoPct=pct(thisMo.length,lastMo.length), amtMoPct=pct(thisMoAmt,lastMoAmt);
   const trendHtml=(p,suffix)=>`<span class="kpi-trend ${p>0?"up":p<0?"down":"flat"}">${p>0?"&#8593;":p<0?"&#8595;":"&#8226;"} ${Math.abs(p)}% ${suffix}</span>`;
   const backupFresh=CLOUD.lastBackup && (now-new Date(CLOUD.lastBackup))<24*3600*1000;
-  const lastSyncTime=(typeof DRIVE!=="undefined"&&DRIVE.getMetadata&&DRIVE.getMetadata()?.lastSyncTime)||CLOUD.lastBackup||null;
+  const lastSyncTime=localStorage.getItem("cloud_last_sync")||(typeof DRIVE!=="undefined"&&DRIVE.getMetadata&&DRIVE.getMetadata()?.lastSyncTime)||CLOUD.lastBackup||null;
 
   // Last-7-days series (real data) for KPI sparklines
   const last7Inv=[], last7Amt=[];
@@ -4809,12 +4809,6 @@ V42.hydrateFromIDB = async function(){
     const sess=await V42.idbGet("meta","session");
     if(sess && sess.user && sess.expiresAt && Date.now()<sess.expiresAt){
       A.loggedIn=true; A.currentUser=sess.user;
-      if(isGoogleUser(sess.user)){
-        CLOUD.user=sess.user; CLOUD.ready=true;
-        try{
-          await V42.restoreGoogleSessionSilently();
-        }catch(e){ console.warn('[MDM] silent session restore skipped',e); }
-      }
     }
     V42.ready=true;
   }catch(e){
@@ -4979,7 +4973,7 @@ V42.backend = async function(action,payload){
       const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
       window.addEventListener('message',onReady);
       document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1';
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
     }).catch(e=>{V42._apiBridgePromise=null;throw e;});
   }
   try{
@@ -5192,7 +5186,10 @@ cloudBackupNow=async function(){
     const q=await V42.flushQueue();
     if(V42.apiUrl){await V42.backend("backup",{snapshot:CLOUD.getPayload(),appVersion:V42.version});}
     else {await V42.createLocalSnapshot();}
-    CLOUD.lastBackup=new Date().toISOString();localStorage.setItem("cloud_last_backup",CLOUD.lastBackup);
+    CLOUD.lastBackup=new Date().toISOString();
+    localStorage.setItem("cloud_last_backup",CLOUD.lastBackup);
+    localStorage.setItem("cloud_last_sync",CLOUD.lastBackup);
+    try{ if(typeof DRIVE!=="undefined" && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
     CLOUD.setSyncStatus("Synced ✓","var(--gn)");CLOUD.updateUI();toast("Backup completed","ok");
   }catch(e){CLOUD.setSyncStatus("Backup failed","var(--rd)");toast("Backup failed: "+e.message,"err");}
 };
@@ -11041,7 +11038,10 @@ v2.8 — Definitive flat-light header + school category correction
           const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
           op.status='synced'; op.syncedAt=new Date().toISOString(); op.serverOperationId=result.operationId||op.id;
-          await V42.idbSet('queue',op.id,op); sent++;
+          await V42.idbSet('queue',op.id,op);
+          localStorage.setItem('cloud_last_sync',op.syncedAt);
+          try{ if(typeof DRIVE!=='undefined' && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
+          sent++;
         }catch(e){
           op.status='pending'; op.lastError=String(e&&e.message?e.message:e); await V42.idbSet('queue',op.id,op); failed++; break;
         }
@@ -11052,44 +11052,6 @@ v2.8 — Definitive flat-light header + school category correction
       if(sent && A.page==='backupsync') gP('backupsync');
     }finally{ V42.syncing=false; }
     return {sent,failed};
-  };
-
-  /* ---- Silent GIS session restoration after browser refresh ---- */
-  V42.restoreGoogleSessionSilently = async function(){
-    if(!isGoogleUser(CLOUD.user) || V42.idToken || !V42.googleClientId) return false;
-    try{
-      await V42.loadGIS();
-      return await new Promise(resolve=>{
-        let settled=false;
-        const finish=v=>{if(settled)return;settled=true;resolve(!!v);};
-        google.accounts.id.initialize({
-          client_id:V42.googleClientId,
-          auto_select:true,
-          cancel_on_tap_outside:false,
-          callback:async resp=>{
-            try{
-              if(!resp || !resp.credential) return finish(false);
-              await V42.acceptGoogleCredential(resp.credential);
-              finish(!!V42.idToken);
-            }catch(e){
-              console.warn('[MDM] silent Google session restore failed',e);
-              finish(false);
-            }
-          }
-        });
-        // Do not render a button or custom overlay here. GIS either restores the
-        // prior account automatically or quietly reports that it cannot.
-        google.accounts.id.prompt(notification=>{
-          try{
-            if(notification && (notification.isNotDisplayed?.() || notification.isSkippedMoment?.() || notification.isDismissedMoment?.())) finish(false);
-          }catch(_){ finish(false); }
-        });
-        setTimeout(()=>finish(!!V42.idToken),5000);
-      });
-    }catch(e){
-      console.warn('[MDM] silent Google session restore unavailable',e);
-      return false;
-    }
   };
 
   /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
