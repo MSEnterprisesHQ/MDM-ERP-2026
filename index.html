@@ -4809,6 +4809,12 @@ V42.hydrateFromIDB = async function(){
     const sess=await V42.idbGet("meta","session");
     if(sess && sess.user && sess.expiresAt && Date.now()<sess.expiresAt){
       A.loggedIn=true; A.currentUser=sess.user;
+      if(isGoogleUser(sess.user)){
+        CLOUD.user=sess.user; CLOUD.ready=true;
+        try{
+          await V42.restoreGoogleSessionSilently();
+        }catch(e){ console.warn('[MDM] silent session restore skipped',e); }
+      }
     }
     V42.ready=true;
   }catch(e){
@@ -4922,37 +4928,6 @@ V42.googleSignIn = async function(){
     if(oh){oh.innerHTML='';google.accounts.id.renderButton(oh,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});}
   }catch(e){toast("Google authentication unavailable: "+e.message,"err");console.error('[MDM] GIS sign-in setup failed',e);}
 };
-/* v3 SURGICAL FIX: initial cloud sync for an already-populated local database.
-   Only enqueue modules that have never received a successful cloud ACK on this device.
-   Existing save/queue behavior remains unchanged. */
-V42.enqueueInitialCloudSync = async function(){
-  if(!CLOUD.user || CLOUD.user.authMethod !== "google" || !CLOUD.user.email || !V42.idToken) return {queued:0};
-  const keys=["f","sc","it","iv","us","st","sr","rt","hd","alm","lpg","ro"];
-  let queued=0;
-  for(const k of keys){
-    const mod = k==="f"?"company":k==="sc"?"schools":k==="it"?"items":k==="iv"?"invoices":k==="alm"?"alloc":k==="lpg"?"lpg":k==="ro"?"roster":(k==="st"||k==="sr"||k==="rt"||k==="hd")?"settings":null;
-    const touched = mod ? DRIVE.lastSynced(mod) : null;
-    if(touched) continue;
-    const prop=V42.keyMap[k];
-    const value=prop ? A[prop] : undefined;
-    if(typeof value === "undefined") continue;
-    await V42.enqueue("state",k,{key:k,value:value});
-    queued++;
-  }
-  return {queued};
-};
-
-V42.markModuleSyncedFromQueue = function(key){
-  try{
-    const now=new Date().toISOString();
-    const map={f:"company",sc:"schools",it:"items",us:null,st:"settings",sr:"settings",rt:"settings",hd:"settings",alm:"alloc",lpg:"lpg",ro:"roster",iv:"invoices"};
-    const mod=map[key];
-    if(mod) localStorage.setItem(DRIVE._touchedKey(mod),now);
-    if(key==="iv") localStorage.setItem(DRIVE._touchedKey("invLog"),now);
-    if(key==="iv" || mod) DRIVE.touchMetadata();
-  }catch(e){}
-};
-
 V42.acceptGoogleCredential = async function(credential){
   try{
     const payload=JSON.parse(atob(credential.split(".")[1].replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(credential.split(".")[1].length/4)*4,"=")));
@@ -4963,7 +4938,6 @@ V42.acceptGoogleCredential = async function(credential){
     localStorage.setItem("cloud_user",JSON.stringify(user));
     auditLog("LOGIN","cloud","google","Google account authenticated: "+user.email,null);
     try{await V42.backend("auth",{idToken:credential,user});}catch(e){console.warn("Backend auth not configured/reachable",e);}
-    await V42.enqueueInitialCloudSync();
     await V42.flushQueue();
     CLOUD.updateUI();
     toast("Signed in as "+(user.name||user.email),"ok");
@@ -11067,7 +11041,7 @@ v2.8 — Definitive flat-light header + school category correction
           const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
           op.status='synced'; op.syncedAt=new Date().toISOString(); op.serverOperationId=result.operationId||op.id;
-          await V42.idbSet('queue',op.id,op); V42.markModuleSyncedFromQueue(op.key); sent++;
+          await V42.idbSet('queue',op.id,op); sent++;
         }catch(e){
           op.status='pending'; op.lastError=String(e&&e.message?e.message:e); await V42.idbSet('queue',op.id,op); failed++; break;
         }
@@ -11078,6 +11052,44 @@ v2.8 — Definitive flat-light header + school category correction
       if(sent && A.page==='backupsync') gP('backupsync');
     }finally{ V42.syncing=false; }
     return {sent,failed};
+  };
+
+  /* ---- Silent GIS session restoration after browser refresh ---- */
+  V42.restoreGoogleSessionSilently = async function(){
+    if(!isGoogleUser(CLOUD.user) || V42.idToken || !V42.googleClientId) return false;
+    try{
+      await V42.loadGIS();
+      return await new Promise(resolve=>{
+        let settled=false;
+        const finish=v=>{if(settled)return;settled=true;resolve(!!v);};
+        google.accounts.id.initialize({
+          client_id:V42.googleClientId,
+          auto_select:true,
+          cancel_on_tap_outside:false,
+          callback:async resp=>{
+            try{
+              if(!resp || !resp.credential) return finish(false);
+              await V42.acceptGoogleCredential(resp.credential);
+              finish(!!V42.idToken);
+            }catch(e){
+              console.warn('[MDM] silent Google session restore failed',e);
+              finish(false);
+            }
+          }
+        });
+        // Do not render a button or custom overlay here. GIS either restores the
+        // prior account automatically or quietly reports that it cannot.
+        google.accounts.id.prompt(notification=>{
+          try{
+            if(notification && (notification.isNotDisplayed?.() || notification.isSkippedMoment?.() || notification.isDismissedMoment?.())) finish(false);
+          }catch(_){ finish(false); }
+        });
+        setTimeout(()=>finish(!!V42.idToken),5000);
+      });
+    }catch(e){
+      console.warn('[MDM] silent Google session restore unavailable',e);
+      return false;
+    }
   };
 
   /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
@@ -11131,7 +11143,6 @@ v2.8 — Definitive flat-light header + school category correction
       // pending/failed queue operation must NOT prevent creation of a full
       // Master Drive snapshot. The failed operation remains pending and is
       // retried on the next sync attempt.
-      await V42.enqueueInitialCloudSync();
       const q=await V42.flushQueue();
       const pending=await V42.queueCount();
 
@@ -11202,24 +11213,6 @@ v2.8 — Definitive flat-light header + school category correction
         A.loggedIn=true; A.currentUser=sess.user;
         CLOUD.user=null; CLOUD.ready=false; CLOUD.token=null; V42.idToken=null;
         localStorage.removeItem('cloud_user');
-      } else if(sess && sess.user && isGoogleUser(sess.user)){
-        // Restore the visible cloud identity, but never treat it as a live token.
-        CLOUD.user=sess.user; CLOUD.ready=true; CLOUD.token=null; V42.idToken=null;
-        A.loggedIn=true; A.currentUser=sess.user;
-        // Re-establish a live GIS credential without showing a failure toast if
-        // the browser suppresses the automatic prompt. If a credential arrives,
-        // the normal acceptGoogleCredential path performs the initial full sync.
-        try{
-          await V42.loadGIS();
-          if(V42.googleClientId){
-            google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{
-              if(resp&&resp.credential){
-                try{ await V42.acceptGoogleCredential(resp.credential); }catch(e){ console.warn('[MDM] startup Google re-auth failed',e); }
-              }
-            }});
-            google.accounts.id.prompt();
-          }
-        }catch(e){ console.warn('[MDM] startup Google session restore deferred',e); }
       }
     }catch(e){}
     installGoogleLoginButton();
