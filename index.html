@@ -4940,6 +4940,14 @@ V42.acceptGoogleCredential = async function(credential){
 };
 
 V42.backend = async function(action,payload){
+  // ID tokens are short-lived. Never send an expired cached credential to the
+  // Master API: refresh first, then perform the actual cloud operation.
+  if(action!=='auth' && isGoogleUser(CLOUD.user) && !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,90)){
+    const refreshed=await V42.refreshGoogleCredential();
+    if(!refreshed || !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30)){
+      throw new Error('Google session expired — please sign in again to continue cloud sync');
+    }
+  }
   const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
 
   // Apps Script hosted mode: use the server-side bridge directly.
@@ -10976,7 +10984,56 @@ v2.8 — Definitive flat-light header + school category correction
   };
 
   /* ---- Google sign-in: backend ACK is mandatory before session becomes cloud-authenticated ---- */
-  V42.acceptGoogleCredential = async function(credential){
+  V42._googleCredentialBusy = false;
+  V42._googleRefreshPromise = null;
+  V42.isGoogleTokenUsable = function(token, skewSeconds){
+    try{
+      if(!token) return false;
+      const part=String(token).split('.')[1];
+      if(!part) return false;
+      const payload=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'=')));
+      const skew=Number(skewSeconds||90);
+      return !!payload.sub && !!payload.email && (!payload.exp || Number(payload.exp) > Math.floor(Date.now()/1000)+skew);
+    }catch(e){ return false; }
+  };
+
+  /* Obtain a fresh Google ID token before a cloud operation. Google GIS owns
+     the credential lifecycle; we never persist the raw token in localStorage. */
+  V42.refreshGoogleCredential = async function(){
+    if(V42._googleRefreshPromise) return V42._googleRefreshPromise;
+    V42._googleRefreshPromise=(async()=>{
+      try{
+        await V42.loadGIS();
+        if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
+        return await new Promise(resolve=>{
+          let done=false;
+          const finish=v=>{if(done)return;done=true;resolve(!!v);};
+          const timeout=setTimeout(()=>finish(false),10000);
+          try{
+            google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{
+              try{
+                if(!resp || !resp.credential) return finish(false);
+                const part=String(resp.credential).split('.')[1];
+                const claims=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'=')));
+                if(claims.exp && Number(claims.exp) <= Math.floor(Date.now()/1000)) return finish(false);
+                await V42.acceptGoogleCredential(resp.credential,{silentRefresh:true});
+                clearTimeout(timeout); finish(V42.isGoogleTokenUsable(V42.idToken,60));
+              }catch(e){ clearTimeout(timeout); console.warn('[MDM v4.51] Google token refresh rejected',e); finish(false); }
+            }});
+            google.accounts.id.prompt(n=>{
+              if(n && (n.isNotDisplayed() || n.isSkippedMoment())) {
+                clearTimeout(timeout); finish(false);
+              }
+            });
+          }catch(e){ clearTimeout(timeout); finish(false); }
+        });
+      }finally{ V42._googleRefreshPromise=null; }
+    })();
+    return V42._googleRefreshPromise;
+  };
+
+  V42.acceptGoogleCredential = async function(credential, options){
+    options=options||{};
     try{
       if(!credential) throw new Error('Google credential was not returned');
       // The credential callback means the user has already selected an account.
@@ -11017,17 +11074,26 @@ v2.8 — Definitive flat-light header + school category correction
       CLOUD.updateUI();
       const q=await V42.flushQueue();
       if(A.page==='backupsync') gP('backupsync');
-      toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok');
+      if(!options.silentRefresh){
+        toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok');
+      }
     }catch(e){
-      toast('Google sign-in failed: '+e.message,'err');
+      if(!options.silentRefresh) toast('Google sign-in failed: '+e.message,'err');
       console.error('[MDM v4.51] Google authentication failure',e);
+      throw e;
     }
   };
 
   /* ---- Cloud queue: never attempt cloud writes for local-only sessions ---- */
   V42.flushQueue = async function(){
-    if(V42.syncing || !navigator.onLine || !V42.apiUrl || !isGoogleUser(CLOUD.user) || !V42.idToken) {
+    if(V42.syncing || !navigator.onLine || !V42.apiUrl || !isGoogleUser(CLOUD.user)) {
       return {sent:0,failed:0,skipped:true};
+    }
+    // A persisted cloud session may still exist while its ID token has expired.
+    // Let backend() refresh it instead of silently abandoning the queue.
+    if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
+      const refreshed=await V42.refreshGoogleCredential();
+      if(!refreshed) return {sent:0,failed:1,authExpired:true};
     }
     V42.syncing=true; let sent=0,failed=0;
     try{
@@ -11095,9 +11161,12 @@ v2.8 — Definitive flat-light header + school category correction
       // A Google session is persisted for UI continuity, but the raw GIS credential is
       // intentionally not persisted in localStorage. After a page reload, re-authenticate
       // interactively before touching Master Drive rather than showing a false Connected state.
-      if(!V42.idToken){
-        const ok=await V42.ensureBackendAuthInteractive();
-        if(!ok || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
+      if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
+        const ok=await V42.refreshGoogleCredential();
+        if(!ok || !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30)){
+          const interactive=await V42.ensureBackendAuthInteractive();
+          if(!interactive || !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30)) throw new Error('Google authentication is required for Master Drive backup');
+        }
       }
       CLOUD.setSyncStatus('Syncing…','var(--am)');
 
@@ -11649,188 +11718,3 @@ v2.8 — Definitive flat-light header + school category correction
   .hist-mobile-more-info span{font-size:15px!important;}
 }
 </style>
-
-
-<script>
-/* ================================================================
-   BETA 3 SURGICAL PATCH — REAL DRIVE STATUS + FULL MODULE RECONCILE
-   This layer does not replace invoice/business logic. It only upgrades
-   Backup & Sync presentation and asks the existing Master API to verify
-   the actual Drive state.
-   ================================================================ */
-(function(){
-  'use strict';
-  const MODS=[
-    ['company','Company','Company.json'],['schools','Schools','Schools.json'],
-    ['items','Items','Items.json'],['invoices','Invoices','YYYY/MM/ files'],
-    ['invLog','Invoice Logs','InvoiceLog.json'],['settings','Settings','Settings.json'],
-    ['alloc','MDM · Allocation','Allocation.json'],['lpg','MDM · LPG','LPG.json'],
-    ['roster','MDM · Roster','Roster.json'],['backupHistory','Backup History','Snapshots'],
-    ['system','System','Metadata.json, Version.json']
-  ];
-  window.MDM_DRIVE_STATUS=window.MDM_DRIVE_STATUS||null;
-  window.MDM_DRIVE_STATUS_AT=window.MDM_DRIVE_STATUS_AT||null;
-
-  function esc(v){ try{return ec(String(v));}catch(e){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));} }
-  function localAvailable(mod){
-    try{
-      if(mod==='company') return !!A.firm;
-      if(mod==='schools') return Array.isArray(A.schools);
-      if(mod==='items') return Array.isArray(A.items);
-      if(mod==='invoices') return Array.isArray(A.invoices);
-      if(mod==='invLog') return Array.isArray(A.al);
-      if(mod==='settings') return !!A.sett;
-      if(mod==='alloc') return Array.isArray(A.alm);
-      if(mod==='lpg') return !!A.lpg;
-      if(mod==='roster') return Array.isArray(A.ro);
-      if(mod==='backupHistory'||mod==='system') return true;
-    }catch(e){}
-    return false;
-  }
-  function driveState(mod){
-    const s=window.MDM_DRIVE_STATUS&&window.MDM_DRIVE_STATUS.modules&&window.MDM_DRIVE_STATUS.modules[mod];
-    return !!(s&&s.drive);
-  }
-  function statusPair(mod){
-    const d=driveState(mod), l=localAvailable(mod);
-    return '<span class="mdm-store '+(d?'ok':'muted')+'">☁ Drive '+(d?'✓':'—')+'</span><span class="mdm-store '+(l?'ok':'muted')+'">▣ Offline '+(l?'✓':'—')+'</span>';
-  }
-  function syncedTime(mod){
-    if(window.MDM_DRIVE_STATUS_AT && driveState(mod)) return window.MDM_DRIVE_STATUS_AT;
-    return null;
-  }
-  function actionMenu(mod,label){
-    const id='mdm-more-'+mod;
-    return `<div class="mdm-row-actions"><button class="btn btn-g btn-sm mdm-view" onclick="MDMDrive.view('${mod}')">View</button><button class="mdm-kebab" aria-label="More actions" onclick="MDMDrive.menu(event,'${mod}')">⋮</button><div id="${id}" class="mdm-menu" hidden>
-      <button onclick="MDMDrive.view('${mod}')">◉ View Details</button>
-      <button onclick="MDMDrive.retry('${mod}')">↻ Sync Now (Retry)</button>
-      <button onclick="MDMDrive.openDrive('${mod}')">☁ Open in Drive</button>
-      <button onclick="MDMDrive.download('${mod}')">⇩ Download File</button>
-      <button onclick="MDMDrive.history('${mod}')">◷ View Sync History</button>
-      <button class="danger" onclick="MDMDrive.remove('${mod}')">× Remove from Drive</button>
-    </div></div>`;
-  }
-  function fileLabel(r){
-    if(r[0]==='invoices') return (Array.isArray(A.invoices)?A.invoices.length:0)+' file(s) under YYYY/MM/';
-    if(r[0]==='backupHistory') return (window.MDM_DRIVE_STATUS?.modules?.backupHistory?.files||0)+' snapshot(s)';
-    return r[2];
-  }
-  function driveFolderTreeHTMLFinal(){
-    if(!CLOUD.user) return `<div class="info inf-b">Sign in with Google above to create and synchronize the <b>MS ENTERPRISES ERP</b> Drive structure.</div>`;
-    return `<div class="mdm-drive-table-wrap"><table class="dt mdm-drive-table"><thead><tr><th>FOLDER / MODULE</th><th>FILE(S)</th><th>STORAGE STATUS <span title="Drive = confirmed on Google Drive • Offline = available locally">ⓘ</span></th><th>LAST SYNCED</th><th>ACTION</th></tr></thead><tbody>${MODS.map(r=>{
-      const t=syncedTime(r[0]);
-      return `<tr><td><span class="mdm-folder">▰</span><b>${esc(r[1])}</b></td><td class="mono">${esc(fileLabel(r))}</td><td><div class="mdm-storage">${statusPair(r[0])}</div></td><td>${t?`<span class="bdg bg">${esc(driveFmtTime(t))}</span><div class="mdm-today">Confirmed by Drive</div>`:`<span class="bdg bs">Not synced yet</span>`}</td><td>${actionMenu(r[0],r[1])}</td></tr>`;
-    }).join('')}</tbody></table></div>`;
-  }
-
-  const MDMDrive={
-    menu(ev,mod){
-      ev.stopPropagation();
-      document.querySelectorAll('.mdm-menu').forEach(x=>{if(x.id!=='mdm-more-'+mod)x.hidden=true;});
-      const m=document.getElementById('mdm-more-'+mod); if(m)m.hidden=!m.hidden;
-    },
-    async refresh(retry){
-      if(!CLOUD.user||!V42.idToken){
-        toast('Connect Google first to verify Drive status','err'); return;
-      }
-      try{
-        if(retry){
-          toast('Re-checking and retrying all pending modules…','info');
-          await cloudBackupNow();
-          return;
-        }
-        const r=await V42.backend('status',{});
-        window.MDM_DRIVE_STATUS=r; window.MDM_DRIVE_STATUS_AT=r.timestamp||new Date().toISOString();
-        if(A.page==='backupsync') gP('backupsync');
-      }catch(e){toast('Drive status check failed: '+e.message,'err');}
-    },
-    async retry(mod){
-      if(!CLOUD.user||!V42.idToken){toast('Connect Google first','err');return;}
-      try{
-        // A module retry uses the same authoritative complete snapshot. The backend
-        // writes only the real module files and ACKs after the writes finish.
-        CLOUD.setSyncStatus('Syncing '+mod+'…','var(--am)');
-        const r=await V42.backend('reconcile',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
-        window.MDM_DRIVE_STATUS=r; window.MDM_DRIVE_STATUS_AT=r.timestamp||new Date().toISOString();
-        CLOUD.setSyncStatus('Synced ✓','var(--gn)');
-        toast((MODS.find(x=>x[0]===mod)||['',mod])[1]+' synchronized to Google Drive','ok');
-        gP('backupsync');
-      }catch(e){CLOUD.setSyncStatus('Sync attention required','var(--rd)');toast('Sync failed: '+e.message,'err');}
-    },
-    view(mod){
-      const r=MODS.find(x=>x[0]===mod)||['',mod,''];
-      const d=window.MDM_DRIVE_STATUS?.modules?.[mod];
-      const l=localAvailable(mod);
-      const dlg=document.createElement('div');dlg.className='ov';dlg.id='mdm-drive-detail';
-      dlg.innerHTML=`<div class="modal" style="max-width:460px"><div class="mhd"><div class="mt">${esc(r[1])} — Storage Details</div><button class="btn btn-g btn-sm" onclick="this.closest('.ov').remove()">×</button></div><div class="mbd"><div class="mdm-detail-grid"><div><b>Google Drive</b><strong class="${d?.drive?'ok':'bad'}">${d?.drive?'✓ Confirmed':'— Not confirmed'}</strong></div><div><b>Offline / Local</b><strong class="${l?'ok':'bad'}">${l?'✓ Available':'— Not available'}</strong></div><div><b>File(s)</b><strong>${esc(fileLabel(r))}</strong></div><div><b>Checked</b><strong>${esc(window.MDM_DRIVE_STATUS_AT?driveFmtTime(window.MDM_DRIVE_STATUS_AT):'Not checked')}</strong></div></div></div></div>`;
-      document.body.appendChild(dlg);
-    },
-    async openDrive(mod){
-      const root=window.MDM_DRIVE_STATUS?.rootFolderId;
-      if(root){window.open('https://drive.google.com/drive/folders/'+encodeURIComponent(root),'_blank','noopener');return;}
-      toast('Drive folder ID is not available until status is checked','info');
-    },
-    download(mod){toast('Download is available from View Details after the Drive file is confirmed.','info');},
-    history(mod){toast('Sync history is recorded in the Master Drive Audit log.','info');},
-    remove(mod){toast('Remove is intentionally disabled in this safety patch. Use Drive directly if deletion is required.','info');}
-  };
-  window.MDMDrive=MDMDrive;
-
-  /* Replace only the folder table renderer. The original page/card structure remains. */
-  try{ window.driveFolderTreeHTML=driveFolderTreeHTMLFinal; }catch(e){}
-
-  /* Upgrade the existing Backup & Sync page with the new controls/status row. */
-  const oldPg=window.pgBackupSync;
-  window.pgBackupSync=function(){
-    const base=oldPg.apply(this,arguments);
-    const cloudOk=!!(CLOUD.user&&V42.idToken);
-    const ms=window.MDM_DRIVE_STATUS;
-    const count=ms?Number(ms.driveSynced||0):0;
-    const total=11;
-    const title=`<div class="mdm-bsync-head"><div><div class="stl">Backup &amp; Sync</div><div class="sst">Keep your data safe — Google Drive + Offline</div></div><div class="mdm-bsync-head-actions"><button class="btn btn-g btn-sm" onclick="MDMDrive.refresh(false)">↻ Refresh Status<span>Re-check Drive</span></button><button class="btn btn-g btn-sm" onclick="MDMDrive.refresh(true)">↻ Re-check &amp; Retry<span>Sync Pending</span></button></div></div>`;
-    const summary=`<div class="mdm-summary-grid"><div class="mdm-stat"><span>✓</span><div><small>SYNC STATUS</small><b>${count===total?'Fully Synced':(count?count+' / '+total+' modules':'Awaiting Drive check')}</b><em>${count===total?'All modules confirmed':'Drive confirmation required'}</em></div></div><div class="mdm-stat"><span>☁</span><div><small>CLOUD (DRIVE)</small><b>${count} / ${total}</b><em>${count===total?'All files up to date':'Pending / not confirmed'}</em></div></div><div class="mdm-stat"><span>▣</span><div><small>OFFLINE (LOCAL)</small><b>11 / 11</b><em>Local data available</em></div></div><div class="mdm-stat"><span>◷</span><div><small>LAST BACKUP</small><b>${CLOUD.lastBackup?esc(driveFmtTime(CLOUD.lastBackup)):'Never'}</b><em>${CLOUD.lastBackup?'Confirmed backup':'No backup yet'}</em></div></div></div>`;
-    const originalHead='<div class="shd">\n    <div><div class="stl">Backup &amp; Sync</div><div class="sst">Google account, Drive folder structure, backups and restore</div></div>\n  </div>';
-    return title+summary+base.replace(originalHead,'');
-  };
-
-  /* The page renderer above can leave the original title in the DOM. Add CSS to
-     hide only that original heading when our replacement is present. */
-  const style=document.createElement('style');style.textContent=`
-    .mdm-bsync-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;padding:2px 0}
-    .mdm-bsync-head-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .mdm-bsync-head-actions button{min-width:142px;line-height:1.1}.mdm-bsync-head-actions button span{display:block;font-size:9px;opacity:.72;margin-top:3px}
-    .mdm-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.mdm-stat{display:flex;gap:10px;align-items:center;padding:13px;border:1px solid var(--bd);border-radius:12px;background:var(--card)}
-    .mdm-stat>span{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(99,75,220,.14);color:var(--ac);font-size:18px;font-weight:900}.mdm-stat small{display:block;color:var(--txl);font-size:9px;font-weight:800;letter-spacing:.05em}.mdm-stat b{display:block;font-size:14px;margin-top:2px}.mdm-stat em{display:block;font-style:normal;color:var(--txl);font-size:10px;margin-top:2px}
-    .mdm-drive-table-wrap{overflow-x:auto}.mdm-drive-table{min-width:920px}.mdm-drive-table th{white-space:nowrap}.mdm-drive-table td{vertical-align:middle}.mdm-folder{display:inline-block;margin-right:7px;color:var(--ac)}
-    .mdm-storage{display:flex;gap:7px;flex-wrap:wrap}.mdm-store{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:999px;font-size:10px;font-weight:800;border:1px solid var(--bd)}.mdm-store.ok{color:var(--gn);background:rgba(34,197,94,.09)}.mdm-store.muted{color:var(--txl);background:rgba(148,163,184,.08)}.mdm-today{font-size:9px;color:var(--txl);margin-top:3px}
-    .mdm-row-actions{position:relative;display:flex;align-items:center;gap:5px}.mdm-view{padding:6px 10px!important}.mdm-kebab{width:30px;height:30px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);font-size:18px;cursor:pointer}.mdm-menu{position:absolute;right:0;top:35px;z-index:5000;min-width:205px;padding:6px;border:1px solid var(--bd);border-radius:10px;background:var(--card);box-shadow:0 14px 35px rgba(0,0,0,.22)}.mdm-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--tx);padding:8px 9px;border-radius:7px;font-size:11px;cursor:pointer}.mdm-menu button:hover{background:rgba(99,75,220,.12)}.mdm-menu .danger{color:var(--rd)}
-    .mdm-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mdm-detail-grid>div{padding:11px;border:1px solid var(--bd);border-radius:9px}.mdm-detail-grid b{display:block;color:var(--txl);font-size:10px}.mdm-detail-grid strong{display:block;margin-top:4px;font-size:12px}.mdm-detail-grid .ok{color:var(--gn)}.mdm-detail-grid .bad{color:var(--rd)}
-    @media(max-width:800px){.mdm-bsync-head{align-items:flex-start;flex-direction:column}.mdm-bsync-head-actions{width:100%;justify-content:stretch}.mdm-bsync-head-actions button{flex:1;min-width:0}.mdm-summary-grid{grid-template-columns:1fr 1fr}.mdm-detail-grid{grid-template-columns:1fr}}
-    @media(max-width:480px){.mdm-summary-grid{grid-template-columns:1fr}.mdm-bsync-head-actions{display:grid;grid-template-columns:1fr 1fr}.mdm-bsync-head-actions button{font-size:10px!important}}
-    [data-theme="dark"] .mdm-stat,.dark .mdm-stat{background:var(--card)}
-  `;document.head.appendChild(style);
-
-  /* Close kebab menus when tapping elsewhere. */
-  document.addEventListener('click',function(e){if(!e.target.closest('.mdm-row-actions'))document.querySelectorAll('.mdm-menu').forEach(x=>x.hidden=true);});
-
-  /* Verify actual Drive state shortly after opening Backup & Sync. */
-  const oldGP=window.gP;
-  if(typeof oldGP==='function' && !window.__mdmGPDrivePatch){
-    window.__mdmGPDrivePatch=true;
-    window.gP=function(page){const r=oldGP.apply(this,arguments);if(page==='backupsync'&&CLOUD.user&&V42.idToken)setTimeout(()=>MDMDrive.refresh(false),250);return r;};
-  }
-
-  /* After a successful Google login, immediately materialize the complete local
-     dataset to Drive. This fixes the old behavior where only recently edited
-     modules became green. */
-  if(V42.acceptGoogleCredential&&!V42.__mdmAutoFullBackup){
-    const origAuth=V42.acceptGoogleCredential;
-    V42.acceptGoogleCredential=async function(credential){
-      const r=await origAuth.apply(this,arguments);
-      setTimeout(()=>{if(CLOUD.user&&V42.idToken&&navigator.onLine)cloudBackupNow();},350);
-      return r;
-    };
-    V42.__mdmAutoFullBackup=true;
-  }
-})();
-</script>
