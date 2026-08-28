@@ -5159,12 +5159,25 @@ function doLogin(){
    ═════════════════════════════════════════════════════════════════════ */
 const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec";
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
+/*
+ * v4.51 surgical transport guard.
+ * "APPS_SCRIPT_BRIDGE" is an internal sentinel used only by the
+ * Apps-Script-hosted build. It is NOT a URL and must never leak into
+ * the GitHub/standalone build through persisted localStorage.
+ * Preserve any real user-configured endpoint unchanged.
+ */
+const V42_IS_HOSTED = !!(window.google && google.script && google.script.run);
+const V42_STORED_API_URL = String(localStorage.getItem("mdm_api_url") || "").trim();
+const V42_SAFE_STORED_API_URL = (V42_STORED_API_URL && V42_STORED_API_URL !== "APPS_SCRIPT_BRIDGE") ? V42_STORED_API_URL : "";
+if(!V42_IS_HOSTED && V42_STORED_API_URL === "APPS_SCRIPT_BRIDGE"){
+  try{ localStorage.removeItem("mdm_api_url"); }catch(e){}
+}
 const V42 = {
   version: "4.42",
   previousVersion: "4.41",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
-  apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
+  apiUrl: V42_SAFE_STORED_API_URL || (V42_IS_HOSTED ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
   googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
   showConfigModal: false,
   deviceId: localStorage.getItem("mdm_device_id") || ("dev_"+uid()),
