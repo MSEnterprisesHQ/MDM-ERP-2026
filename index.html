@@ -1,3 +1,5 @@
+<!-- v4.51 FINAL SURGICAL FIX: transport endpoint fallback/retry + Backup & Sync top-control alignment.
+     No invoice/PDF/business-calculation logic is changed. -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
 BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
@@ -1653,6 +1655,19 @@ Invoice/PDF/business logic intentionally preserved.
 [data-theme="dark"] .drive-ux-table th{color:var(--tx);background:color-mix(in srgb,var(--slx) 82%,var(--card) 18%)}
 [data-theme="dark"] .drive-status.ok{background:rgba(22,163,74,.14);border-color:rgba(74,222,128,.28)}
 @media(max-width:900px){.drive-refresh-row{align-items:flex-start;flex-wrap:wrap}.drive-ux-table{min-width:920px!important}.drive-table-scroll{overflow-x:auto}}
+</style>
+<style id="backup-sync-final-polish">
+.storage-heading{display:inline-block;vertical-align:middle}
+.drive-status-wrap{gap:6px!important}
+.drive-status{min-width:88px!important;height:28px!important;padding:0 8px!important;gap:5px!important;letter-spacing:0!important}
+.drive-status .drive-icon,.drive-status .drive-icon svg{width:14px!important;height:14px!important}
+.drive-status .drive-icon svg{stroke-width:2.05!important;shape-rendering:geometricPrecision}
+.drive-actions .drive-icon svg,.drive-menu .drive-icon svg{shape-rendering:geometricPrecision}
+.master-refresh-card .backup-control-title{white-space:nowrap}
+.master-refresh-card .backup-control-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.master-refresh-btn{min-width:90px!important;height:34px!important;padding:6px 10px!important}
+@media(max-width:900px){.backup-control-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}}
+@media(max-width:560px){.backup-control-grid{grid-template-columns:1fr!important}.master-refresh-card .backup-control-sub{white-space:normal}}
 </style>
 </head>
 <body>
@@ -3863,23 +3878,29 @@ function niPrAll(){
 
 
 <style id="master-refresh-final-ux">
+/* v4.51 FINAL — the two top controls are deliberately one horizontal row,
+   matching the Backup Now / Restore Backup action row below. */
 .backup-control-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-  margin-bottom:12px;
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  gap:8px!important;
+  width:100%;
+  margin:0 0 12px!important;
+  align-items:stretch;
 }
 .backup-control-card{
-  min-height:62px;
+  min-height:64px;
+  height:64px;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:11px 13px;
+  padding:10px 13px;
   border:1px solid var(--bd);
   border-radius:10px;
   background:var(--slx);
   box-sizing:border-box;
+  overflow:hidden;
 }
 .backup-control-copy{min-width:0}
 .backup-control-title{
@@ -3937,8 +3958,9 @@ function niPrAll(){
 }
 @keyframes masterRefreshSpin{to{transform:rotate(360deg)}}
 
-@media(max-width:700px){
-  .backup-control-grid{grid-template-columns:1fr}
+@media(max-width:560px){
+  .backup-control-grid{grid-template-columns:1fr!important}
+  .backup-control-card{height:auto;min-height:62px}
 }
 </style>
 
@@ -5172,6 +5194,16 @@ const V42_SAFE_STORED_API_URL = (V42_STORED_API_URL && V42_STORED_API_URL !== "A
 if(!V42_IS_HOSTED && V42_STORED_API_URL === "APPS_SCRIPT_BRIDGE"){
   try{ localStorage.removeItem("mdm_api_url"); }catch(e){}
 }
+// Canonical transport endpoints. A stale saved endpoint is never allowed to
+// permanently block the canonical Master deployment; the saved endpoint is
+// tried first, then the locked project default is retried automatically.
+function V42_transportEndpoints(){
+  const a=[];
+  const push=u=>{u=String(u||"").trim(); if(/^https:\/\/script\.google\.com\/macros\/s\//.test(u) && !a.includes(u)) a.push(u);};
+  push(V42_SAFE_STORED_API_URL);
+  push(V42_DEFAULT_API_URL);
+  return a;
+}
 const V42 = {
   version: "4.42",
   previousVersion: "4.41",
@@ -5415,8 +5447,8 @@ V42.backend = async function(action,payload){
   }
   const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
 
-  // Apps Script hosted mode: use the server-side bridge directly.
-  if(window.google && google.script && google.script.run){
+  // Apps Script hosted mode: keep the established server-side bridge untouched.
+  if(V42_IS_HOSTED){
     return await new Promise((resolve,reject)=>{
       google.script.run
         .withSuccessHandler(d=>{
@@ -5432,51 +5464,79 @@ V42.backend = async function(action,payload){
     });
   }
 
-  // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
-  // This avoids the browser CORS/redirect problem of reading a ContentService
-  // POST response directly from GitHub Pages. The bridge calls google.script.run
-  // server-side, so the API response remains readable and ACK can be verified.
-  if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  if(!V42._apiBridgePromise){
-    V42._apiBridgePromise=new Promise((resolve,reject)=>{
+  const endpoints=V42_transportEndpoints();
+  if(!endpoints.length) throw new Error("Master API endpoint not configured");
+  const failures=[];
+
+  // GitHub/standalone mode. Each endpoint gets its own bridge instance.
+  // This is deliberately recreated after a failed load/timeout so a dead iframe
+  // can never poison all later Backup Now / Master Refresh attempts.
+  const bridgeRequest=async(url)=>{
+    const frame=await new Promise((resolve,reject)=>{
       const frame=document.createElement('iframe');
       frame.id='mdm-api-bridge-frame';
       frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
-      const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
+      let settled=false;
+      const cleanup=()=>{window.removeEventListener('message',onReady);};
+      const fail=err=>{if(settled)return;settled=true;cleanup();try{frame.remove();}catch(_){};reject(err);};
+      const timer=setTimeout(()=>fail(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.')),12000);
+      const onReady=ev=>{
+        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready') return;
+        if(settled)return; settled=true; clearTimeout(timer); cleanup(); resolve(frame);
+      };
       window.addEventListener('message',onReady);
       document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
-    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
-  }
-  try{
-    const frame=await V42._apiBridgePromise;
-    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    return await new Promise((resolve,reject)=>{
-      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
-      const onMessage=ev=>{
-        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
-        clearTimeout(timeout);window.removeEventListener('message',onMessage);
-        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
-        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
-      };
-      window.addEventListener('message',onMessage);
-      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+      frame.src=url+(url.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51')+'&_='+Date.now();
     });
-  }catch(bridgeError){
-    // Last-resort direct fetch is retained for deployments where CORS is already
-    // configured. Never use no-cors because backup/sync require a readable ACK.
+
     try{
-      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
-      if(!r.ok) throw new Error('API HTTP '+r.status);
-      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
-    }catch(fetchError){
-      const detail=(fetchError&&fetchError.message)||String(fetchError);
-      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
+      const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      return await new Promise((resolve,reject)=>{
+        let done=false;
+        const finish=(fn,v)=>{if(done)return;done=true;window.removeEventListener('message',onMessage);clearTimeout(timeout);fn(v);};
+        const timeout=setTimeout(()=>finish(reject,new Error('Master API bridge timeout')),30000);
+        const onMessage=ev=>{
+          if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
+          if(ev.data.ok && ev.data.result?.ok) finish(resolve,ev.data.result);
+          else finish(reject,new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
+        };
+        window.addEventListener('message',onMessage);
+        frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+      });
+    } finally {
+      try{frame.remove();}catch(_){}
+    }
+  };
+
+  for(const url of endpoints){
+    try{
+      const result=await bridgeRequest(url);
+      // If the saved endpoint was stale but the canonical endpoint succeeded,
+      // repair the persisted setting so subsequent calls use the working URL.
+      if(url===V42_DEFAULT_API_URL && V42_SAFE_STORED_API_URL && V42_SAFE_STORED_API_URL!==url){
+        V42.apiUrl=url;
+        try{localStorage.setItem('mdm_api_url',url);}catch(_){}
+      }
+      return result;
+    }catch(bridgeError){
+      failures.push(url+': '+(bridgeError?.message||bridgeError));
+
+      // Last-resort direct POST for deployments where CORS is already enabled.
+      // We still require a readable JSON ACK; no-cors is intentionally forbidden.
+      try{
+        const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
+        if(!r.ok) throw new Error('API HTTP '+r.status);
+        const d=await r.json();
+        if(!d.ok) throw new Error(d.error||'API request failed');
+        return d;
+      }catch(fetchError){
+        failures.push(url+' direct: '+(fetchError?.message||fetchError));
+      }
     }
   }
-};
 
+  throw new Error('Master API transport failed: '+failures.join(' | '));
+};
 V42.ensureBackendAuth = async function(){
   if(!V42.apiUrl || !CLOUD.user) return false;
   if(V42.idToken || CLOUD.token) return true;
@@ -10200,11 +10260,11 @@ function cloudCardHTML(){
           </div>
           <div class="backup-control-card master-refresh-card">
             <div class="backup-control-copy">
-              <div class="backup-control-title">${driveIcon('refresh')} Master Refresh</div>
+              <div class="backup-control-title">${driveIcon('refresh')}<span>Master Refresh</span></div>
               <div class="backup-control-sub">Re-check all modules, retry pending syncs and refresh Drive status</div>
             </div>
             <button type="button" class="btn btn-g master-refresh-btn" id="master-refresh-btn" onclick="cloudMasterRefresh()">
-              ${driveIcon('refresh')} <span>Refresh</span>
+              ${driveIcon('refresh')}<span>Refresh</span>
             </button>
           </div>
         </div>
@@ -10314,7 +10374,7 @@ function driveFolderTreeHTML(){
   const nowSynced=rows.filter(r=>!!DRIVE.lastSynced(r.mod)).length+(DRIVE.getMetadata()?1:0)+(CLOUD.lastBackup?1:0);
   const total=all.length;
   return `<div class="drive-refresh-row"><div class="drive-refresh-meta">${nowSynced}/${total} modules have a local sync record · Offline = the app's durable local database (IndexedDB); no separate JSON download is required.</div><div style="display:flex;gap:7px"><button class="btn btn-g btn-sm" onclick="driveRefreshStatus()">${driveIcon('refresh')} Refresh Status</button><button class="btn btn-g btn-sm" onclick="driveRetryAll()">${driveIcon('refresh')} Re-check &amp; Retry</button></div></div>
-  <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th>Storage Status <span class="drive-info" title="Drive = Google Drive copy. Offline = local app copy in IndexedDB/local storage.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
+  <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th><span class="storage-heading">Storage</span> <span class="drive-info" title="Drive = confirmed Google Drive copy. Offline = available in the app’s local IndexedDB database.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
   ${all.map((r,i)=>{
     const driveOK=r.mod==='backup'?!!CLOUD.lastBackup:r.mod==='system'?!!DRIVE.getMetadata():!!DRIVE.lastSynced(r.mod);
     const localOK=driveLocalAvailable(r.mod);
