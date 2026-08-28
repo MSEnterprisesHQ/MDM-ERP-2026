@@ -4946,68 +4946,41 @@ V42.acceptGoogleCredential = async function(credential){
 };
 
 V42.backend = async function(action,payload){
-  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
+  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null),requestId:"req_"+uid()+"_"+Date.now().toString(36)};
 
-  // Apps Script hosted mode: use the server-side bridge directly.
+  // Apps Script-hosted mode keeps the native server-side bridge.
   if(window.google && google.script && google.script.run){
     return await new Promise((resolve,reject)=>{
-      google.script.run
-        .withSuccessHandler(d=>{
-          try{
-            if(!d || !d.ok) throw new Error((d && d.error) || "API request failed");
-            resolve(d);
-          }catch(e){ reject(e); }
-        })
-        .withFailureHandler(e=>{
-          reject(new Error((e && e.message) || String(e) || "Apps Script request failed"));
-        })
-        .apiRequest(body);
+      google.script.run.withSuccessHandler(d=>{try{if(!d||!d.ok)throw new Error((d&&d.error)||"API request failed");resolve(d);}catch(e){reject(e);}}).withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||"Apps Script request failed"))).apiRequest(body);
     });
   }
 
-  // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
-  // This avoids the browser CORS/redirect problem of reading a ContentService
-  // POST response directly from GitHub Pages. The bridge calls google.script.run
-  // server-side, so the API response remains readable and ACK can be verified.
   if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  if(!V42._apiBridgePromise){
-    V42._apiBridgePromise=new Promise((resolve,reject)=>{
-      const frame=document.createElement('iframe');
-      frame.id='mdm-api-bridge-frame';
-      frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
-      const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
-      window.addEventListener('message',onReady);
-      document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1';
-    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
-  }
-  try{
-    const frame=await V42._apiBridgePromise;
-    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    return await new Promise((resolve,reject)=>{
-      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
-      const onMessage=ev=>{
-        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
-        clearTimeout(timeout);window.removeEventListener('message',onMessage);
-        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
-        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
-      };
-      window.addEventListener('message',onMessage);
-      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
-    });
-  }catch(bridgeError){
-    // Last-resort direct fetch is retained for deployments where CORS is already
-    // configured. Never use no-cors because backup/sync require a readable ACK.
-    try{
-      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
-      if(!r.ok) throw new Error('API HTTP '+r.status);
-      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
-    }catch(fetchError){
-      const detail=(fetchError&&fetchError.message)||String(fetchError);
-      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
-    }
-  }
+
+  // GitHub Pages cannot reliably read Apps Script POST responses because the Web App
+  // response is cross-origin. Use a normal HTML form POST (no CORS preflight) and
+  // poll a tiny JSONP result endpoint for the server ACK. This preserves real ACKs
+  // without adding a third bridge file.
+  return await new Promise((resolve,reject)=>{
+    const requestId=body.requestId;
+    const frameName="mdm_api_frame_"+requestId;
+    const iframe=document.createElement("iframe"); iframe.name=frameName; iframe.style.cssText="position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0"; document.body.appendChild(iframe);
+    const form=document.createElement("form"); form.method="POST"; form.action=V42.apiUrl; form.target=frameName; form.style.display="none";
+    const input=document.createElement("input"); input.type="hidden"; input.name="body"; input.value=JSON.stringify(body); form.appendChild(input); document.body.appendChild(form);
+    const cb="mdmApiResult_"+requestId.replace(/[^A-Za-z0-9_]/g,"");
+    let done=false, tries=0;
+    const cleanup=()=>{try{delete window[cb];}catch(e){} form.remove(); setTimeout(()=>iframe.remove(),200);};
+    window[cb]=(d)=>{
+      if(done)return;
+      if(d&&d.pending)return;
+      done=true;cleanup();
+      if(d&&d.ok)resolve(d);else reject(new Error((d&&d.error)||"Master API request failed"));
+    };
+    const poll=()=>{if(done)return;tries++;const sc=document.createElement("script");sc.src=V42.apiUrl+(V42.apiUrl.includes("?")?"&":"?")+"result=1&requestId="+encodeURIComponent(requestId)+"&callback="+encodeURIComponent(cb)+"&_="+Date.now();sc.onerror=()=>{sc.remove();};document.head.appendChild(sc);setTimeout(()=>{sc.remove();if(!done&&tries<50)poll();},400);};
+    try{form.submit();}catch(e){done=true;cleanup();reject(e);return;}
+    setTimeout(poll,700);
+    setTimeout(()=>{if(!done){done=true;cleanup();reject(new Error("Master API transport timeout"));}},22000);
+  });
 };
 
 V42.ensureBackendAuth = async function(){
