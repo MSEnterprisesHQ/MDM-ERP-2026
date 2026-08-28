@@ -2539,7 +2539,7 @@ function pgDash(){
   const invMoPct=pct(thisMo.length,lastMo.length), amtMoPct=pct(thisMoAmt,lastMoAmt);
   const trendHtml=(p,suffix)=>`<span class="kpi-trend ${p>0?"up":p<0?"down":"flat"}">${p>0?"&#8593;":p<0?"&#8595;":"&#8226;"} ${Math.abs(p)}% ${suffix}</span>`;
   const backupFresh=CLOUD.lastBackup && (now-new Date(CLOUD.lastBackup))<24*3600*1000;
-  const lastSyncTime=(typeof DRIVE!=="undefined"&&DRIVE.getMetadata&&DRIVE.getMetadata()?.lastSyncTime)||CLOUD.lastBackup||null;
+  const lastSyncTime=localStorage.getItem("cloud_last_sync")||(typeof DRIVE!=="undefined"&&DRIVE.getMetadata&&DRIVE.getMetadata()?.lastSyncTime)||CLOUD.lastBackup||null;
 
   // Last-7-days series (real data) for KPI sparklines
   const last7Inv=[], last7Amt=[];
@@ -4809,12 +4809,6 @@ V42.hydrateFromIDB = async function(){
     const sess=await V42.idbGet("meta","session");
     if(sess && sess.user && sess.expiresAt && Date.now()<sess.expiresAt){
       A.loggedIn=true; A.currentUser=sess.user;
-      if(isGoogleUser(sess.user)){
-        CLOUD.user=sess.user; CLOUD.ready=true;
-        try{
-          await V42.restoreGoogleSessionSilently();
-        }catch(e){ console.warn('[MDM] silent session restore skipped',e); }
-      }
     }
     V42.ready=true;
   }catch(e){
@@ -4946,41 +4940,52 @@ V42.acceptGoogleCredential = async function(credential){
 };
 
 V42.backend = async function(action,payload){
-  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null),requestId:"req_"+uid()+"_"+Date.now().toString(36)};
+  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
 
-  // Apps Script-hosted mode keeps the native server-side bridge.
+  // Apps Script-hosted mode remains unchanged.
   if(window.google && google.script && google.script.run){
     return await new Promise((resolve,reject)=>{
-      google.script.run.withSuccessHandler(d=>{try{if(!d||!d.ok)throw new Error((d&&d.error)||"API request failed");resolve(d);}catch(e){reject(e);}}).withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||"Apps Script request failed"))).apiRequest(body);
+      google.script.run.withSuccessHandler(d=>{try{if(!d||!d.ok)throw new Error((d&&d.error)||'API request failed');resolve(d);}catch(e){reject(e);}})
+      .withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||'Apps Script request failed'))).apiRequest(body);
     });
   }
 
-  if(!V42.apiUrl) throw new Error("API endpoint not configured");
-
-  // GitHub Pages cannot reliably read Apps Script POST responses because the Web App
-  // response is cross-origin. Use a normal HTML form POST (no CORS preflight) and
-  // poll a tiny JSONP result endpoint for the server ACK. This preserves real ACKs
-  // without adding a third bridge file.
-  return await new Promise((resolve,reject)=>{
-    const requestId=body.requestId;
-    const frameName="mdm_api_frame_"+requestId;
-    const iframe=document.createElement("iframe"); iframe.name=frameName; iframe.style.cssText="position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0"; document.body.appendChild(iframe);
-    const form=document.createElement("form"); form.method="POST"; form.action=V42.apiUrl; form.target=frameName; form.style.display="none";
-    const input=document.createElement("input"); input.type="hidden"; input.name="body"; input.value=JSON.stringify(body); form.appendChild(input); document.body.appendChild(form);
-    const cb="mdmApiResult_"+requestId.replace(/[^A-Za-z0-9_]/g,"");
-    let done=false, tries=0;
-    const cleanup=()=>{try{delete window[cb];}catch(e){} form.remove(); setTimeout(()=>iframe.remove(),200);};
-    window[cb]=(d)=>{
-      if(done)return;
-      if(d&&d.pending)return;
-      done=true;cleanup();
-      if(d&&d.ok)resolve(d);else reject(new Error((d&&d.error)||"Master API request failed"));
-    };
-    const poll=()=>{if(done)return;tries++;const sc=document.createElement("script");sc.src=V42.apiUrl+(V42.apiUrl.includes("?")?"&":"?")+"result=1&requestId="+encodeURIComponent(requestId)+"&callback="+encodeURIComponent(cb)+"&_="+Date.now();sc.onerror=()=>{sc.remove();};document.head.appendChild(sc);setTimeout(()=>{sc.remove();if(!done&&tries<50)poll();},400);};
-    try{form.submit();}catch(e){done=true;cleanup();reject(e);return;}
-    setTimeout(poll,700);
-    setTimeout(()=>{if(!done){done=true;cleanup();reject(new Error("Master API transport timeout"));}},22000);
-  });
+  // GitHub/standalone mode: submit a normal HTML form to Apps Script.
+  // Browser fetch/XHR cannot reliably read Apps Script Web App POST responses
+  // because the service may redirect across origins. A form POST does not need
+  // CORS permission. We then poll a tiny JSONP status endpoint for the ACK.
+  if(!V42.apiUrl) throw new Error('API endpoint not configured');
+  const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+  const frame=document.createElement('iframe');
+  frame.name='mdm-api-post-'+requestId;
+  frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+  document.body.appendChild(frame);
+  const form=document.createElement('form');
+  form.method='POST'; form.action=V42.apiUrl; form.target=frame.name; form.style.display='none';
+  const fields={requestId,action,idToken:body.idToken||'',payload:JSON.stringify(body.payload||{}),appVersion:body.appVersion||'',deviceId:body.deviceId||'',user:JSON.stringify(body.user||null)};
+  Object.keys(fields).forEach(k=>{const i=document.createElement('input');i.type='hidden';i.name=k;i.value=fields[k];form.appendChild(i);});
+  document.body.appendChild(form); form.submit(); form.remove();
+  const cleanup=()=>{try{frame.remove();}catch(_){}};
+  try{
+    const started=Date.now();
+    while(Date.now()-started<30000){
+      await new Promise(r=>setTimeout(r,700));
+      const callback='mdmApiCb_'+requestId.replace(/[^A-Za-z0-9_]/g,'');
+      const result=await new Promise((resolve,reject)=>{
+        let done=false; const finish=v=>{if(done)return;done=true;try{delete window[callback];}catch(_){};resolve(v);};
+        window[callback]=d=>finish(d);
+        const sc=document.createElement('script');
+        sc.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'status=1&requestId='+encodeURIComponent(requestId)+'&callback='+callback+'&t='+Date.now();
+        sc.onerror=()=>finish(null); document.head.appendChild(sc);
+        setTimeout(()=>{try{sc.remove();}catch(_){};finish(null);},5000);
+      });
+      if(result && result.pending!==true){
+        if(result.ok) return result;
+        throw new Error(result.error||'API request failed');
+      }
+    }
+    throw new Error('Master API request timed out');
+  }finally{cleanup();}
 };
 
 V42.ensureBackendAuth = async function(){
@@ -4990,8 +4995,8 @@ V42.ensureBackendAuth = async function(){
     await V42.loadGIS();
     if(!V42.googleClientId) return false;
     return await new Promise(resolve=>{
-      let done=false; const finish=v=>{if(done)return;done=true;resolve(v);};
-      google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{try{await V42.acceptGoogleCredential(resp.credential);finish(true);}catch(e){finish(false);}}});
+      let done=false; const finish=v=>{if(done)return;done=true;resolve(!!v);};
+      google.accounts.id.initialize({client_id:V42.googleClientId,auto_select:true,callback:async resp=>{try{if(!resp?.credential)return finish(false);await V42.acceptGoogleCredential(resp.credential);finish(!!V42.idToken);}catch(e){finish(false);}}});
       google.accounts.id.prompt(n=>{if(n.isNotDisplayed()||n.isSkippedMoment())finish(false);});
       setTimeout(()=>finish(false),7000);
     });
@@ -5114,8 +5119,25 @@ async function bootstrapV42(){
     // The Google-login enhancement is installed by the existing startup hook.
   }
 
-  if(navigator.onLine) setTimeout(()=>V42.flushQueue(),1200);
-  setInterval(()=>{ if(navigator.onLine && CLOUD.user) V42.flushQueue(); }, 5*60*1000);
+  if(navigator.onLine) setTimeout(async()=>{
+    try{
+      if(CLOUD.user && isGoogleUser(CLOUD.user)){
+        if(!V42.idToken) await V42.ensureBackendAuth();
+        if(V42.idToken) await V42.syncAllExistingState();
+      }
+    }catch(e){ console.warn('[MDM] startup master sync deferred',e); }
+    await V42.flushQueue();
+  },1200);
+  setInterval(async()=>{
+    if(!navigator.onLine || !CLOUD.user) return;
+    try{
+      if(isGoogleUser(CLOUD.user)){
+        if(!V42.idToken) await V42.ensureBackendAuth();
+        if(V42.idToken && localStorage.getItem('cloud_initial_sync')!=='complete') await V42.syncAllExistingState();
+      }
+      await V42.flushQueue();
+    }catch(e){}
+  }, 5*60*1000);
 }
 
 /* v4.42: legacy synchronous Drive adapter is retained only as a local mirror.
@@ -5165,7 +5187,10 @@ cloudBackupNow=async function(){
     const q=await V42.flushQueue();
     if(V42.apiUrl){await V42.backend("backup",{snapshot:CLOUD.getPayload(),appVersion:V42.version});}
     else {await V42.createLocalSnapshot();}
-    CLOUD.lastBackup=new Date().toISOString();localStorage.setItem("cloud_last_backup",CLOUD.lastBackup);
+    CLOUD.lastBackup=new Date().toISOString();
+    localStorage.setItem("cloud_last_backup",CLOUD.lastBackup);
+    localStorage.setItem("cloud_last_sync",CLOUD.lastBackup);
+    try{ if(typeof DRIVE!=="undefined" && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
     CLOUD.setSyncStatus("Synced ✓","var(--gn)");CLOUD.updateUI();toast("Backup completed","ok");
   }catch(e){CLOUD.setSyncStatus("Backup failed","var(--rd)");toast("Backup failed: "+e.message,"err");}
 };
@@ -10992,8 +11017,9 @@ v2.8 — Definitive flat-light header + school category correction
       // google.accounts.id.cancel() here; that API belongs to Google's prompt lifecycle.
       CLOUD.updateUI();
       const q=await V42.flushQueue();
+      const initial=await V42.syncAllExistingState();
       if(A.page==='backupsync') gP('backupsync');
-      toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok');
+      toast('Signed in as '+(user.name||user.email)+(initial.failed===0?' — Master data synced':(' — '+initial.failed+' module(s) pending')),'ok');
     }catch(e){
       toast('Google sign-in failed: '+e.message,'err');
       console.error('[MDM v4.51] Google authentication failure',e);
@@ -11014,7 +11040,10 @@ v2.8 — Definitive flat-light header + school category correction
           const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
           op.status='synced'; op.syncedAt=new Date().toISOString(); op.serverOperationId=result.operationId||op.id;
-          await V42.idbSet('queue',op.id,op); sent++;
+          await V42.idbSet('queue',op.id,op);
+          localStorage.setItem('cloud_last_sync',op.syncedAt);
+          try{ if(typeof DRIVE!=='undefined' && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
+          sent++;
         }catch(e){
           op.status='pending'; op.lastError=String(e&&e.message?e.message:e); await V42.idbSet('queue',op.id,op); failed++; break;
         }
@@ -11027,41 +11056,30 @@ v2.8 — Definitive flat-light header + school category correction
     return {sent,failed};
   };
 
-  /* ---- Silent GIS session restoration after browser refresh ---- */
-  V42.restoreGoogleSessionSilently = async function(){
-    if(!isGoogleUser(CLOUD.user) || V42.idToken || !V42.googleClientId) return false;
+
+  /* ---- Initial Master Drive sync: upload the existing local master state once the
+     Google credential is accepted. This uses the same durable sync API as normal
+     saves; it does not touch invoice/PDF/rendering/business logic. ---- */
+  V42.syncAllExistingState = async function(){
+    if(!V42.apiUrl || !isGoogleUser(CLOUD.user) || !V42.idToken) return {sent:0,failed:0,skipped:true};
     try{
-      await V42.loadGIS();
-      return await new Promise(resolve=>{
-        let settled=false;
-        const finish=v=>{if(settled)return;settled=true;resolve(!!v);};
-        google.accounts.id.initialize({
-          client_id:V42.googleClientId,
-          auto_select:true,
-          cancel_on_tap_outside:false,
-          callback:async resp=>{
-            try{
-              if(!resp || !resp.credential) return finish(false);
-              await V42.acceptGoogleCredential(resp.credential);
-              finish(!!V42.idToken);
-            }catch(e){
-              console.warn('[MDM] silent Google session restore failed',e);
-              finish(false);
-            }
-          }
-        });
-        // Do not render a button or custom overlay here. GIS either restores the
-        // prior account automatically or quietly reports that it cannot.
-        google.accounts.id.prompt(notification=>{
-          try{
-            if(notification && (notification.isNotDisplayed?.() || notification.isSkippedMoment?.() || notification.isDismissedMoment?.())) finish(false);
-          }catch(_){ finish(false); }
-        });
-        setTimeout(()=>finish(!!V42.idToken),5000);
+      CLOUD.setSyncStatus('Syncing…','var(--am)');
+      const result=await V42.backend('fullsync',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
+      if(!result || !result.ok) throw new Error((result&&result.error)||'Master full sync was not acknowledged');
+
+      const map={company:'company',schools:'schools',items:'items',invoices:'invoices',invLog:'invLog',settings:'settings',alloc:'alloc',lpg:'lpg',roster:'roster'};
+      Object.keys(map).forEach(mod=>{
+        const info=result.modules && result.modules[map[mod]];
+        if(info && info.ok && info.updatedAt) localStorage.setItem('gdrive_touched_'+mod,info.updatedAt);
       });
+      localStorage.setItem('cloud_initial_sync','complete');
+      CLOUD.cloudModuleStatus=result.modules||{};
+      CLOUD.setSyncStatus('Synced ✓','var(--gn)');
+      return {sent:Object.keys(map).length,failed:0,modules:result.modules||{}};
     }catch(e){
-      console.warn('[MDM] silent Google session restore unavailable',e);
-      return false;
+      CLOUD.setSyncStatus('Sync pending','var(--am)');
+      console.warn('[MDM] initial master full sync failed',e);
+      return {sent:0,failed:1,error:String(e&&e.message?e.message:e)};
     }
   };
 
@@ -11103,11 +11121,10 @@ v2.8 — Definitive flat-light header + school category correction
         return;
       }
       if(!isGoogleUser(CLOUD.user)) throw new Error('Google authentication is required for Master Drive backup');
-      // A Google session is persisted for UI continuity, but the raw GIS credential is
-      // intentionally not persisted in localStorage. After a page reload, re-authenticate
-      // interactively before touching Master Drive rather than showing a false Connected state.
+      // A Google session is persisted for UI continuity. After reload, silently restore
+      // a fresh GIS credential before touching Master Drive; do not open a manual chooser.
       if(!V42.idToken){
-        const ok=await V42.ensureBackendAuthInteractive();
+        const ok=await V42.ensureBackendAuth();
         if(!ok || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
       }
       CLOUD.setSyncStatus('Syncing…','var(--am)');
