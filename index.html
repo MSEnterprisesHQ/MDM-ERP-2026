@@ -4939,6 +4939,73 @@ V42.acceptGoogleCredential = async function(credential){
   }catch(e){toast("Google sign-in failed: "+e.message,"err");}
 };
 
+V42._createApiBridge = function(){
+  return new Promise((resolve,reject)=>{
+    const frame=document.createElement('iframe');
+    frame.id='mdm-api-bridge-frame-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+    frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+    let settled=false;
+    const cleanup=()=>{
+      window.removeEventListener('message',onReady);
+      try{frame.remove();}catch(_e){}
+    };
+    const fail=(err)=>{if(settled)return;settled=true;cleanup();reject(err instanceof Error?err:new Error(String(err||'Bridge load failed')));};
+    const onReady=ev=>{
+      if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready') return;
+      if(settled)return;
+      settled=true;
+      window.removeEventListener('message',onReady);
+      resolve(frame);
+    };
+    const timer=setTimeout(()=>fail(new Error('Master API bridge did not become ready')),12000);
+    window.addEventListener('message',onReady);
+    document.body.appendChild(frame);
+    try{
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51')+'&cb='+Date.now();
+    }catch(e){clearTimeout(timer);fail(e);return;}
+  });
+};
+
+V42._bridgeRequest = async function(body){
+  let lastError=null;
+  // A fresh bridge is deliberately used for each cloud operation. This avoids
+  // reusing a stale/suspended Apps Script HTML-service iframe after the browser
+  // has frozen or detached it. It also isolates concurrent requests from each other.
+  for(let attempt=1;attempt<=3;attempt++){
+    let frame=null;
+    try{
+      frame=await V42._createApiBridge();
+      const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      const result=await new Promise((resolve,reject)=>{
+        let done=false;
+        const finish=(fn,v)=>{if(done)return;done=true;window.removeEventListener('message',onMessage);clearTimeout(timeout);fn(v);};
+        const timeout=setTimeout(()=>finish(reject,new Error('Master API bridge request timeout')),30000);
+        const onMessage=ev=>{
+          if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
+          if(ev.data.ok && ev.data.result?.ok) finish(resolve,ev.data.result);
+          else finish(reject,new Error(ev.data.error || ev.data.result?.error || 'Master API request failed'));
+        };
+        window.addEventListener('message',onMessage);
+        try{
+          frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+        }catch(e){finish(reject,e);}
+      });
+      try{frame.remove();}catch(_e){}
+      return result;
+    }catch(e){
+      lastError=e;
+      try{if(frame)frame.remove();}catch(_e){}
+      // Only transport/bridge failures are retried. Server/application errors
+      // have already crossed the bridge and must be surfaced unchanged.
+      const msg=String(e&&e.message||e).toLowerCase();
+      const retryable=msg.includes('bridge') || msg.includes('timeout') || msg.includes('failed to execute') || msg.includes('message channel');
+      if(!retryable || attempt>=3) break;
+      await new Promise(r=>setTimeout(r,350*attempt));
+    }
+  }
+  throw new Error('Master API transport failed after 3 bridge attempts: '+String(lastError&&lastError.message||lastError||'unknown transport error'));
+};
+
 V42.backend = async function(action,payload){
   const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
 
@@ -4948,60 +5015,20 @@ V42.backend = async function(action,payload){
       google.script.run
         .withSuccessHandler(d=>{
           try{
-            if(!d || !d.ok) throw new Error((d && d.error) || "API request failed");
+            if(!d || !d.ok) throw new Error((d && d.error) || 'API request failed');
             resolve(d);
-          }catch(e){ reject(e); }
+          }catch(e){reject(e);}
         })
-        .withFailureHandler(e=>{
-          reject(new Error((e && e.message) || String(e) || "Apps Script request failed"));
-        })
+        .withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||'Apps Script request failed')))
         .apiRequest(body);
     });
   }
 
-  // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
-  // This avoids the browser CORS/redirect problem of reading a ContentService
-  // POST response directly from GitHub Pages. The bridge calls google.script.run
-  // server-side, so the API response remains readable and ACK can be verified.
-  if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  if(!V42._apiBridgePromise){
-    V42._apiBridgePromise=new Promise((resolve,reject)=>{
-      const frame=document.createElement('iframe');
-      frame.id='mdm-api-bridge-frame';
-      frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
-      const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
-      window.addEventListener('message',onReady);
-      document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
-    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
-  }
-  try{
-    const frame=await V42._apiBridgePromise;
-    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    return await new Promise((resolve,reject)=>{
-      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
-      const onMessage=ev=>{
-        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
-        clearTimeout(timeout);window.removeEventListener('message',onMessage);
-        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
-        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
-      };
-      window.addEventListener('message',onMessage);
-      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
-    });
-  }catch(bridgeError){
-    // Last-resort direct fetch is retained for deployments where CORS is already
-    // configured. Never use no-cors because backup/sync require a readable ACK.
-    try{
-      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
-      if(!r.ok) throw new Error('API HTTP '+r.status);
-      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
-    }catch(fetchError){
-      const detail=(fetchError&&fetchError.message)||String(fetchError);
-      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
-    }
-  }
+  if(!V42.apiUrl) throw new Error('API endpoint not configured');
+  // Standalone/GitHub mode: use the Apps Script HTML-service bridge only.
+  // Direct fetch is intentionally NOT used here because the deployed Apps
+  // Script endpoint does not provide a reliable readable CORS response.
+  return await V42._bridgeRequest(body);
 };
 
 V42.ensureBackendAuth = async function(){
@@ -11135,6 +11162,22 @@ v2.8 — Definitive flat-light header + school category correction
     }
   };
 
+  /* Prevent overlapping full backups. Auto-sync, the post-login backup, and a
+     manual Backup Now click can otherwise reach Apps Script simultaneously.
+     The first operation owns the cloud write; later callers await the same run. */
+  if(!window.__mdmBackupMutexWrapped){
+    const originalCloudBackupNow=window.cloudBackupNow;
+    window.cloudBackupNow=async function(){
+      if(V42.__backupInFlight) return await V42.__backupInFlight;
+      V42.__backupInFlight=(async()=>{
+        try{return await originalCloudBackupNow();}
+        finally{V42.__backupInFlight=null;}
+      })();
+      return await V42.__backupInFlight;
+    };
+    window.__mdmBackupMutexWrapped=true;
+  }
+
   /* ---- Cloud sign-in button: always use GIS, never the old email prompt ---- */
   window.cloudSignIn = function(){ return V42.googleSignIn(); };
 
@@ -11759,27 +11802,28 @@ v2.8 — Definitive flat-light header + school category correction
     if(V42.idToken) scheduleRefresh(V42.idToken);
   };
 
-  /* Wrap only the transport call. A token-expiry/authentication rejection
-     triggers one automatic GIS refresh and one retry. All other errors are
-     propagated unchanged. */
+  /* Wrap only the transport call. Before every cloud operation, reject an
+     expired/near-expiry ID token and obtain a fresh GIS credential first.
+     If the server still reports an auth failure, refresh once and retry. */
   if(!V42.__tokenLifecycleWrapped){
     const originalBackend=V42.backend;
     V42.backend=async function(action,payload){
+      if(action!=='auth' && isGoogleUser(CLOUD.user)){
+        const c=parseJwt(V42.idToken||CLOUD.token);
+        const remaining=c&&c.exp ? (Number(c.exp)*1000-Date.now()) : 0;
+        if(!c || !c.exp || remaining < 90000){
+          const refreshed=await V42.refreshGoogleIdToken();
+          if(!refreshed || !V42.idToken) throw new Error('Google session token could not be refreshed automatically');
+        }
+      }
       try{
         return await originalBackend.call(this,action,payload);
       }catch(err){
         const msg=String(err&&err.message||err).toLowerCase();
-        const authFailure=msg.includes('token expired') ||
-          msg.includes('id token expired') ||
-          msg.includes('token verification failed') ||
-          msg.includes('authentication required') ||
-          msg.includes('google authentication is required');
-
+        const authFailure=msg.includes('token expired') || msg.includes('id token expired') || msg.includes('token verification failed') || msg.includes('authentication required') || msg.includes('google authentication is required');
         if(!authFailure) throw err;
-
         const refreshed=await V42.refreshGoogleIdToken();
         if(!refreshed || !V42.idToken) throw err;
-
         return await originalBackend.call(this,action,payload);
       }
     };
