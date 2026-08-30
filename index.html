@@ -5428,23 +5428,6 @@ V42.googleSignIn = async function(){
     if(oh){oh.innerHTML='';google.accounts.id.renderButton(oh,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});}
   }catch(e){toast("Google authentication unavailable: "+e.message,"err");console.error('[MDM] GIS sign-in setup failed',e);}
 };
-V42.acceptGoogleCredential = async function(credential){
-  try{
-    const payload=JSON.parse(atob(credential.split(".")[1].replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(credential.split(".")[1].length/4)*4,"=")));
-    if(payload.aud && V42.googleClientId && payload.aud!==V42.googleClientId) throw new Error("Google client mismatch");
-    const user={id:payload.sub,name:payload.name||payload.email||"Google User",email:(payload.email||"").toLowerCase(),picture:payload.picture||"",googleSub:payload.sub,signedInAt:new Date().toISOString(),deviceId:V42.deviceId,authMethod:"google"};
-    CLOUD.user=user; CLOUD.ready=true; CLOUD.token=credential; V42.idToken=credential;
-    await V42.saveSession(user);
-    localStorage.setItem("cloud_user",JSON.stringify(user));
-    auditLog("LOGIN","cloud","google","Google account authenticated: "+user.email,null);
-    try{await V42.backend("auth",{idToken:credential,user});}catch(e){console.warn("Backend auth not configured/reachable",e);}
-    await V42.flushQueue();
-    CLOUD.updateUI();
-    toast("Signed in as "+(user.name||user.email),"ok");
-    if(A.page==="backupsync")gP("backupsync");
-  }catch(e){toast("Google sign-in failed: "+e.message,"err");}
-};
-
 function isGoogleUser(u){ return !!(u && u.authMethod === "google" && u.email); }
 
 V42.backend = async function(action,payload){
