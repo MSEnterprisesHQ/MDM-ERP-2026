@@ -2584,8 +2584,13 @@ function gP(p){
   const pg={dashboard:pgDash,new:pgNew,history:pgHist,schools:pgSch,items:pgItm,ledger:pgLed,archive:pgArc,audit:pgAud,admin:pgAdm,settings:pgSett,controls:pgControls,backupsync:pgBackupSync,"external-register":pgExternalInvoiceRegisterReference,profile:pgPro,reports:pgRep};
   if(p==="schools" && !Array.isArray(SC.draft)) scInitDraft();
   if(p==="items" && !Array.isArray(IT.draft)) itInitDraft();
-  if(pg[p])pc.innerHTML=pg[p]();
-  else pc.innerHTML='<div class="empty"><div class="ei">&#128679;</div><div class="et">Page not found</div></div>';
+  try{
+    if(pg[p]) pc.innerHTML=pg[p]();
+    else pc.innerHTML='<div class="empty"><div class="ei">&#128679;</div><div class="et">Page not found</div></div>';
+  }catch(e){
+    console.error('[MDM] Page render failed:',p,e);
+    pc.innerHTML='<div class="empty"><div class="ei">&#9888;</div><div class="et">Unable to load this section</div><div class="es">Please retry. Your saved data is not affected.</div></div>';
+  }
   // Post-render hooks
   if(p==="settings"){setTimeout(()=>{try{bindThemePicker();}catch(e){console.warn("Theme picker init",e);}},30);}
   if(p==="new" && typeof niRenderMasterPreview==="function"){
@@ -5689,7 +5694,7 @@ async function bootstrapV42(){
   }
 
   if(navigator.onLine) setTimeout(()=>V42.flushQueue(),1200);
-  setInterval(()=>{ if(navigator.onLine && CLOUD.user) V42.flushQueue(); }, 5*60*1000);
+  setInterval(()=>{ if(navigator.onLine && CLOUD.user && typeof V42.reconcilePendingSync==='function') V42.reconcilePendingSync('timer'); }, 10*60*1000);
 }
 
 /* v4.42: legacy synchronous Drive adapter is retained only as a local mirror.
@@ -5702,9 +5707,10 @@ try{
 
 /* Replace v4.41's false online→synced behavior with real queue processing. */
 window.addEventListener("online",async()=>{
-  toast("Internet restored — checking pending sync…","info");
-  const result=await V42.flushQueue();
-  if(result.sent) toast(result.sent+" record(s) synced to master cloud","ok");
+  try{
+    const result=await V42.reconcilePendingSync('online');
+    if(result && result.sent) toast(result.sent+" record(s) synced to master cloud","ok");
+  }catch(e){ console.warn('[MDM] online reconciliation deferred',e); }
 });
 window.addEventListener("offline",()=>toast("Device offline — data will remain saved locally","warn"));
 
@@ -12482,127 +12488,87 @@ v2.8 — Definitive flat-light header + school category correction
 </style>
 
 <script>
-/*
- * v4.57 — TOKEN LIFECYCLE + DUPLICATE-SYNC SURGICAL FIX
- *
- * Scope is intentionally limited to Google credential refresh and backup
- * orchestration. Invoice/PDF/calculation/UI/business logic is untouched.
- *
- * Root cause fixed:
- *   refreshGoogleCredential() called acceptGoogleCredential(..., silentRefresh)
- *   and acceptGoogleCredential() re-enqueued the ENTIRE current state on every
- *   refresh. That created duplicate queue operations and repeated Drive writes.
- *
- * Fix:
- *   1) Silent credential refresh never seeds the full state queue.
- *   2) A silent refresh may drain already-pending work, but it cannot create
- *      duplicate module records by itself.
- *   3) Backup Now gets a single-flight lock so double taps/concurrent calls
- *      cannot create two snapshots.
- *   4) Refresh uses GIS auto-select where Google allows a non-interactive
- *      credential renewal; if Google does not issue a credential, the existing
- *      interactive re-auth path remains the safe fallback.
- */
+/* v4.58 FINAL — credential lifecycle + offline recovery + deterministic sync
+   This is the authoritative final patch. It modifies the existing V42 pipeline
+   and does not add another Backup/Sync implementation. */
 (function(){
+  'use strict';
   try{
     if(typeof V42==='undefined') return;
+    const isGoogle=typeof isGoogleUser==='function' ? isGoogleUser : (u=>!!(u&&u.authMethod==='google'&&u.email));
+    V42._googleRefreshPromise=V42._googleRefreshPromise||null;
+    V42._reconcilePromise=null;
+    V42._lastActivityCredentialCheck=0;
 
-    /* ---- 1. Prevent queue reseeding during silent Google credential refresh ---- */
-    if(!V42._enqueueCurrentStateGuardInstalled && typeof V42.enqueueCurrentState==='function'){
-      const originalEnqueueCurrentState=V42.enqueueCurrentState;
-      V42.enqueueCurrentState=async function(){
-        if(V42._silentCredentialRefresh===true) return 0;
-        return await originalEnqueueCurrentState.apply(this,arguments);
-      };
-      V42._enqueueCurrentStateGuardInstalled=true;
-    }
+    /* Reuse a healthy token. Refresh only inside a five-minute safety window. */
+    V42.ensureGoogleCredential=async function(){
+      if(!isGoogle(CLOUD?.user)) return false;
+      const token=V42.idToken||CLOUD.token;
+      if(typeof V42.isGoogleTokenUsable==='function' && V42.isGoogleTokenUsable(token,300)) return true;
+      try{
+        const ok=await V42.refreshGoogleCredential();
+        return !!(ok && typeof V42.isGoogleTokenUsable==='function' && V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30));
+      }catch(_){ return false; }
+    };
 
-    /* ---- 2. Robust Google ID-token refresh ---- */
-    if(typeof V42.refreshGoogleCredential==='function'){
-      V42.refreshGoogleCredential=async function(){
-        if(V42._googleRefreshPromise) return V42._googleRefreshPromise;
-
-        V42._googleRefreshPromise=(async()=>{
-          try{
-            /* Do not refresh a token that is still comfortably valid. */
-            if(typeof V42.isGoogleTokenUsable==='function' &&
-               V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,300)) return true;
-
-            await V42.loadGIS();
-            if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
-            if(!window.google || !google.accounts || !google.accounts.id) return false;
-
-            return await new Promise(resolve=>{
-              let done=false;
-              const finish=v=>{if(done)return;done=true;resolve(!!v);};
-              const timeout=setTimeout(()=>finish(false),10000);
-
-              try{
-                google.accounts.id.initialize({
-                  client_id:V42.googleClientId,
-                  auto_select:true,
-                  cancel_on_tap_outside:false,
-                  callback:async resp=>{
-                    try{
-                      if(!resp || !resp.credential) return finish(false);
-                      V42._silentCredentialRefresh=true;
-                      try{
-                        await V42.acceptGoogleCredential(resp.credential,{silentRefresh:true});
-                      }finally{
-                        V42._silentCredentialRefresh=false;
-                      }
-                      clearTimeout(timeout);
-                      finish(typeof V42.isGoogleTokenUsable==='function' &&
-                             V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60));
-                    }catch(e){
-                      V42._silentCredentialRefresh=false;
-                      clearTimeout(timeout);
-                      finish(false);
-                    }
-                  }
-                });
-
-                google.accounts.id.prompt(notification=>{
-                  /* If GIS explicitly says no credential will be returned, fail
-                     cleanly and let the caller use interactive re-auth. */
-                  if(notification && (notification.isNotDisplayed?.() || notification.isSkippedMoment?.())){
-                    clearTimeout(timeout);
-                    finish(false);
-                  }
-                });
-              }catch(e){
-                clearTimeout(timeout);
-                finish(false);
-              }
-            });
-          }finally{
-            V42._googleRefreshPromise=null;
-            V42._silentCredentialRefresh=false;
-          }
-        })();
-
-        return V42._googleRefreshPromise;
-      };
-    }
-
-    /* ---- 3. Backup Now: single-flight protection only ----
-       The existing proven backup implementation remains the worker. */
-    if(typeof window.cloudBackupNow==='function' && !window._mdmBackupSingleFlightInstalled){
-      const originalBackupNow=window.cloudBackupNow;
-      window.cloudBackupNow=async function(){
-        if(V42._backupInFlight) return;
-        V42._backupInFlight=true;
+    /* Wrap the existing queue drain once: auth is ensured before the existing
+       worker runs. No queue reseeding and no duplicate upload worker. */
+    if(typeof V42.flushQueue==='function' && !V42._v458FlushReplaced){
+      const worker=V42.flushQueue;
+      V42.flushQueue=async function(){
+        if(V42._v458FlushBusy) return {sent:0,failed:0,skipped:true,busy:true};
+        if(!navigator.onLine || !V42.apiUrl || !isGoogle(CLOUD?.user)) return {sent:0,failed:0,skipped:true};
+        V42._v458FlushBusy=true;
         try{
-          return await originalBackupNow.apply(this,arguments);
-        }finally{
-          V42._backupInFlight=false;
-        }
+          const authOk=await V42.ensureGoogleCredential();
+          if(!authOk) return {sent:0,failed:0,authPending:true,pending:await V42.queueCount()};
+          return await worker.apply(this,arguments);
+        }finally{ V42._v458FlushBusy=false; }
       };
-      window._mdmBackupSingleFlightInstalled=true;
+      V42._v458FlushReplaced=true;
     }
 
-    /* ---- 4. Diagnostics: expose the actual token lifecycle state without
-       changing any visible UI. Useful for self-test/debug only. */
+    /* Online/resume reconciliation. Only pending/unconfirmed queue work is
+       drained; there is no full-state reseed here. */
+    V42.reconcilePendingSync=async function(reason){
+      if(V42._reconcilePromise) return V42._reconcilePromise;
+      V42._reconcilePromise=(async()=>{
+        try{
+          if(!navigator.onLine || !isGoogle(CLOUD?.user)) return {sent:0,skipped:true};
+          const authOk=await V42.ensureGoogleCredential(reason);
+          if(!authOk) return {sent:0,authPending:true,pending:await V42.queueCount()};
+          return await V42.flushQueue();
+        }finally{ V42._reconcilePromise=null; }
+      })();
+      return V42._reconcilePromise;
+    };
+
+    /* User activity is a checkpoint, not a token generator. Ordinary clicks do
+       nothing while the credential has >5 minutes left. Near expiry, GIS renewal
+       is attempted once per minute at most. */
+    if(!V42._v458ActivityHook){
+      document.addEventListener('pointerdown',()=>{
+        try{
+          if(!navigator.onLine || !isGoogle(CLOUD?.user)) return;
+          const now=Date.now();
+          if(now-V42._lastActivityCredentialCheck<60000) return;
+          if(typeof V42.isGoogleTokenUsable==='function' && V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,300)) return;
+          V42._lastActivityCredentialCheck=now;
+          V42.ensureGoogleCredential('activity').catch(()=>{});
+        }catch(_){}
+      },{passive:true,capture:true});
+      V42._v458ActivityHook=true;
+    }
+
+    if(!V42._v458ResumeHook){
+      const resume=()=>{ if(navigator.onLine && isGoogle(CLOUD?.user)) V42.reconcilePendingSync('resume').catch(()=>{}); };
+      window.addEventListener('online',resume);
+      window.addEventListener('pageshow',resume);
+      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') resume();});
+      V42._v458ResumeHook=true;
+    }
+
+    /* Keep token/transport details internal. Diagnostics are developer-only. */
     V42.getCredentialDiagnostics=function(){
       const token=V42.idToken||CLOUD?.token||null;
       let exp=null,secondsRemaining=null;
@@ -12613,22 +12579,24 @@ v2.8 — Definitive flat-light header + school category correction
           exp=Number(payload.exp||0)||null;
           if(exp) secondsRemaining=Math.max(0,exp-Math.floor(Date.now()/1000));
         }
-      }catch(e){}
-      return {
-        googleSession:!!isGoogleUser?.(CLOUD?.user),
-        tokenPresent:!!token,
-        tokenExpiryEpoch:exp,
-        tokenSecondsRemaining:secondsRemaining,
-        refreshInFlight:!!V42._googleRefreshPromise,
-        backupInFlight:!!V42._backupInFlight,
-        silentRefreshGuard:!!V42._silentCredentialRefresh
-      };
+      }catch(_){}
+      return {googleSession:isGoogle(CLOUD?.user),tokenPresent:!!token,tokenExpiryEpoch:exp,tokenSecondsRemaining:secondsRemaining,refreshInFlight:!!V42._googleRefreshPromise,reconcileInFlight:!!V42._reconcilePromise};
     };
 
-    console.info('[MDM v4.58] Token lifecycle + verified per-module Backup & Sync fix installed');
-  }catch(e){
-    console.warn('[MDM v4.58] Surgical fix install skipped:',e);
-  }
+    /* Single-flight protection for the existing full Backup Now command. */
+    if(typeof window.cloudBackupNow==='function' && !window._mdmBackupSingleFlightInstalled){
+      const backupWorker=window.cloudBackupNow;
+      window.cloudBackupNow=async function(){
+        if(V42._backupInFlight) return;
+        V42._backupInFlight=true;
+        try{ return await backupWorker.apply(this,arguments); }
+        finally{ V42._backupInFlight=false; }
+      };
+      window._mdmBackupSingleFlightInstalled=true;
+    }
+
+    console.info('[MDM v4.58 FINAL] offline-first credential lifecycle active');
+  }catch(e){ console.warn('[MDM v4.58 FINAL] install failed',e); }
 })();
 </script>
 
