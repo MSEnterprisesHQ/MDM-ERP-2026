@@ -1,5 +1,3 @@
-<!-- v4.51 FINAL SURGICAL FIX: transport endpoint fallback/retry + Backup & Sync top-control alignment.
-     No invoice/PDF/business-calculation logic is changed. -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
 BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
@@ -1543,134 +1541,6 @@ Invoice/PDF/business logic intentionally preserved.
 
 
 
-<style id="mdm-drive-ux-surgical">
-/* BETA 3 surgical Drive/Offline table UX — no business logic changes */
-.drive-ux-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
-.drive-ux-table th{font-size:10px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;color:var(--txm);background:var(--slx);padding:11px 12px;border-bottom:1px solid var(--bd);font-weight:800}
-.drive-ux-table td{padding:11px 12px;border-bottom:1px solid var(--bd);vertical-align:middle;min-width:0}
-.drive-ux-table tr:last-child td{border-bottom:0}
-.drive-ux-table th:nth-child(1){width:24%}.drive-ux-table th:nth-child(2){width:24%}.drive-ux-table th:nth-child(3){width:23%}.drive-ux-table th:nth-child(4){width:18%}.drive-ux-table th:nth-child(5){width:11%}
-.drive-folder-name{display:flex;align-items:center;gap:8px;min-width:0;font-weight:750;color:var(--tx)}
-.drive-folder-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.drive-file{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--txl);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.drive-icon{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;color:var(--txl)}
-.drive-icon svg{width:15px;height:15px;display:block;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.drive-status-wrap{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
-.drive-status{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:4px 8px;border-radius:999px;border:1px solid transparent;font-size:10px;line-height:1;white-space:nowrap;font-weight:750;box-sizing:border-box}
-.drive-status.ok{background:color-mix(in srgb,var(--gn) 12%,transparent);border-color:color-mix(in srgb,var(--gn) 24%,var(--bd));color:var(--gn)}
-.drive-status.pending{background:color-mix(in srgb,var(--am) 12%,transparent);border-color:color-mix(in srgb,var(--am) 24%,var(--bd));color:var(--am)}
-.drive-status.off{background:var(--slx);border-color:var(--bd);color:var(--txl)}
-.drive-status .drive-icon{width:13px;height:13px;flex-basis:13px}.drive-status .drive-icon svg{width:13px;height:13px}
-.drive-time{display:flex;flex-direction:column;gap:3px;min-width:0}.drive-time-main{font-size:10.5px;font-weight:750;color:var(--tx);white-space:nowrap}.drive-time-sub{font-size:9px;color:var(--txm);white-space:nowrap}
-.drive-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;position:relative}.drive-view-btn,.drive-menu-btn{height:30px;border:1px solid var(--bd);background:transparent;color:var(--tx);border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700}.drive-view-btn{padding:0 10px;font-size:10.5px}.drive-menu-btn{width:30px;padding:0}.drive-menu-btn svg{width:15px;height:15px}
-.drive-menu{position:absolute;right:0;top:34px;z-index:1200;width:220px;padding:6px;background:var(--card,#fff);border:1px solid var(--bd);border-radius:10px;box-shadow:0 14px 35px rgba(0,0,0,.22);display:none}.drive-menu.open{display:block}.drive-menu button{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;background:transparent;color:var(--tx);border-radius:7px;text-align:left;font-size:11px;cursor:pointer}.drive-menu button:hover{background:var(--slx)}.drive-menu button .drive-icon{color:var(--txl)}
-.drive-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:10px;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--slx);font-size:10px;color:var(--txl)}
-.drive-legend-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.drive-info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid var(--txm);border-radius:50%;font-size:9px;color:var(--txm);font-weight:800;cursor:help}
-.drive-refresh-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.drive-refresh-meta{font-size:10px;color:var(--txm)}
-@media(max-width:900px){.drive-ux-table{min-width:760px}.drive-table-scroll{overflow-x:auto}.drive-ux-table th,.drive-ux-table td{padding:10px 9px}.drive-menu{right:0}}
-</style>
-
-<!-- SURGICAL DRIVE TABLE UX POLISH v4.56.1 — HTML/CSS ONLY; Code.gs untouched -->
-<style id="drive-table-ux-polish">
-/* Keep the Drive/Offline table crisp at both light and dark theme. */
-.drive-ux-table{table-layout:fixed}
-.drive-ux-table th{height:38px;padding:9px 12px;font-size:10px;letter-spacing:.045em;line-height:1.15;vertical-align:middle}
-.drive-ux-table td{padding:12px 12px;line-height:1.2}
-.drive-ux-table th:nth-child(1){width:23%}
-.drive-ux-table th:nth-child(2){width:22%}
-.drive-ux-table th:nth-child(3){width:25%}
-.drive-ux-table th:nth-child(4){width:20%}
-.drive-ux-table th:nth-child(5){width:10%}
-.drive-folder-name{gap:9px}
-.drive-folder-name .drive-icon{width:16px;height:16px;flex:0 0 16px;color:var(--tx)}
-.drive-folder-name .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
-.drive-file{font-size:11px;line-height:1.25}
-.drive-status-wrap{gap:7px;flex-wrap:nowrap;overflow:visible}
-.drive-status{min-height:26px;height:26px;padding:0 8px;gap:5px;border-radius:8px;font-size:10px;line-height:1;white-space:nowrap;flex:0 0 auto;letter-spacing:.01em}
-.drive-status .drive-icon{width:14px;height:14px;flex-basis:14px}
-.drive-status .drive-icon svg{width:14px;height:14px;stroke-width:1.9}
-.drive-status.ok{background:color-mix(in srgb,var(--gn) 11%,transparent);border-color:color-mix(in srgb,var(--gn) 25%,var(--bd));color:var(--gn)}
-.drive-status.off{background:color-mix(in srgb,var(--txm) 7%,transparent);border-color:var(--bd);color:var(--txl)}
-.drive-time{gap:3px}
-.drive-time-main{font-size:10.5px;line-height:1.2;font-variant-numeric:tabular-nums}
-.drive-time-sub{font-size:9px;line-height:1.2}
-.drive-actions{gap:7px}
-.drive-view-btn,.drive-menu-btn{height:32px;min-height:32px;border-radius:8px;box-sizing:border-box}
-.drive-view-btn{padding:0 9px;gap:5px;font-size:10.5px;white-space:nowrap}
-.drive-view-btn .drive-icon{width:14px;height:14px;flex-basis:14px}
-.drive-view-btn .drive-icon svg{width:14px;height:14px;stroke-width:1.9}
-.drive-menu-btn{width:32px;min-width:32px;padding:0}
-.drive-menu-btn .drive-icon{width:16px;height:16px;flex-basis:16px}
-.drive-menu-btn .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
-.drive-menu{width:228px;padding:6px;border-radius:10px}
-.drive-menu button{min-height:38px;padding:9px 10px;gap:9px;font-size:11px;line-height:1.2}
-.drive-menu button .drive-icon{width:16px;height:16px;flex-basis:16px}
-.drive-menu button .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
-.drive-info{width:15px;height:15px;font-size:9px;vertical-align:-2px}
-.drive-refresh-row{margin-bottom:10px;min-height:32px}
-.drive-refresh-meta{font-size:10px;line-height:1.35}
-.drive-legend{gap:12px 18px;font-size:10px;line-height:1.35}
-.drive-legend-item{gap:6px}
-.drive-legend-item .drive-icon{width:14px;height:14px;flex-basis:14px}
-.drive-legend-item .drive-icon svg{width:14px;height:14px;stroke-width:1.9}
-
-/* Dark mode: retain clear text/borders without changing the theme palette. */
-[data-theme="dark"] .drive-ux-table th{color:var(--tx);background:color-mix(in srgb,var(--slx) 82%,var(--card) 18%)}
-[data-theme="dark"] .drive-status.off{background:rgba(255,255,255,.045);color:var(--txl);border-color:rgba(255,255,255,.10)}
-[data-theme="dark"] .drive-menu{box-shadow:0 16px 36px rgba(0,0,0,.42)}
-
-/* Small screens: keep the table readable by horizontal scrolling, never by crushing cells. */
-@media(max-width:900px){
-  .drive-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .drive-ux-table{min-width:900px}
-  .drive-ux-table th,.drive-ux-table td{padding:10px 10px}
-  .drive-status-wrap{gap:6px}
-  .drive-status{font-size:9.5px;padding:0 7px}
-  .drive-refresh-row{align-items:flex-start;flex-wrap:wrap}
-}
-</style>
-<style>
-/* v3 FINAL surgical Backup & Sync readability layer — no business logic changes */
-.drive-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--bd);border-radius:10px}
-.drive-ux-table{min-width:920px!important;table-layout:fixed!important}
-.drive-ux-table th,.drive-ux-table td{box-sizing:border-box}
-.drive-ux-table th:nth-child(1){width:22%!important}.drive-ux-table th:nth-child(2){width:22%!important}.drive-ux-table th:nth-child(3){width:27%!important}.drive-ux-table th:nth-child(4){width:18%!important}.drive-ux-table th:nth-child(5){width:11%!important}
-.drive-ux-table th{font-size:10px!important;line-height:1.2!important;letter-spacing:.05em!important;padding:11px 12px!important;white-space:nowrap}
-.drive-ux-table td{padding:11px 12px!important;line-height:1.25!important}
-.drive-icon{width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 17px;vertical-align:middle}
-.drive-icon svg{width:17px;height:17px;display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;shape-rendering:geometricPrecision}
-.drive-folder-name,.drive-status,.drive-actions{display:flex;align-items:center}
-.drive-folder-name{gap:8px;min-width:0}.drive-folder-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-.drive-file{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.drive-status-wrap{display:flex!important;align-items:center!important;gap:8px!important;flex-wrap:nowrap!important;white-space:nowrap!important}
-.drive-status{height:28px;min-width:92px;padding:0 9px;border:1px solid var(--bd);border-radius:999px;gap:6px;font-size:10px;font-weight:700;box-sizing:border-box;justify-content:flex-start}
-.drive-status.ok{color:var(--gn);background:var(--glt);border-color:#bbf7d0}.drive-status.off{color:var(--txl);background:var(--slx);opacity:.9}
-.drive-status .drive-icon{width:15px;height:15px;flex-basis:15px}.drive-status .drive-icon svg{width:15px;height:15px;stroke-width:2}
-.drive-time{display:flex;flex-direction:column;gap:2px;min-width:0}.drive-time-main{font-size:10.5px;font-weight:700;white-space:nowrap}.drive-time-sub{font-size:9px;color:var(--txl);white-space:nowrap}
-.drive-actions{justify-content:flex-end;gap:6px;position:relative}.drive-view-btn,.drive-menu-btn{height:32px;min-height:32px;border:1px solid var(--bd);background:transparent;color:var(--tx);border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}.drive-view-btn{padding:0 10px;font-size:10.5px;font-weight:700}.drive-menu-btn{width:32px;min-width:32px;padding:0}.drive-menu-btn .drive-icon,.drive-menu-btn .drive-icon svg{width:16px;height:16px}
-.drive-menu{position:absolute;right:0;top:38px;z-index:1200;width:228px;padding:6px;background:var(--card,#fff);border:1px solid var(--bd);border-radius:10px;box-shadow:0 16px 36px rgba(0,0,0,.25);display:none}.drive-menu.open{display:block}.drive-menu button{width:100%;min-height:38px;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;background:transparent;color:var(--tx);border-radius:7px;text-align:left;font-size:11px;line-height:1.2;cursor:pointer}.drive-menu button:hover{background:var(--slx)}.drive-menu button .drive-icon{width:16px;height:16px;flex-basis:16px}.drive-menu button .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
-.drive-info{display:inline-flex;width:15px;height:15px;align-items:center;justify-content:center;border:1px solid currentColor;border-radius:50%;font-size:9px;line-height:1;margin-left:3px;opacity:.75}
-.drive-refresh-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;min-height:34px}.drive-refresh-meta{font-size:10px;color:var(--txm);line-height:1.4}
-.drive-legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:9px;font-size:9.5px;color:var(--txl)}.drive-legend-item{display:inline-flex;align-items:center;gap:5px}.drive-legend-item .drive-icon{width:14px;height:14px;flex-basis:14px}.drive-legend-item .drive-icon svg{width:14px;height:14px}
-[data-theme="dark"] .drive-ux-table th{color:var(--tx);background:color-mix(in srgb,var(--slx) 82%,var(--card) 18%)}
-[data-theme="dark"] .drive-status.ok{background:rgba(22,163,74,.14);border-color:rgba(74,222,128,.28)}
-@media(max-width:900px){.drive-refresh-row{align-items:flex-start;flex-wrap:wrap}.drive-ux-table{min-width:920px!important}.drive-table-scroll{overflow-x:auto}}
-</style>
-<style id="backup-sync-final-polish">
-/* FINAL Backup & Sync layout lock — visual only. */
-.backup-control-grid{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;grid-auto-flow:column!important;align-items:stretch!important;gap:8px!important;width:100%!important;margin:0 0 12px!important}
-.backup-control-card{width:100%!important;min-width:0!important;height:64px!important;min-height:64px!important;display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;box-sizing:border-box!important;overflow:hidden!important}
-.backup-control-copy{min-width:0!important;flex:1 1 auto!important}
-.master-refresh-card{border-color:color-mix(in srgb,var(--bd) 70%,var(--pr))!important}
-.master-refresh-card .backup-control-sub{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
-.master-refresh-btn{flex:0 0 auto!important;height:34px!important;min-height:34px!important;min-width:96px!important;padding:7px 11px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:6px!important}
-.drive-ux-table .drive-status-wrap{display:flex!important;align-items:center!important;gap:7px!important;flex-wrap:nowrap!important;white-space:nowrap!important}
-.drive-ux-table .drive-status{display:inline-flex!important;align-items:center!important;justify-content:flex-start!important;height:28px!important;min-height:28px!important;min-width:88px!important;padding:0 8px!important;box-sizing:border-box!important;white-space:nowrap!important;line-height:1!important}
-.drive-ux-table .drive-icon,.drive-ux-table .drive-icon svg{width:14px!important;height:14px!important;flex:0 0 14px!important;shape-rendering:geometricPrecision!important}
-.drive-ux-table .drive-actions{display:flex!important;align-items:center!important;justify-content:flex-end!important;gap:6px!important;white-space:nowrap!important}
-.drive-ux-table .drive-view-btn,.drive-ux-table .drive-menu-btn{height:32px!important;min-height:32px!important;box-sizing:border-box!important}
-@media(max-width:560px){.backup-control-grid{grid-template-columns:1fr!important;grid-auto-flow:row!important}.backup-control-card{height:auto!important;min-height:62px!important}.master-refresh-card .backup-control-sub{white-space:normal!important}}
-</style>
 </head>
 <body>
 <div id="app"></div>
@@ -3636,337 +3506,7 @@ function niPrAll(){
   .hist-pdf-btn{box-shadow:0 2px 8px rgba(20,184,166,.12)!important;}
   .hist-excel-btn{box-shadow:0 2px 8px rgba(15,23,42,.10)!important;}
 }
-</style>
-<style id="drive-table-ux-final">
-/* FINAL Drive Folder Structure UX polish — HTML/CSS only.
-   JS, Apps Script bridge, data model and sync logic remain untouched. */
-
-.drive-ux-table th{
-  color:var(--tx);
-  font-weight:850;
-  letter-spacing:.055em;
-  text-transform:uppercase;
-}
-
-.drive-ux-table th:nth-child(1){width:22%}
-.drive-ux-table th:nth-child(2){width:22%}
-.drive-ux-table th:nth-child(3){width:27%}
-.drive-ux-table th:nth-child(4){width:19%}
-.drive-ux-table th:nth-child(5){width:10%}
-
-.drive-ux-table td{
-  min-height:48px;
-}
-
-.drive-folder-name .drive-icon{
-  color:var(--tx);
-  filter:none;
-}
-.drive-folder-name .drive-icon svg{
-  width:16px;
-  height:16px;
-  stroke-width:2;
-}
-
-.drive-file{
-  color:var(--txl);
-  font-size:11px;
-  font-weight:550;
-  letter-spacing:.01em;
-}
-
-.drive-status-wrap{
-  display:flex;
-  align-items:center;
-  gap:7px;
-  flex-wrap:nowrap;
-  min-width:0;
-}
-
-.drive-status{
-  height:28px;
-  min-height:28px;
-  padding:0 9px;
-  border-radius:8px;
-  gap:5px;
-  font-size:10px;
-  font-weight:800;
-  line-height:1;
-  letter-spacing:.01em;
-  box-shadow:none;
-}
-
-.drive-status .drive-icon{
-  width:14px;
-  height:14px;
-  flex:0 0 14px;
-}
-.drive-status .drive-icon svg{
-  width:14px;
-  height:14px;
-  stroke-width:2;
-}
-
-/* A Drive-confirmed state is visually distinct from merely having local data. */
-.drive-status.ok{
-  background:color-mix(in srgb,var(--gn) 12%,transparent);
-  border:1px solid color-mix(in srgb,var(--gn) 30%,var(--bd));
-  color:var(--gn);
-}
-
-/* Avoid visually shouting "error" for a legitimate local/offline state. */
-.drive-status.off{
-  background:color-mix(in srgb,var(--txm) 7%,transparent);
-  border:1px solid var(--bd);
-  color:var(--txm);
-}
-
-.drive-time{
-  gap:3px;
-}
-.drive-time-main{
-  font-size:10.5px;
-  font-weight:800;
-  font-variant-numeric:tabular-nums;
-  color:var(--tx);
-}
-.drive-time-sub{
-  font-size:9px;
-  color:var(--txm);
-  font-weight:600;
-}
-
-.drive-actions{
-  gap:7px;
-}
-.drive-view-btn,
-.drive-menu-btn{
-  height:32px;
-  min-height:32px;
-  border-radius:8px;
-  border:1px solid var(--bd);
-  background:transparent;
-  color:var(--tx);
-  box-sizing:border-box;
-}
-.drive-view-btn{
-  min-width:58px;
-  padding:0 10px;
-  gap:5px;
-  font-size:10.5px;
-  font-weight:800;
-}
-.drive-menu-btn{
-  width:32px;
-  min-width:32px;
-}
-.drive-view-btn .drive-icon,
-.drive-menu-btn .drive-icon{
-  width:15px;
-  height:15px;
-  flex:0 0 15px;
-}
-.drive-view-btn .drive-icon svg,
-.drive-menu-btn .drive-icon svg{
-  width:15px;
-  height:15px;
-  stroke-width:2;
-}
-.drive-view-btn:hover,
-.drive-menu-btn:hover{
-  background:var(--slx);
-  border-color:var(--txm);
-}
-
-.drive-menu{
-  width:236px;
-  padding:6px;
-  border-radius:10px;
-  box-shadow:0 16px 40px rgba(0,0,0,.28);
-}
-.drive-menu button{
-  min-height:40px;
-  padding:9px 10px;
-  gap:9px;
-  font-size:11px;
-  line-height:1.2;
-  font-weight:650;
-}
-.drive-menu button .drive-icon{
-  width:16px;
-  height:16px;
-  flex:0 0 16px;
-}
-.drive-menu button .drive-icon svg{
-  width:16px;
-  height:16px;
-  stroke-width:2;
-}
-
-.drive-info{
-  width:15px;
-  height:15px;
-  margin-left:3px;
-  vertical-align:-2px;
-  font-size:9px;
-  line-height:13px;
-  font-weight:900;
-}
-
-.drive-refresh-row{
-  align-items:center;
-  min-height:34px;
-}
-.drive-refresh-meta{
-  font-size:10px;
-  line-height:1.4;
-  color:var(--txm);
-}
-.drive-refresh-row .btn{
-  min-height:32px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-}
-.drive-refresh-row .btn .drive-icon{
-  width:14px;
-  height:14px;
-  flex:0 0 14px;
-}
-.drive-refresh-row .btn .drive-icon svg{
-  width:14px;
-  height:14px;
-  stroke-width:2;
-}
-
-.drive-legend{
-  margin-top:10px;
-  padding:10px 12px;
-  gap:10px 18px;
-  font-size:10px;
-  line-height:1.35;
-}
-.drive-legend-item{
-  gap:6px;
-}
-.drive-legend-item .drive-icon{
-  width:14px;
-  height:14px;
-  flex:0 0 14px;
-}
-.drive-legend-item .drive-icon svg{
-  width:14px;
-  height:14px;
-  stroke-width:2;
-}
-
-/* Mobile: keep the table readable by scrolling the table, not squeezing text. */
-@media(max-width:900px){
-  .drive-table-scroll{
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:thin;
-  }
-  .drive-ux-table{
-    min-width:820px;
-  }
-  .drive-ux-table th,
-  .drive-ux-table td{
-    padding:10px 9px;
-  }
-}
-</style>
-
-
-<style id="master-refresh-final-ux">
-/* v4.51 FINAL — the two top controls are deliberately one horizontal row,
-   matching the Backup Now / Restore Backup action row below. */
-.backup-control-grid{
-  display:grid!important;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
-  gap:8px!important;
-  width:100%;
-  margin:0 0 12px!important;
-  align-items:stretch;
-}
-.backup-control-card{
-  min-height:64px;
-  height:64px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  padding:10px 13px;
-  border:1px solid var(--bd);
-  border-radius:10px;
-  background:var(--slx);
-  box-sizing:border-box;
-  overflow:hidden;
-}
-.backup-control-copy{min-width:0}
-.backup-control-title{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  font-weight:800;
-  font-size:12.5px;
-  color:var(--tx);
-  line-height:1.2;
-}
-.backup-control-title .drive-icon{
-  width:15px;
-  height:15px;
-  flex:0 0 15px;
-}
-.backup-control-title .drive-icon svg{
-  width:15px;
-  height:15px;
-  stroke-width:2;
-}
-.backup-control-sub{
-  margin-top:4px;
-  color:var(--txl);
-  font-size:10.5px;
-  line-height:1.35;
-}
-.master-refresh-card{
-  border-color:color-mix(in srgb,var(--bd) 70%,var(--pr));
-}
-.master-refresh-btn{
-  flex:0 0 auto;
-  min-width:92px;
-  min-height:34px;
-  padding:7px 11px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-  font-size:11px;
-  font-weight:800;
-}
-.master-refresh-btn .drive-icon{
-  width:14px;
-  height:14px;
-  flex:0 0 14px;
-}
-.master-refresh-btn .drive-icon svg{
-  width:14px;
-  height:14px;
-  stroke-width:2;
-}
-.master-refresh-btn.is-busy .drive-icon svg{
-  animation:masterRefreshSpin .85s linear infinite;
-}
-@keyframes masterRefreshSpin{to{transform:rotate(360deg)}}
-
-@media(max-width:560px){
-  .backup-control-grid{grid-template-columns:1fr!important}
-  .backup-control-card{height:auto;min-height:62px}
-}
-</style>
-
-</body></html>`);
+</style></body></html>`);
   pw.document.close();setTimeout(()=>pw.print(),500);
 }
 
@@ -5183,34 +4723,12 @@ function doLogin(){
    ═════════════════════════════════════════════════════════════════════ */
 const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz-fjDuTmRiLpzPb74P1gGn7YQYWRVG8t1R4clp3syOX6BRycoCMm6QLve600Pn-irx/exec";
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
-/*
- * v4.51 surgical transport guard.
- * "APPS_SCRIPT_BRIDGE" is an internal sentinel used only by the
- * Apps-Script-hosted build. It is NOT a URL and must never leak into
- * the GitHub/standalone build through persisted localStorage.
- * Preserve any real user-configured endpoint unchanged.
- */
-const V42_IS_HOSTED = !!(window.google && google.script && google.script.run);
-const V42_STORED_API_URL = String(localStorage.getItem("mdm_api_url") || "").trim();
-const V42_SAFE_STORED_API_URL = (V42_STORED_API_URL && V42_STORED_API_URL !== "APPS_SCRIPT_BRIDGE") ? V42_STORED_API_URL : "";
-if(!V42_IS_HOSTED && V42_STORED_API_URL === "APPS_SCRIPT_BRIDGE"){
-  try{ localStorage.removeItem("mdm_api_url"); }catch(e){}
-}
-// Canonical Master deployment is authoritative. A stale endpoint left in an
-// older browser session must never become the active transport again.
-if(!V42_IS_HOSTED && V42_SAFE_STORED_API_URL !== V42_DEFAULT_API_URL){
-  try{ localStorage.setItem("mdm_api_url",V42_DEFAULT_API_URL); }catch(e){}
-}
-const V42_EFFECTIVE_API_URL = V42_DEFAULT_API_URL;
-function V42_transportEndpoints(){
-  return [V42_DEFAULT_API_URL];
-}
 const V42 = {
   version: "4.42",
   previousVersion: "4.41",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
-  apiUrl: V42_IS_HOSTED ? "APPS_SCRIPT_BRIDGE" : V42_EFFECTIVE_API_URL,
+  apiUrl: ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : (localStorage.getItem("mdm_api_url") === V42_DEFAULT_API_URL ? V42_DEFAULT_API_URL : V42_DEFAULT_API_URL)),
   googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
   showConfigModal: false,
   deviceId: localStorage.getItem("mdm_device_id") || ("dev_"+uid()),
@@ -5225,6 +4743,7 @@ const V42 = {
   idToken: null,
 };
 localStorage.setItem("mdm_device_id", V42.deviceId);
+if(!(window.google && google.script && google.script.run)){ localStorage.setItem("mdm_api_url", V42_DEFAULT_API_URL); }
 
 V42.openDB = function(){
   return new Promise((resolve,reject)=>{
@@ -5325,29 +4844,6 @@ V42.enqueue = async function(type,key,payload){
 V42.queue = async function(){try{return (await V42.idbAll("queue")).filter(x=>x.status!=="synced").sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));}catch(e){return[];}};
 V42.queueCount = async function(){return (await V42.queue()).length;};
 
-V42.enqueueCurrentState = async function(){
-  const items=[
-    ['f',A.firm],['sr',A.series],['rt',A.rates],['hd',A.heads],
-    ['it',A.items],['sc',A.schools],['iv',A.invoices],['us',A.users],
-    ['st',{sett:A.sett||ST0,series:A.series,rates:A.rates,heads:A.heads}],
-    ['alm',A.alm||[]],['lpg',A.lpg||{}],['ro',A.ro||[]]
-  ];
-  let added=0;
-  let existing=[];
-  try{ existing=await V42.queue(); }catch(_){ existing=[]; }
-  for(const [key,value] of items){
-    const hash=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
-    const pendingSame=existing.some(op=>op && op.key===key && op.status!=='synced');
-    const confirmedHash=localStorage.getItem('cloud_confirmed_hash_'+key)||'';
-    // Do not create another queue record when the exact current content is
-    // already confirmed by Master API, or is already waiting in the queue.
-    if(pendingSame || confirmedHash===hash) continue;
-    const id=await V42.enqueue('state',key,{key,value});
-    if(id){ added++; existing.push({id,key,status:'pending'}); }
-  }
-  return added;
-};
-
 V42.getSession = async function(){return await V42.idbGet("meta","session");};
 V42.saveSession = async function(user){
   const rec={user,deviceId:V42.deviceId,createdAt:new Date().toISOString(),expiresAt:Date.now()+30*24*3600*1000,appVersion:V42.version};
@@ -5402,7 +4898,7 @@ V42.googleSignIn = async function(){
   if(!V42.googleClientId){V42.config();if(!V42.googleClientId){toast("Set Google Client ID first","err");return;}}
   try{
     await V42.loadGIS();
-    google.accounts.id.initialize({client_id:V42.googleClientId,auto_select:true,cancel_on_tap_outside:false,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});
+    google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});
     // Do not rely on GIS One Tap prompt() for an explicit user action. Browsers
     // may suppress that prompt/FedCM even when the OAuth client is valid.
     // The official rendered GIS button is the supported interactive sign-in
@@ -5444,118 +4940,71 @@ V42.acceptGoogleCredential = async function(credential){
   }catch(e){toast("Google sign-in failed: "+e.message,"err");}
 };
 
-function isGoogleUser(u){ return !!(u && u.authMethod === "google" && u.email); }
-
 V42.backend = async function(action,payload){
   const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
 
-  // ID tokens are short-lived. Before cloud work, try a silent GIS refresh;
-  // if the server still reports an expired credential, refresh once and retry
-  // the SAME operation. No logout/login is required for this recovery path.
-  const perform=async()=>{
-    if(V42_IS_HOSTED){
-      return await new Promise((resolve,reject)=>{
-        google.script.run
-          .withSuccessHandler(d=>{
-            try{if(!d||!d.ok)throw new Error((d&&d.error)||'API request failed');resolve(d);}catch(e){reject(e);}
-          })
-          .withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||'Apps Script request failed')))
-          .apiRequest(body);
-      });
-    }
-
-    const endpoints=V42_transportEndpoints();
-    if(!endpoints.length) throw new Error('Master API endpoint not configured');
-    const failures=[];
-
-    const bridgeOnce=async(url)=>{
-      let frame=null;
-      try{
-        frame=await new Promise((resolve,reject)=>{
-          const f=document.createElement('iframe');
-          f.id='mdm-api-bridge-frame';
-          f.setAttribute('aria-hidden','true');
-          f.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-          let settled=false;
-          const cleanup=()=>{window.removeEventListener('message',onReady);clearTimeout(timer);};
-          const fail=err=>{if(settled)return;settled=true;cleanup();try{f.remove();}catch(_){}reject(err);};
-          const timer=setTimeout(()=>fail(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.')),10000);
-          const onReady=ev=>{
-            if(ev.source!==f.contentWindow || ev.data?.type!=='mdm-api-bridge-ready') return;
-            if(settled)return;settled=true;cleanup();resolve(f);
-          };
-          window.addEventListener('message',onReady);
-          document.body.appendChild(f);
-          f.src=url+(url.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51')+'&_='+Date.now();
-        });
-
-        const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-        return await new Promise((resolve,reject)=>{
-          let done=false;
-          const timeout=setTimeout(()=>finish(reject,new Error('Master API bridge timeout')),25000);
-          const finish=(fn,v)=>{if(done)return;done=true;window.removeEventListener('message',onMessage);clearTimeout(timeout);fn(v);};
-          const onMessage=ev=>{
-            if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
-            if(ev.data.ok && ev.data.result?.ok) finish(resolve,ev.data.result);
-            else finish(reject,new Error(ev.data.error||ev.data.result?.error||'API request failed'));
-          };
-          window.addEventListener('message',onMessage);
-          frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
-        });
-      }finally{try{frame?.remove();}catch(_){} }
-    };
-
-    for(const url of endpoints){
-      // A transient iframe/deployment wake-up failure must not fail Backup Now
-      // on the first attempt. Recreate the bridge instead of reusing a poisoned one.
-      let lastBridgeError=null;
-      for(let attempt=1;attempt<=3;attempt++){
-        try{
-          const result=await bridgeOnce(url);
-          if(url===V42_DEFAULT_API_URL && V42_SAFE_STORED_API_URL && V42_SAFE_STORED_API_URL!==url){
-            V42.apiUrl=url;try{localStorage.setItem('mdm_api_url',url);}catch(_){}
-          }
-          return result;
-        }catch(e){
-          lastBridgeError=e;
-          if(attempt<3) await new Promise(r=>setTimeout(r,700*attempt));
-        }
-      }
-      failures.push(url+': '+(lastBridgeError?.message||lastBridgeError));
-
-      // Direct POST is only a fallback for a deployment that explicitly allows
-      // readable CORS responses. No no-cors request is ever treated as success.
-      try{
-        const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
-        if(!r.ok) throw new Error('API HTTP '+r.status);
-        const d=await r.json();
-        if(!d.ok) throw new Error(d.error||'API request failed');
-        return d;
-      }catch(e){failures.push(url+' direct: '+(e?.message||e));}
-    }
-    throw new Error('Master API transport failed: '+failures.join(' | '));
-  };
-
-  // Fast local expiry check before first transport attempt.
-  if(action!=='auth' && isGoogleUser(CLOUD.user) && !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,90)){
-    const refreshed=await V42.refreshGoogleCredential();
-    if(!refreshed) throw new Error('Google session expired — automatic credential refresh was unavailable');
+  // Apps Script hosted mode: use the server-side bridge directly.
+  if(window.google && google.script && google.script.run){
+    return await new Promise((resolve,reject)=>{
+      google.script.run
+        .withSuccessHandler(d=>{
+          try{
+            if(!d || !d.ok) throw new Error((d && d.error) || "API request failed");
+            resolve(d);
+          }catch(e){ reject(e); }
+        })
+        .withFailureHandler(e=>{
+          reject(new Error((e && e.message) || String(e) || "Apps Script request failed"));
+        })
+        .apiRequest(body);
+    });
   }
 
+  // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
+  // This avoids the browser CORS/redirect problem of reading a ContentService
+  // POST response directly from GitHub Pages. The bridge calls google.script.run
+  // server-side, so the API response remains readable and ACK can be verified.
+  if(!V42.apiUrl) throw new Error("API endpoint not configured");
+  if(!V42._apiBridgePromise){
+    V42._apiBridgePromise=new Promise((resolve,reject)=>{
+      const frame=document.createElement('iframe');
+      frame.id='mdm-api-bridge-frame';
+      frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
+      const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
+      window.addEventListener('message',onReady);
+      document.body.appendChild(frame);
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
+    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
+  }
   try{
-    return await perform();
-  }catch(firstError){
-    // Server-side tokeninfo can reject a token that looked valid locally. In
-    // that case refresh once and replay the exact operation; do not force login.
-    if(action!=='auth' && isGoogleUser(CLOUD.user) && /token|credential|authentication/i.test(String(firstError?.message||''))){
-      try{
-        const refreshed=await V42.refreshGoogleCredential();
-        if(refreshed && V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30)) return await perform();
-      }catch(_){ }
+    const frame=await V42._apiBridgePromise;
+    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    return await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
+      const onMessage=ev=>{
+        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
+        clearTimeout(timeout);window.removeEventListener('message',onMessage);
+        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
+        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
+      };
+      window.addEventListener('message',onMessage);
+      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+    });
+  }catch(bridgeError){
+    // Last-resort direct fetch is retained for deployments where CORS is already
+    // configured. Never use no-cors because backup/sync require a readable ACK.
+    try{
+      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
+      if(!r.ok) throw new Error('API HTTP '+r.status);
+      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
+    }catch(fetchError){
+      const detail=(fetchError&&fetchError.message)||String(fetchError);
+      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
     }
-    throw firstError;
   }
 };
+
 V42.ensureBackendAuth = async function(){
   if(!V42.apiUrl || !CLOUD.user) return false;
   if(V42.idToken || CLOUD.token) return true;
@@ -10003,97 +9452,6 @@ function cloudAutoSyncToggle(enabled) {
   toast("Auto sync " + (enabled?"enabled — will backup after every invoice save":"disabled"),"ok");
 }
 
-/* Master Refresh = manual top-level recovery command for Backup & Sync.
-   It does NOT replace Backup Now. It re-seeds the current complete state,
-   drains every pending queue item in batches, then performs a full cloud
-   backup so Drive status can be re-confirmed in one operation. */
-window.cloudMasterRefresh = async function(){
-  const btn=document.getElementById('master-refresh-btn');
-  if(btn?.dataset.busy==='1') return;
-  if(!CLOUD.user){
-    toast('Sign in to Google first','err');
-    return;
-  }
-  if(!isGoogleUser(CLOUD.user)){
-    toast('Google authentication is required for Master Refresh','err');
-    return;
-  }
-
-  try{
-    if(btn){
-      btn.dataset.busy='1';
-      btn.disabled=true;
-      btn.innerHTML=driveIcon('refresh')+' <span>Refreshing…</span>';
-      btn.classList.add('is-busy');
-    }
-    CLOUD.setSyncStatus('Refreshing…','var(--am)');
-
-    // Make sure the currently stored state for every supported module is
-    // represented in the durable queue, even if the user never edited it.
-    await V42.enqueueCurrentState();
-
-    // Refresh the credential before any Master API request.
-    if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
-      const refreshed=await V42.refreshGoogleCredential();
-      if(!refreshed){
-        const interactive=await V42.ensureBackendAuthInteractive();
-        if(!interactive) throw new Error('Google authentication is required for Master Refresh');
-      }
-    }
-
-    // Drain the queue in batches. flushQueue intentionally limits each pass
-    // to 25 records; this loop makes the manual refresh a true "all modules"
-    // command instead of stopping after the first batch.
-    let totalSent=0;
-    let safety=0;
-    while(safety++<40){
-      const before=await V42.queueCount();
-      if(!before) break;
-      const r=await V42.flushQueue();
-      totalSent+=r.sent||0;
-      const after=await V42.queueCount();
-      if(r.authExpired) throw new Error('Google authentication expired during refresh');
-      if(r.failed && after>=before) break;
-      if(after===0) break;
-      if((r.sent||0)===0) break;
-    }
-
-    const pending=await V42.queueCount();
-    if(pending){
-      CLOUD.setSyncStatus('Refresh incomplete · '+pending+' pending','var(--am)');
-      if(A.page==='backupsync') gP('backupsync');
-      toast('Refresh stopped with '+pending+' pending sync item(s). They remain queued for retry.','info');
-      return;
-    }
-
-    // Re-run the complete cloud backup after all module sync records are
-    // acknowledged. This gives the user an actual Drive write, not a cosmetic
-    // green status.
-    const result=await V42.backend('backup',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
-    if(!result || !result.ok) throw new Error((result&&result.error)||'Master refresh backup was not acknowledged');
-
-    CLOUD.lastBackup=new Date().toISOString();
-    localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);
-    localStorage.setItem('cloud_last_sync',CLOUD.lastBackup);
-    CLOUD.setSyncStatus('Synced ✓','var(--gn)');
-    CLOUD.updateUI();
-    if(A.page==='backupsync') gP('backupsync');
-    auditLog('EXPORT','backup','cloud','Master Refresh completed: '+result.fileName+' | '+totalSent+' queued record(s) synced',null);
-    toast('Master Refresh complete — all pending data synced and Drive backup confirmed','ok');
-  }catch(e){
-    CLOUD.setSyncStatus('Refresh failed','var(--rd)');
-    toast('Master Refresh failed: '+(e&&e.message?e.message:e),'err');
-    console.error('[MDM] Master Refresh failure',e);
-  }finally{
-    if(btn){
-      btn.dataset.busy='0';
-      btn.disabled=false;
-      btn.classList.remove('is-busy');
-      btn.innerHTML=driveIcon('refresh')+' <span>Refresh</span>';
-    }
-  }
-};
-
 function cloudBackupNow() {
   if(!CLOUD.user) { toast("Sign in to Google first","err"); return; }
   CLOUD.setSyncStatus("Syncing…", "var(--am)");
@@ -10268,23 +9626,12 @@ function cloudCardHTML(){
           </div>
         </div>
 
-        <!-- Auto Sync + Master Refresh -->
-        <div class="backup-control-grid">
-          <div class="backup-control-card">
-            <div class="backup-control-copy">
-              <div class="backup-control-title">Auto Sync</div>
-              <div class="backup-control-sub">Automatically sync changes after every save</div>
-            </div>
-            <label class="tog"><input type="checkbox" id="cloud-auto-sync" onchange="cloudAutoSyncToggle(this.checked)" ${CLOUD.autoSync?"checked":""}><span class="tog-s"></span></label>
-          </div>
-          <div class="backup-control-card master-refresh-card">
-            <div class="backup-control-copy">
-              <div class="backup-control-title">${driveIcon('refresh')}<span>Master Refresh</span></div>
-              <div class="backup-control-sub">Re-check all modules, retry pending syncs and refresh Drive status</div>
-            </div>
-            <button type="button" class="btn btn-g master-refresh-btn" id="master-refresh-btn" onclick="cloudMasterRefresh()">
-              ${driveIcon('refresh')}<span>Refresh</span>
-            </button>
+        <!-- Auto Sync Toggle -->
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--bd);border-radius:8px;margin-bottom:12px;background:var(--slx)">
+          <label class="tog"><input type="checkbox" id="cloud-auto-sync" onchange="cloudAutoSyncToggle(this.checked)" ${CLOUD.autoSync?"checked":""}><span class="tog-s"></span></label>
+          <div>
+            <div style="font-weight:700;font-size:12.5px">Auto Sync</div>
+            <div style="font-size:11px;color:var(--txl)">Automatically backup after every invoice save</div>
           </div>
         </div>
 
@@ -10314,169 +9661,53 @@ function driveFmtTime(iso){
   return new Date(iso).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
 }
 
-function driveIcon(name){
-  const p={
-    folder:'<path d="M3 6.5h6l2 2h10v9.5H3z"/><path d="M3 8.5h18"/>',
-    cloud:'<path d="M8.2 20h9.1a3.7 3.7 0 0 0 .7-7.33A6.1 6.1 0 0 0 6.5 9.8 4.3 4.3 0 0 0 8.2 20z"/><path d="M8.7 12.4h6.7"/>',
-    offline:'<rect x="4" y="5" width="16" height="13" rx="2"/><path d="M8 21h8M12 18v3"/>',
-    check:'<path d="m5 12 4 4L19 6"/>',
-    refresh:'<path d="M20 11a8 8 0 0 0-14.7-4L3 10"/><path d="M3 5v5h5"/><path d="M4 13a8 8 0 0 0 14.7 4L21 14"/><path d="M21 19v-5h-5"/>',
-    eye:'<path d="M2.5 12s3.4-5 9.5-5 9.5 5 9.5 5-3.4 5-9.5 5-9.5-5-9.5-5z"/><circle cx="12" cy="12" r="2.5"/>',
-    external:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>',
-    download:'<path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M5 20h14"/>',
-    history:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>',
-    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
-    dots:'<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>'
-  };
-  return `<span class="drive-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${p[name]||p.info}</svg></span>`;
-}
-
-function driveLocalAvailable(mod){
-  if(mod==='company') return !!A.firm;
-  if(mod==='schools') return Array.isArray(A.schools);
-  if(mod==='items') return Array.isArray(A.items);
-  if(mod==='invoices') return Array.isArray(A.invoices);
-  if(mod==='invLog') return Array.isArray(A.invoices);
-  if(mod==='settings') return !!(A.sett||A.series||A.rates||A.heads);
-  if(mod==='alloc') return Array.isArray(A.alm);
-  if(mod==='lpg') return !!A.lpg;
-  if(mod==='roster') return Array.isArray(A.ro);
-  if(mod==='backup') return true;
-  if(mod==='system') return true;
-  return false;
-}
-function driveModulePayload(mod){
-  return {company:A.firm,schools:A.schools,items:A.items,invoices:A.invoices,invLog:A.invoices,settings:{sett:A.sett||ST0,series:A.series,rates:A.rates,heads:A.heads},alloc:A.alm||[],lpg:A.lpg||{},roster:A.ro||{}}[mod];
-}
-async function driveSyncOne(mod){
-  if(!CLOUD.user){toast('Connect Google first','err');return;}
-  const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
-  const key=keyMap[mod];
-  if(!key){toast('System status is updated by Backup Now','info');return;}
-  try{
-    const value=driveModulePayload(mod);
-    await V42.enqueue('state',key,{key,value});
-    const r=await V42.flushQueue();
-    if(r.authExpired) throw new Error('Google authentication expired; re-authentication is required');
-    if(r.failed) throw new Error((r.failures&&r.failures[0]&&r.failures[0].error)||'Master API did not acknowledge this module');
-    if(r.sent<1) throw new Error('No cloud operation was acknowledged');
-    toast((DRIVE.moduleLabels[mod]||mod)+' synced to Google Drive ✓','ok');
-    if(A.page==='backupsync')gP('backupsync');
-  }catch(e){
-    toast((DRIVE.moduleLabels[mod]||mod)+' sync failed: '+(e&&e.message?e.message:e),'err');
-    if(A.page==='backupsync')gP('backupsync');
-  }
-}
-function driveViewDetails(mod,label,file,driveOK,localOK){
-  const t=DRIVE.lastSynced(mod);
-  const text=`${label}\n\nFile: ${file}\nDrive: ${driveOK?'Synced':'Not synced'}\nOffline: ${localOK?'Available':'Not available'}\nLast synced: ${t?driveFmtTime(t):'Not synced yet'}\n\nOffline means the application has a local copy in its offline-first storage (IndexedDB/local app storage). It is not a separate downloaded JSON file.`;
-  alert(text);
-}
-function driveOpenInDrive(mod){toast('Drive folder link is not exposed by the current Master API bridge yet.','info');}
-function driveDownloadFile(mod){
-  const payload=driveModulePayload(mod);
-  if(payload===undefined){toast('No local copy available','err');return;}
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(DRIVE.moduleLabels[mod]||mod).replace(/[^a-z0-9]+/gi,'_')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-}
-function driveHistory(mod){
-  const q=V42.queue?V42.queue():Promise.resolve([]);
-  const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
-  q.then(rows=>{const related=rows.filter(x=>x.key===keyMap[mod]);alert(`${DRIVE.moduleLabels[mod]||mod} sync history\n\nPending/retry records: ${related.length}\nLast confirmed sync: ${DRIVE.lastSynced(mod)?driveFmtTime(DRIVE.lastSynced(mod)):'None recorded locally'}`)});
-}
-function driveToggleMenu(id){document.querySelectorAll('.drive-menu.open').forEach(x=>{if(x.id!==id)x.classList.remove('open')});document.getElementById(id)?.classList.toggle('open')}
-document.addEventListener('click',e=>{if(!e.target.closest('.drive-actions'))document.querySelectorAll('.drive-menu.open').forEach(x=>x.classList.remove('open'))});
-
-function driveCloudState(mod){
-  if(mod==='backup') return CLOUD.lastBackup?{ok:true,time:CLOUD.lastBackup,source:'Master Drive backup confirmed'}:{ok:false,time:null,source:'No Master Drive backup confirmed'};
-  if(mod==='system'){
-    const t=localStorage.getItem('cloud_confirmed_at_system')||null;
-    return {ok:!!t,time:t,source:t?'Master API confirmed':'No cloud confirmation recorded'};
-  }
-  const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
-  const key=keyMap[mod];
-  if(!key) return {ok:false,time:null,source:'No cloud mapping'};
-  const value=driveModulePayload(mod);
-  const currentHash=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
-  const confirmedHash=localStorage.getItem('cloud_confirmed_hash_'+key)||'';
-  const t=localStorage.getItem('cloud_confirmed_at_'+key)||null;
-  const qPromise=V42.queue();
-  return {ok:!!t && confirmedHash===currentHash,time:t,source:(t&&confirmedHash===currentHash)?'Confirmed by Master API':'Not confirmed for current data',pendingPromise:qPromise,key};
-}
 function driveFolderTreeHTML(){
-  if(!CLOUD.user){return `<div class="info inf-b">Sign in with Google above to create the <b>MS ENTERPRISES ERP</b> folder and see its contents here.</div>`;}
-  const rows=[
-    {mod:'company',label:'Company',file:'Company.json'},
-    {mod:'schools',label:'Schools',file:'Schools.json'},
-    {mod:'items',label:'Items',file:'Items.json'},
-    {mod:'invoices',label:'Invoices',file:DRIVE.invoiceFileCount()+' file(s) under YYYY/MM/'},
-    {mod:'invLog',label:'Invoice Logs',file:'InvoiceLog.json'},
-    {mod:'settings',label:'Settings',file:'Settings.json'},
-    {mod:'alloc',label:'MDM · Allocation',file:'Allocation.json'},
-    {mod:'lpg',label:'MDM · LPG',file:'LPG.json'},
-    {mod:'roster',label:'MDM · Roster',file:'Roster.json'}
+  if(!CLOUD.user){
+    return `<div class="info inf-b">Sign in with Google above to create the <b>MS ENTERPRISES ERP</b> folder and see its contents here.</div>`;
+  }
+  const rows = [
+    {mod:"company",  label:"Company",           file:"Company.json"},
+    {mod:"schools",  label:"Schools",           file:"Schools.json"},
+    {mod:"items",    label:"Items",             file:"Items.json"},
+    {mod:"invoices", label:"Invoices",          file:DRIVE.invoiceFileCount()+" file(s) under YYYY/MM/"},
+    {mod:"invLog",   label:"Invoice Logs",      file:"InvoiceLog.json"},
+    {mod:"settings", label:"Settings",          file:"Settings.json"},
+    {mod:"alloc",    label:"MDM · Allocation",  file:"Allocation.json"},
+    {mod:"lpg",      label:"MDM · LPG",         file:"LPG.json"},
+    {mod:"roster",   label:"MDM · Roster",      file:"Roster.json"},
   ];
-  const all=rows.concat([{mod:'backup',label:'Backup History',file:DRIVE.listBackups().length+' snapshot(s)'},{mod:'system',label:'System',file:'Metadata.json, Version.json'}]);
-  const states=all.map(r=>({r,state:driveCloudState(r.mod)}));
-  const confirmed=states.filter(x=>x.state.ok).length;
-  const total=all.length;
-  return `<div class="drive-refresh-row"><div class="drive-refresh-meta"><b>${confirmed}/${total}</b> modules confirmed in Google Drive · Offline = durable local app database (IndexedDB)</div><div style="display:flex;gap:7px"><button class="btn btn-g btn-sm" onclick="driveRefreshStatus()">${driveIcon('refresh')} Refresh Status</button><button class="btn btn-g btn-sm" onclick="driveRetryAll()">${driveIcon('refresh')} Re-check &amp; Retry</button></div></div>
-  <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th><span class="storage-heading">Storage Status</span> <span class="drive-info" title="Drive = confirmed by Master API after cloud write. Offline = available in the app's local database.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
-  ${states.map(({r,state},i)=>{
-    const driveOK=state.ok;
-    const localOK=driveLocalAvailable(r.mod);
-    const t=state.time;
-    const menuId='drive-menu-'+i;
-    const safeLabel=String(r.label).replace(/'/g,"\\'");
-    const safeFile=String(r.file).replace(/'/g,"\\'");
-    const driveTitle=driveOK?'Confirmed by Master API after cloud sync':'Not confirmed for the current local data';
-    return `<tr><td><div class="drive-folder-name">${driveIcon('folder')}<span>${ec(r.label)}</span></div></td><td><div class="drive-file">${ec(r.file)}</div></td><td><div class="drive-status-wrap"><span class="drive-status ${driveOK?'ok':'off'}" title="${driveTitle}">${driveIcon('cloud')}<span>Drive ${driveOK?driveIcon('check'):'—'}</span></span><span class="drive-status ${localOK?'ok':'off'}" title="Offline = data available in the local app database">${driveIcon('offline')}<span>Offline ${localOK?driveIcon('check'):'—'}</span></span></div></td><td><div class="drive-time">${t?`<span class="drive-time-main">${driveFmtTime(t)}</span><span class="drive-time-sub">Confirmed by Master API</span>`:`<span class="drive-time-main" style="color:var(--txm)">Not synced yet</span>`}</div></td><td><div class="drive-actions"><button class="drive-view-btn" onclick="driveViewDetails('${r.mod}','${safeLabel}','${safeFile}',${driveOK},${localOK})">${driveIcon('eye')}<span style="margin-left:5px">View</span></button><button class="drive-menu-btn" aria-label="More actions" onclick="event.stopPropagation();driveToggleMenu('${menuId}')">${driveIcon('dots')}</button><div class="drive-menu" id="${menuId}"><button onclick="driveViewDetails('${r.mod}','${safeLabel}','${safeFile}',${driveOK},${localOK});driveToggleMenu('${menuId}')">${driveIcon('eye')}View Details</button><button onclick="driveSyncOne('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('refresh')}Sync Now (Retry)</button><button onclick="driveOpenInDrive('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('external')}Open in Drive</button><button onclick="driveDownloadFile('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('download')}Download File</button><button onclick="driveHistory('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('history')}View Sync History</button></div></div></td></tr>`;
-  }).join('')}</tbody></table></div>
-  <div class="drive-legend"><span class="drive-legend-item">${driveIcon('cloud')} <b>Drive</b> = confirmed by Master API</span><span class="drive-legend-item">${driveIcon('offline')} <b>Offline</b> = local app database</span><span class="drive-legend-item">${driveIcon('check')} Green = current data confirmed</span></div>`;
-}
-
-async function driveRefreshStatus(){
-  try{
-    if(!CLOUD.user) throw new Error('Connect Google first');
-    if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
-      const refreshed=await V42.refreshGoogleCredential();
-      if(!refreshed) throw new Error('Google authentication expired; re-authentication is required');
-    }
-    const added=await V42.enqueueCurrentState();
-    const r=await V42.flushQueue();
-    if(r.authExpired) throw new Error('Google authentication expired during refresh');
-    if(A.page==='backupsync')gP('backupsync');
-    if(r.failed) toast(`Refresh checked ${r.sent||0} module(s) · ${r.failed} failed · ${r.pending||0} pending`,'err');
-    else toast(r.sent ? `Refresh complete · ${r.sent} module(s) confirmed in Drive` : 'Refresh complete · no unconfirmed changes found','ok');
-  }catch(e){toast('Refresh failed: '+(e&&e.message?e.message:e),'err');}
-}
-async function driveRetryAll(){
-  try{
-    if(!CLOUD.user) throw new Error('Connect Google first');
-    const added=await V42.enqueueCurrentState();
-    const r=await V42.flushQueue();
-    if(r.authExpired) throw new Error('Google authentication expired during retry');
-    if(A.page==='backupsync')gP('backupsync');
-    if(r.failed) toast(`Retry finished · ${r.sent||0} synced · ${r.failed} failed · ${r.pending||0} pending`,'err');
-    else toast(`Retry complete · ${r.sent||0} module(s) confirmed in Drive`,'ok');
-  }catch(e){toast('Retry failed: '+(e&&e.message?e.message:e),'err');}
+  return `<div class="tw"><table class="dt">
+    <thead><tr><th>Folder / Module</th><th>File(s)</th><th>Last Synced</th></tr></thead>
+    <tbody>
+      ${rows.map(r=>{
+        const t = DRIVE.lastSynced(r.mod);
+        return `<tr><td style="font-weight:700">&#128193; ${r.label}</td><td class="mono" style="color:var(--txl)">${ec(r.file)}</td><td>${t?`<span class="bdg bg">${driveFmtTime(t)}</span>`:`<span class="bdg bs">Not synced yet</span>`}</td></tr>`;
+      }).join("")}
+      <tr><td style="font-weight:700">&#128193; Backup History</td><td class="mono" style="color:var(--txl)">${DRIVE.listBackups().length} snapshot(s)</td><td>${CLOUD.lastBackup?`<span class="bdg bg">${driveFmtTime(CLOUD.lastBackup)}</span>`:`<span class="bdg bs">No backups yet</span>`}</td></tr>
+      <tr><td style="font-weight:700">&#128193; System</td><td class="mono" style="color:var(--txl)">Metadata.json, Version.json</td><td>${DRIVE.getMetadata()?`<span class="bdg bg">${driveFmtTime(DRIVE.getMetadata().lastSyncTime)}</span>`:`<span class="bdg bs">—</span>`}</td></tr>
+    </tbody>
+  </table></div>`;
 }
 
 function driveBackupHistoryHTML(){
-  const backups=DRIVE.listBackups();
-  if(!backups.length){
-    return `<div class="info inf-b">No local backup snapshots are recorded yet. Backup History will appear here after a confirmed snapshot is created.</div>`;
-  }
-  return `<div class="drive-backup-history">${backups.slice(0,20).map((path,i)=>{
-    const name=String(path).split('/').pop();
-    const safePath=String(path).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
-    const m=name.match(/^Backup_(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2})\\.json$/);
-    const stamp=m?m[1].replace('_',' ').replace(/^(\\d{4}-\\d{2}-\\d{2}) (\\d{2})-(\\d{2})$/,(_,d,h,mi)=>`${d} ${h}:${mi}`):name;
-    return `<div class="drive-history-row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--bd)">
-      <div><div style="font-weight:700">${ec(stamp)}</div><div style="font-size:10.5px;color:var(--txl)">${ec(name)}</div></div>
-      <button class="btn btn-g btn-sm" onclick="driveRestoreSnapshot('${safePath}')">${driveIcon('refresh')} Restore</button>
-    </div>`;
-  }).join('')}</div>`;
+  if(!CLOUD.user) return "";
+  const backups = DRIVE.listBackups();
+  if(backups.length===0) return `<div class="info inf-b">No backups yet. Click <b>Backup Now</b> above to create your first snapshot.</div>`;
+  return `<div class="tw"><table class="dt">
+    <thead><tr><th>Snapshot</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      ${backups.map(path=>{
+        const name = path.split("/").pop();
+        const snap = DRIVE_ADAPTER.readFile(path);
+        const when = snap && snap.exportedAt ? driveFmtTime(snap.exportedAt) : name.replace("Backup_","").replace(".json","").replace("_"," ");
+        return `<tr>
+          <td class="mono">${ec(name)}</td>
+          <td>${when}</td>
+          <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="driveRestoreSnapshot('${path.replace(/'/g,"\\'")}')">Full Restore</button></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  </table></div>`;
 }
 
 function driveSelectiveRestoreHTML(){
@@ -11700,7 +10931,6 @@ v2.8 — Definitive flat-light header + school category correction
 - Mobile action grid is responsive and prevents hidden/collapsed controls.
 - v4.73 is the exact rollback backup.
 -->
-<!-- MDM ERP BETA VERSION 3 — FINAL SURGICAL MERGE: token lifecycle + verified Backup & Sync -->
 <!-- MDM ERP — BETA BASELINE
      This build is the canonical BETA application baseline.
      From this point forward, genuine invoice transactions are carried forward
@@ -11747,50 +10977,12 @@ v2.8 — Definitive flat-light header + school category correction
   };
 
   /* ---- Google sign-in: backend ACK is mandatory before session becomes cloud-authenticated ---- */
-  V42._googleRefreshPromise = null;
-  V42.isGoogleTokenUsable = function(token, skewSeconds){
-    try{
-      if(!token) return false;
-      const part=String(token).split('.')[1];
-      if(!part) return false;
-      const payload=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'=')));
-      const skew=Number(skewSeconds||90);
-      return !!payload.sub && !!payload.email && (!payload.exp || Number(payload.exp) > Math.floor(Date.now()/1000)+skew);
-    }catch(e){ return false; }
-  };
-
-  V42.refreshGoogleCredential = async function(){
-    if(V42._googleRefreshPromise) return V42._googleRefreshPromise;
-    V42._googleRefreshPromise=(async()=>{
-      try{
-        await V42.loadGIS();
-        if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
-        return await new Promise(resolve=>{
-          let done=false;
-          const finish=v=>{if(done)return;done=true;resolve(!!v);};
-          const timeout=setTimeout(()=>finish(false),10000);
-          try{
-            google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{
-              try{
-                if(!resp || !resp.credential) return finish(false);
-                await V42.acceptGoogleCredential(resp.credential,{silentRefresh:true});
-                clearTimeout(timeout); finish(V42.isGoogleTokenUsable(V42.idToken,60));
-              }catch(e){ clearTimeout(timeout); finish(false); }
-            }});
-            google.accounts.id.prompt(n=>{
-              if(n && (n.isNotDisplayed() || n.isSkippedMoment())) { clearTimeout(timeout); finish(false); }
-            });
-          }catch(e){ clearTimeout(timeout); finish(false); }
-        });
-      }finally{ V42._googleRefreshPromise=null; }
-    })();
-    return V42._googleRefreshPromise;
-  };
-
-  V42.acceptGoogleCredential = async function(credential, options){
-    options=options||{};
+  V42.acceptGoogleCredential = async function(credential){
     try{
       if(!credential) throw new Error('Google credential was not returned');
+      // The credential callback means the user has already selected an account.
+      // Remove ONLY our temporary chooser immediately; never cancel Google's own
+      // account/sign-in window, which has its own lifecycle.
       try{ document.getElementById('mdm-google-gis-overlay')?.remove(); }catch(e){}
       const part=String(credential).split('.')[1];
       if(!part) throw new Error('Invalid Google credential');
@@ -11800,11 +10992,17 @@ v2.8 — Definitive flat-light header + school category correction
       if(!payload.sub || !payload.email) throw new Error('Google credential is missing identity claims');
 
       const user={id:payload.sub,name:payload.name||payload.email,email:String(payload.email).toLowerCase(),picture:payload.picture||'',googleSub:payload.sub,signedInAt:new Date().toISOString(),deviceId:V42.deviceId,authMethod:'google'};
+
+      /* Do not mark this device cloud-authenticated until the master backend accepts it. */
       const previous={user:CLOUD.user,token:CLOUD.token,idToken:V42.idToken};
       CLOUD.user=user; CLOUD.token=credential; V42.idToken=credential;
       let authResult;
-      try{ authResult=await V42.backend('auth',{idToken:credential,user}); }
-      catch(e){ CLOUD.user=previous.user||null; CLOUD.token=previous.token||null; V42.idToken=previous.idToken||null; throw e; }
+      try{
+        authResult=await V42.backend('auth',{idToken:credential,user});
+      }catch(e){
+        CLOUD.user=previous.user||null; CLOUD.token=previous.token||null; V42.idToken=previous.idToken||null;
+        throw e;
+      }
       if(!authResult || !authResult.ok) throw new Error((authResult&&authResult.error)||'Master authentication rejected');
 
       const prevRole=(A.currentUser&&A.currentUser.role)?A.currentUser.role:'admin';
@@ -11812,107 +11010,49 @@ v2.8 — Definitive flat-light header + school category correction
       await V42.saveSession(mergedUser);
       localStorage.setItem('cloud_user',JSON.stringify(mergedUser));
       localStorage.removeItem('mdm_local_user');
-      A.loggedIn=true; A.currentUser=mergedUser; CLOUD.ready=true;
+      A.loggedIn=true; A.currentUser=mergedUser;
       auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
-
-        // A normal sign-in reconciles the complete current state. A silent
-      // credential refresh only replaces the credential; it must never reseed
-      // the queue or create duplicate cloud writes.
-      let q={sent:0,failed:0};
-      if(!options.silentRefresh){
-        await V42.enqueueCurrentState();
-        q=await V42.flushQueue();
-      }
-      if(A.page==='backupsync') gP('backupsync');
+      CLOUD.ready=true;
+      // Our temporary chooser was removed at credential receipt. Do not call
+      // google.accounts.id.cancel() here; that API belongs to Google's prompt lifecycle.
       CLOUD.updateUI();
-      if(!options.silentRefresh){ toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok'); }
+      const q=await V42.flushQueue();
+      if(A.page==='backupsync') gP('backupsync');
+      toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok');
     }catch(e){
-      if(!options.silentRefresh) toast('Google sign-in failed: '+e.message,'err');
+      toast('Google sign-in failed: '+e.message,'err');
       console.error('[MDM v4.51] Google authentication failure',e);
-      throw e;
     }
   };
 
   /* ---- Cloud queue: never attempt cloud writes for local-only sessions ---- */
   V42.flushQueue = async function(){
-    if(V42.syncing || !navigator.onLine || !V42.apiUrl || !isGoogleUser(CLOUD.user)) return {sent:0,failed:0,skipped:true};
-
-    // Keep authentication recovery inside the existing queue worker. A valid
-    // credential is reused; refresh happens only when it is near expiry.
-    if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
-      const refreshed=await V42.refreshGoogleCredential();
-      if(!refreshed) return {sent:0,failed:0,authPending:true,pending:await V42.queueCount()};
+    if(V42.syncing || !navigator.onLine || !V42.apiUrl || !isGoogleUser(CLOUD.user) || !V42.idToken) {
+      return {sent:0,failed:0,skipped:true};
     }
-
-    V42.syncing=true;
-    let sent=0,failed=0,authExpired=false;
-    const failures=[];
+    V42.syncing=true; let sent=0,failed=0;
     try{
       const q=(await V42.queue()).filter(x=>x.status!=='synced').slice(0,25);
       for(const op of q){
-        op.status='uploading'; op.attempts=(op.attempts||0)+1;
-        await V42.idbSet('queue',op.id,op);
+        op.status='uploading'; op.attempts=(op.attempts||0)+1; await V42.idbSet('queue',op.id,op);
         try{
-          let result;
-          try{
-            result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
-          }catch(firstError){
-            // The server may reject an otherwise locally-valid token. Refresh
-            // once and replay the SAME operation; never enqueue it again.
-            const msg=String(firstError&&firstError.message?firstError.message:firstError);
-            if(/token|credential|authentication|unauthorized|401/i.test(msg)){
-              const refreshed=await V42.refreshGoogleCredential();
-              if(!refreshed) throw firstError;
-              result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
-            }else{
-              throw firstError;
-            }
-          }
+          const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
-
-          op.status='synced';
-          op.syncedAt=new Date().toISOString();
-          op.serverOperationId=result.operationId||op.id;
-          op.serverResult=result;
+          op.status='synced'; op.syncedAt=new Date().toISOString(); op.serverOperationId=result.operationId||op.id;
           await V42.idbSet('queue',op.id,op);
-
-          // Cloud state becomes confirmed only after the Master API ACK.
-          const value=op.payload&&Object.prototype.hasOwnProperty.call(op.payload,'value')?op.payload.value:null;
-          if(op.key==='iv'){
-            const h=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
-            localStorage.setItem('cloud_confirmed_hash_iv',h);
-            localStorage.setItem('cloud_confirmed_at_iv',op.syncedAt);
-            localStorage.setItem('cloud_confirmed_hash_invoices',h);
-            localStorage.setItem('cloud_confirmed_at_invoices',op.syncedAt);
-            localStorage.setItem('cloud_confirmed_at_invLog',op.syncedAt);
-          }else if(value!==null){
-            const h=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
-            localStorage.setItem('cloud_confirmed_hash_'+op.key,h);
-            localStorage.setItem('cloud_confirmed_at_'+op.key,op.syncedAt);
-          }
           localStorage.setItem('cloud_last_sync',op.syncedAt);
+          try{ if(typeof DRIVE!=='undefined' && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
           sent++;
         }catch(e){
-          op.status='pending';
-          op.lastError=String(e&&e.message?e.message:e);
-          await V42.idbSet('queue',op.id,op);
-          failed++;
-          failures.push({key:op.key,error:op.lastError});
-          if(/token|credential|authentication|unauthorized|permission|401/i.test(op.lastError)){
-            authExpired=true;
-            break;
-          }
-          // One module failing must not prevent other modules from syncing.
-          continue;
+          op.status='pending'; op.lastError=String(e&&e.message?e.message:e); await V42.idbSet('queue',op.id,op); failed++; break;
         }
       }
       const left=await V42.queueCount();
       if(left===0 && sent) CLOUD.setSyncStatus('Synced ✓','var(--gn)');
-      else if(failed && sent) CLOUD.setSyncStatus(left+' pending · '+failed+' failed','var(--am)');
       else if(left) CLOUD.setSyncStatus(left+' pending','var(--am)');
       if(sent && A.page==='backupsync') gP('backupsync');
     }finally{ V42.syncing=false; }
-    return {sent,failed,authExpired,failures,pending:await V42.queueCount()};
+    return {sent,failed};
   };
 
   /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
@@ -11953,23 +11093,19 @@ v2.8 — Definitive flat-light header + school category correction
         return;
       }
       if(!isGoogleUser(CLOUD.user)) throw new Error('Google authentication is required for Master Drive backup');
-      // A persisted Google session may outlive its short-lived ID token. Refresh it
-      // before touching Master Drive; only fall back to interactive re-auth if refresh fails.
-      if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
-        const ok=await V42.refreshGoogleCredential();
-        if(!ok || !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30)){
-          const interactive=await V42.ensureBackendAuthInteractive();
-          if(!interactive || !V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30)) throw new Error('Google authentication is required for Master Drive backup');
-        }
+      // A Google session is persisted for UI continuity, but the raw GIS credential is
+      // intentionally not persisted in localStorage. After a page reload, re-authenticate
+      // interactively before touching Master Drive rather than showing a false Connected state.
+      if(!V42.idToken){
+        const ok=await V42.ensureBackendAuthInteractive();
+        if(!ok || !V42.idToken) throw new Error('Google authentication is required for Master Drive backup');
       }
       CLOUD.setSyncStatus('Syncing…','var(--am)');
 
-      // Ensure every current module is represented even when it has never been
-      // edited during this session. enqueueCurrentState is hash-aware, so this
-      // does not create duplicate records for already-confirmed data.
-      await V42.enqueueCurrentState();
-      // Drain every module independently. A single module failure remains pending
-      // but must not prevent the other modules from reaching Master Drive.
+      // Queue sync and full backup are intentionally decoupled. A single
+      // pending/failed queue operation must NOT prevent creation of a full
+      // Master Drive snapshot. The failed operation remains pending and is
+      // retried on the next sync attempt.
       const q=await V42.flushQueue();
       const pending=await V42.queueCount();
 
@@ -11978,9 +11114,6 @@ v2.8 — Definitive flat-light header + school category correction
 
       CLOUD.lastBackup=new Date().toISOString();
       localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);
-      localStorage.setItem('cloud_confirmed_at_backup',CLOUD.lastBackup);
-      localStorage.setItem('cloud_confirmed_at_system',CLOUD.lastBackup);
-      localStorage.setItem('cloud_last_sync',CLOUD.lastBackup);
 
       if(pending>0){
         CLOUD.setSyncStatus('Backup saved · '+pending+' pending','var(--am)');
