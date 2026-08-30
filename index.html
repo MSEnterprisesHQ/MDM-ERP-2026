@@ -2584,13 +2584,8 @@ function gP(p){
   const pg={dashboard:pgDash,new:pgNew,history:pgHist,schools:pgSch,items:pgItm,ledger:pgLed,archive:pgArc,audit:pgAud,admin:pgAdm,settings:pgSett,controls:pgControls,backupsync:pgBackupSync,"external-register":pgExternalInvoiceRegisterReference,profile:pgPro,reports:pgRep};
   if(p==="schools" && !Array.isArray(SC.draft)) scInitDraft();
   if(p==="items" && !Array.isArray(IT.draft)) itInitDraft();
-  try{
-    if(pg[p]) pc.innerHTML=pg[p]();
-    else pc.innerHTML='<div class="empty"><div class="ei">&#128679;</div><div class="et">Page not found</div></div>';
-  }catch(e){
-    console.error('[MDM] Page render failed:',p,e);
-    pc.innerHTML='<div class="empty"><div class="ei">&#9888;</div><div class="et">Unable to load this section</div><div class="es">Please retry. Your saved data is not affected.</div></div>';
-  }
+  if(pg[p])pc.innerHTML=pg[p]();
+  else pc.innerHTML='<div class="empty"><div class="ei">&#128679;</div><div class="et">Page not found</div></div>';
   // Post-render hooks
   if(p==="settings"){setTimeout(()=>{try{bindThemePicker();}catch(e){console.warn("Theme picker init",e);}},30);}
   if(p==="new" && typeof niRenderMasterPreview==="function"){
@@ -5408,7 +5403,7 @@ V42.googleSignIn = async function(){
   if(!V42.googleClientId){V42.config();if(!V42.googleClientId){toast("Set Google Client ID first","err");return;}}
   try{
     await V42.loadGIS();
-    google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});
+    google.accounts.id.initialize({client_id:V42.googleClientId,auto_select:true,cancel_on_tap_outside:false,callback:async resp=>{if(resp&&resp.credential) await V42.acceptGoogleCredential(resp.credential);}});
     // Do not rely on GIS One Tap prompt() for an explicit user action. Browsers
     // may suppress that prompt/FedCM even when the OAuth client is valid.
     // The official rendered GIS button is the supported interactive sign-in
@@ -5694,7 +5689,7 @@ async function bootstrapV42(){
   }
 
   if(navigator.onLine) setTimeout(()=>V42.flushQueue(),1200);
-  setInterval(()=>{ if(navigator.onLine && CLOUD.user && typeof V42.reconcilePendingSync==='function') V42.reconcilePendingSync('timer'); }, 10*60*1000);
+  setInterval(()=>{ if(navigator.onLine && CLOUD.user) V42.flushQueue(); }, 5*60*1000);
 }
 
 /* v4.42: legacy synchronous Drive adapter is retained only as a local mirror.
@@ -5707,10 +5702,9 @@ try{
 
 /* Replace v4.41's false online→synced behavior with real queue processing. */
 window.addEventListener("online",async()=>{
-  try{
-    const result=await V42.reconcilePendingSync('online');
-    if(result && result.sent) toast(result.sent+" record(s) synced to master cloud","ok");
-  }catch(e){ console.warn('[MDM] online reconciliation deferred',e); }
+  toast("Internet restored — checking pending sync…","info");
+  const result=await V42.flushQueue();
+  if(result.sent) toast(result.sent+" record(s) synced to master cloud","ok");
 });
 window.addEventListener("offline",()=>toast("Device offline — data will remain saved locally","warn"));
 
@@ -11805,11 +11799,14 @@ v2.8 — Definitive flat-light header + school category correction
       A.loggedIn=true; A.currentUser=mergedUser; CLOUD.ready=true;
       auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
 
-      // IMPORTANT: sign-in must seed every current module into the durable queue.
-      // Previously only modules that had been edited after login were queued, which
-      // caused untouched modules to remain "Not synced yet" until the user saved them.
-      await V42.enqueueCurrentState();
-      const q=await V42.flushQueue();
+        // A normal sign-in reconciles the complete current state. A silent
+      // credential refresh only replaces the credential; it must never reseed
+      // the queue or create duplicate cloud writes.
+      let q={sent:0,failed:0};
+      if(!options.silentRefresh){
+        await V42.enqueueCurrentState();
+        q=await V42.flushQueue();
+      }
       if(A.page==='backupsync') gP('backupsync');
       CLOUD.updateUI();
       if(!options.silentRefresh){ toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok'); }
@@ -11823,10 +11820,14 @@ v2.8 — Definitive flat-light header + school category correction
   /* ---- Cloud queue: never attempt cloud writes for local-only sessions ---- */
   V42.flushQueue = async function(){
     if(V42.syncing || !navigator.onLine || !V42.apiUrl || !isGoogleUser(CLOUD.user)) return {sent:0,failed:0,skipped:true};
+
+    // Keep authentication recovery inside the existing queue worker. A valid
+    // credential is reused; refresh happens only when it is near expiry.
     if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
       const refreshed=await V42.refreshGoogleCredential();
-      if(!refreshed) return {sent:0,failed:1,authExpired:true};
+      if(!refreshed) return {sent:0,failed:0,authPending:true,pending:await V42.queueCount()};
     }
+
     V42.syncing=true;
     let sent=0,failed=0,authExpired=false;
     const failures=[];
@@ -11836,7 +11837,21 @@ v2.8 — Definitive flat-light header + school category correction
         op.status='uploading'; op.attempts=(op.attempts||0)+1;
         await V42.idbSet('queue',op.id,op);
         try{
-          const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
+          let result;
+          try{
+            result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
+          }catch(firstError){
+            // The server may reject an otherwise locally-valid token. Refresh
+            // once and replay the SAME operation; never enqueue it again.
+            const msg=String(firstError&&firstError.message?firstError.message:firstError);
+            if(/token|credential|authentication|unauthorized|401/i.test(msg)){
+              const refreshed=await V42.refreshGoogleCredential();
+              if(!refreshed) throw firstError;
+              result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
+            }else{
+              throw firstError;
+            }
+          }
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
 
           op.status='synced';
@@ -11845,13 +11860,13 @@ v2.8 — Definitive flat-light header + school category correction
           op.serverResult=result;
           await V42.idbSet('queue',op.id,op);
 
-          // Cloud state is confirmed ONLY after the Master API ACK. The old
-          // local DRIVE adapter is deliberately not used as cloud truth.
-          let value=op.payload&&Object.prototype.hasOwnProperty.call(op.payload,'value')?op.payload.value:null;
+          // Cloud state becomes confirmed only after the Master API ACK.
+          const value=op.payload&&Object.prototype.hasOwnProperty.call(op.payload,'value')?op.payload.value:null;
           if(op.key==='iv'){
-            localStorage.setItem('cloud_confirmed_hash_iv',typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value));
+            const h=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
+            localStorage.setItem('cloud_confirmed_hash_iv',h);
             localStorage.setItem('cloud_confirmed_at_iv',op.syncedAt);
-            localStorage.setItem('cloud_confirmed_hash_invoices',typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value));
+            localStorage.setItem('cloud_confirmed_hash_invoices',h);
             localStorage.setItem('cloud_confirmed_at_invoices',op.syncedAt);
             localStorage.setItem('cloud_confirmed_at_invLog',op.syncedAt);
           }else if(value!==null){
@@ -11867,12 +11882,12 @@ v2.8 — Definitive flat-light header + school category correction
           await V42.idbSet('queue',op.id,op);
           failed++;
           failures.push({key:op.key,error:op.lastError});
-          // A token/auth failure affects every remaining operation; a module
-          // failure does not. Continue so one bad module cannot block the rest.
-          if(/token|credential|authentication|unauthorized|permission/i.test(op.lastError)){
+          if(/token|credential|authentication|unauthorized|permission|401/i.test(op.lastError)){
             authExpired=true;
             break;
           }
+          // One module failing must not prevent other modules from syncing.
+          continue;
         }
       }
       const left=await V42.queueCount();
@@ -12485,131 +12500,4 @@ v2.8 — Definitive flat-light header + school category correction
   }
   .hist-mobile-more-info span{font-size:15px!important;}
 }
-</style>
-
-<script>
-/* v4.58 FINAL — credential lifecycle + offline recovery + deterministic sync
-   This is the authoritative final patch. It modifies the existing V42 pipeline
-   and does not add another Backup/Sync implementation. */
-(function(){
-  'use strict';
-  try{
-    if(typeof V42==='undefined') return;
-    const isGoogle=typeof isGoogleUser==='function' ? isGoogleUser : (u=>!!(u&&u.authMethod==='google'&&u.email));
-    V42._googleRefreshPromise=V42._googleRefreshPromise||null;
-    V42._reconcilePromise=null;
-    V42._lastActivityCredentialCheck=0;
-
-    /* Reuse a healthy token. Refresh only inside a five-minute safety window. */
-    V42.ensureGoogleCredential=async function(){
-      if(!isGoogle(CLOUD?.user)) return false;
-      const token=V42.idToken||CLOUD.token;
-      if(typeof V42.isGoogleTokenUsable==='function' && V42.isGoogleTokenUsable(token,300)) return true;
-      try{
-        const ok=await V42.refreshGoogleCredential();
-        return !!(ok && typeof V42.isGoogleTokenUsable==='function' && V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,30));
-      }catch(_){ return false; }
-    };
-
-    /* Wrap the existing queue drain once: auth is ensured before the existing
-       worker runs. No queue reseeding and no duplicate upload worker. */
-    if(typeof V42.flushQueue==='function' && !V42._v458FlushReplaced){
-      const worker=V42.flushQueue;
-      V42.flushQueue=async function(){
-        if(V42._v458FlushBusy) return {sent:0,failed:0,skipped:true,busy:true};
-        if(!navigator.onLine || !V42.apiUrl || !isGoogle(CLOUD?.user)) return {sent:0,failed:0,skipped:true};
-        V42._v458FlushBusy=true;
-        try{
-          const authOk=await V42.ensureGoogleCredential();
-          if(!authOk) return {sent:0,failed:0,authPending:true,pending:await V42.queueCount()};
-          return await worker.apply(this,arguments);
-        }finally{ V42._v458FlushBusy=false; }
-      };
-      V42._v458FlushReplaced=true;
-    }
-
-    /* Online/resume reconciliation. Only pending/unconfirmed queue work is
-       drained; there is no full-state reseed here. */
-    V42.reconcilePendingSync=async function(reason){
-      if(V42._reconcilePromise) return V42._reconcilePromise;
-      V42._reconcilePromise=(async()=>{
-        try{
-          if(!navigator.onLine || !isGoogle(CLOUD?.user)) return {sent:0,skipped:true};
-          const authOk=await V42.ensureGoogleCredential(reason);
-          if(!authOk) return {sent:0,authPending:true,pending:await V42.queueCount()};
-          return await V42.flushQueue();
-        }finally{ V42._reconcilePromise=null; }
-      })();
-      return V42._reconcilePromise;
-    };
-
-    /* User activity is a checkpoint, not a token generator. Ordinary clicks do
-       nothing while the credential has >5 minutes left. Near expiry, GIS renewal
-       is attempted once per minute at most. */
-    if(!V42._v458ActivityHook){
-      document.addEventListener('pointerdown',()=>{
-        try{
-          if(!navigator.onLine || !isGoogle(CLOUD?.user)) return;
-          const now=Date.now();
-          if(now-V42._lastActivityCredentialCheck<60000) return;
-          if(typeof V42.isGoogleTokenUsable==='function' && V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,300)) return;
-          V42._lastActivityCredentialCheck=now;
-          V42.ensureGoogleCredential('activity').catch(()=>{});
-        }catch(_){}
-      },{passive:true,capture:true});
-      V42._v458ActivityHook=true;
-    }
-
-    if(!V42._v458ResumeHook){
-      const resume=()=>{ if(navigator.onLine && isGoogle(CLOUD?.user)) V42.reconcilePendingSync('resume').catch(()=>{}); };
-      window.addEventListener('online',resume);
-      window.addEventListener('pageshow',resume);
-      document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible') resume();});
-      V42._v458ResumeHook=true;
-    }
-
-    /* Keep token/transport details internal. Diagnostics are developer-only. */
-    V42.getCredentialDiagnostics=function(){
-      const token=V42.idToken||CLOUD?.token||null;
-      let exp=null,secondsRemaining=null;
-      try{
-        const part=String(token||'').split('.')[1];
-        if(part){
-          const payload=JSON.parse(atob(part.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(part.length/4)*4,'=')));
-          exp=Number(payload.exp||0)||null;
-          if(exp) secondsRemaining=Math.max(0,exp-Math.floor(Date.now()/1000));
-        }
-      }catch(_){}
-      return {googleSession:isGoogle(CLOUD?.user),tokenPresent:!!token,tokenExpiryEpoch:exp,tokenSecondsRemaining:secondsRemaining,refreshInFlight:!!V42._googleRefreshPromise,reconcileInFlight:!!V42._reconcilePromise};
-    };
-
-    /* Single-flight protection for the existing full Backup Now command. */
-    if(typeof window.cloudBackupNow==='function' && !window._mdmBackupSingleFlightInstalled){
-      const backupWorker=window.cloudBackupNow;
-      window.cloudBackupNow=async function(){
-        if(V42._backupInFlight) return;
-        V42._backupInFlight=true;
-        try{ return await backupWorker.apply(this,arguments); }
-        finally{ V42._backupInFlight=false; }
-      };
-      window._mdmBackupSingleFlightInstalled=true;
-    }
-
-    console.info('[MDM v4.58 FINAL] offline-first credential lifecycle active');
-  }catch(e){ console.warn('[MDM v4.58 FINAL] install failed',e); }
-})();
-</script>
-
-<style id="mdm-v4-58-backup-ux-readability">
-/* v4.58 — Backup & Sync readability only. No business/data logic. */
-.drive-ux-table .storage-heading{display:inline-block;white-space:nowrap;vertical-align:middle;line-height:1.2}
-.drive-ux-table .drive-status{gap:5px!important;font-size:10px!important;font-weight:750!important;letter-spacing:.01em!important}
-.drive-ux-table .drive-status>span{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap}
-.drive-ux-table .drive-status .drive-icon{flex:0 0 14px!important}
-.drive-ux-table .drive-status .drive-icon svg{shape-rendering:geometricPrecision!important;vector-effect:non-scaling-stroke}
-.drive-ux-table .drive-time-sub{font-size:9px!important;line-height:1.25!important;margin-top:2px!important;opacity:.78}
-.drive-ux-table .drive-time-main{font-variant-numeric:tabular-nums;font-weight:700}
-.drive-ux-table .drive-view-btn,.drive-ux-table .drive-menu-btn{font-size:10.5px!important}
-html[data-theme="dark"] .drive-ux-table .drive-status.ok{background:rgba(22,163,74,.16)!important;border-color:rgba(74,222,128,.28)!important;color:#86efac!important}
-html[data-theme="dark"] .drive-ux-table .drive-status.off{background:rgba(148,163,184,.08)!important;border-color:rgba(148,163,184,.18)!important;color:#94a3b8!important}
 </style>
