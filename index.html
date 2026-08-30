@@ -10446,6 +10446,27 @@ async function driveRetryAll(){
   }catch(e){toast('Retry failed: '+(e&&e.message?e.message:e),'err');}
 }
 
+function driveBackupHistoryHTML(){
+  if(!CLOUD.user) return "";
+  const backups = DRIVE.listBackups();
+  if(backups.length===0) return `<div class="info inf-b">No backups yet. Click <b>Backup Now</b> above to create your first snapshot.</div>`;
+  return `<div class="tw"><table class="dt">
+    <thead><tr><th>Snapshot</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+      ${backups.map(path=>{
+        const name = path.split("/").pop();
+        const snap = DRIVE_ADAPTER.readFile(path);
+        const when = snap && snap.exportedAt ? driveFmtTime(snap.exportedAt) : name.replace("Backup_","").replace(".json","").replace("_"," ");
+        return `<tr>
+          <td class="mono">${ec(name)}</td>
+          <td>${when}</td>
+          <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="driveRestoreSnapshot('${path.replace(/'/g,"\\'")}')">Full Restore</button></td>
+        </tr>`;
+      }).join("")}
+    </tbody>
+  </table></div>`;
+}
+
 function driveSelectiveRestoreHTML(){
   if(!CLOUD.user) return "";
   const opts = [
