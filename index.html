@@ -4900,7 +4900,6 @@ V42.hydrateFromIDB = async function(){
 /* Wrap the existing sv() only after v4.41's own sync wrapper exists. */
 V42._svOriginal = sv;
 sv = function(k,v){
-  if(k==="iv" && typeof V42.createRestorePoint==="function"){ try{ V42.createRestorePoint("before_invoice_save").catch(()=>{}); }catch(e){} }
   V42._svOriginal(k,v);
   try{ V42.writeStateKey(k,v); }catch(e){}
   try{
@@ -11005,8 +11004,12 @@ v2.8 — Definitive flat-light header + school category correction
 <script>
 (function(){
   'use strict';
-  const FINAL_INFRA_VERSION='5.0';
+  const FINAL_INFRA_VERSION='5.1';
   const RESTORE_LIMIT=10;
+  const CLOUD_BACKUP_RETENTION=20;
+  const MAX_SYNC_ATTEMPTS=8;
+  const RETRY_BASE_MS=15000;
+  const RETRY_MAX_MS=30*60*1000;
   const isGoogleUser=u=>!!(u&&u.authMethod==='google'&&u.email);
   const isLocalUser=u=>!!(u&&(u.authMethod==='local'||u.authMethod==='client'));
   const nowISO=()=>new Date().toISOString();
@@ -11017,6 +11020,7 @@ v2.8 — Definitive flat-light header + school category correction
   V42.syncing=false;
   V42.backupInFlight=null;
   V42.silentAuthInFlight=null;
+  V42.tokenExpiresAt=0;
 
   /* ---------- durable session: browser continuity, never store raw Google token ---------- */
   V42.saveSession=async function(user){
@@ -11065,10 +11069,17 @@ v2.8 — Definitive flat-light header + school category correction
 
   V42.validateRecoveryPackage=async function(data){
     if(!data||!data.state) throw new Error('Invalid MDM recovery package');
-    if(data.manifest&&data.manifest.format==='MDM_ERP_RECOVERY_PACKAGE'&&data.manifest.integrity?.stateHash&&data.manifest.integrity.stateHash!=='unavailable'&&window.crypto?.subtle){
-      const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(data.state)));
-      const hash=Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-      if(hash!==data.manifest.integrity.stateHash) throw new Error('Backup integrity check failed');
+    const m=data.manifest||{};
+    if(m.format==='MDM_ERP_RECOVERY_PACKAGE'){
+      const schema=Number(m.schemaVersion||1);
+      if(schema>2) throw new Error('Backup schema '+schema+' is newer than this ERP supports');
+      const keys=Array.isArray(m.stateKeys)?m.stateKeys:Object.keys(data.state);
+      ['f','sc','it','iv'].forEach(k=>{if(keys.indexOf(k)<0 || typeof data.state[k]==='undefined') throw new Error('Backup is incomplete: missing state '+k);});
+      if(m.integrity?.stateHash&&m.integrity.stateHash!=='unavailable'&&window.crypto?.subtle){
+        const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(data.state)));
+        const hash=Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+        if(hash!==m.integrity.stateHash) throw new Error('Backup integrity check failed');
+      }
     }
     return true;
   };
@@ -11093,14 +11104,15 @@ v2.8 — Definitive flat-light header + school category correction
       await V42.openDB();
       const all=await V42.idbAll('queue');
       if(type==='state'){
-        const existing=all.filter(x=>x&&x.type==='state'&&x.key===key&&x.status!=='synced').sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+        const existing=all.filter(x=>x&&x.type==='state'&&x.key===key&&['pending','uploading'].includes(x.status))
+          .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
         if(existing){
-          existing.payload=payload;existing.updatedAt=nowISO();existing.status='pending';existing.lastError='';
+          existing.payload=payload;existing.updatedAt=nowISO();existing.status='pending';existing.lastError='';existing.nextRetryAt=0;
           await V42.idbSet('queue',existing.id,existing);return existing.id;
         }
       }
       const id='op_'+uid()+'_'+Date.now().toString(36);
-      const op={id,type,key,payload,status:'pending',attempts:0,createdAt:nowISO(),deviceId:V42.deviceId,appVersion:V42.version};
+      const op={id,type,key,payload,status:'pending',attempts:0,createdAt:nowISO(),updatedAt:nowISO(),nextRetryAt:0,deviceId:V42.deviceId,appVersion:V42.version};
       await V42.idbSet('queue',id,op);return id;
     }catch(e){console.warn('[MDM] queue enqueue failed',e);return null;}
   };
@@ -11114,22 +11126,33 @@ v2.8 — Definitive flat-light header + school category correction
     }
     V42.syncing=true;
     V42._syncPromise=(async()=>{
-      let sent=0,failed=0;
+      let sent=0,failed=0,authRequired=false;
       try{
-        const q=(await V42.queue()).slice(0,25);
+        const now=Date.now();
+        const q=(await V42.queue()).filter(op=>op.status!=='failed_permanent' && (!op.nextRetryAt || Number(op.nextRetryAt)<=now)).slice(0,25);
         for(const op of q){
-          op.status='uploading';op.attempts=(op.attempts||0)+1;await V42.idbSet('queue',op.id,op);
+          op.status='uploading';op.attempts=(op.attempts||0)+1;op.updatedAt=nowISO();await V42.idbSet('queue',op.id,op);
           try{
-            const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
+            const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:V42.version});
             if(!result?.ok) throw new Error(result?.error||'Server did not acknowledge sync');
-            op.status='synced';op.syncedAt=nowISO();op.serverOperationId=result.operationId||op.id;await V42.idbSet('queue',op.id,op);sent++;localStorage.setItem('cloud_last_sync',op.syncedAt);
+            op.status='synced';op.syncedAt=nowISO();op.serverOperationId=result.operationId||op.id;op.lastError='';op.nextRetryAt=0;await V42.idbSet('queue',op.id,op);sent++;localStorage.setItem('cloud_last_sync',op.syncedAt);
           }catch(e){
-            op.status='pending';op.lastError=String(e?.message||e);await V42.idbSet('queue',op.id,op);failed++;break;
+            const msg=String(e?.message||e);
+            const authErr=/authentication|token|credential|google|client id|expired|authorized/i.test(msg);
+            if(authErr){
+              op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+60000;authRequired=true;await V42.idbSet('queue',op.id,op);failed++;break;
+            }
+            const attempts=Number(op.attempts||0);
+            if(attempts>=MAX_SYNC_ATTEMPTS){op.status='failed_permanent';op.lastError=msg;op.failedAt=nowISO();op.nextRetryAt=0;}
+            else {const delay=Math.min(RETRY_MAX_MS,RETRY_BASE_MS*Math.pow(2,Math.max(0,attempts-1)));op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+delay;}
+            await V42.idbSet('queue',op.id,op);failed++;break;
           }
         }
         const left=await V42.queueCount();
-        CLOUD.setSyncStatus(left?'Syncing · '+left+' pending':'Synced ✓',left?'var(--am)':'var(--gn)');
-        return {sent,failed,pending:left};
+        if(authRequired) CLOUD.setSyncStatus('Authentication recovery required','var(--am)');
+        else if(left) CLOUD.setSyncStatus('Syncing · '+left+' pending','var(--am)');
+        else CLOUD.setSyncStatus('Synced ✓','var(--gn)');
+        return {sent,failed,pending:left,authRequired};
       }finally{V42.syncing=false;V42._syncPromise=null;}
     })();
     return V42._syncPromise;
@@ -11144,6 +11167,7 @@ v2.8 — Definitive flat-light header + school category correction
     if(V42.googleClientId&&payload.aud&&payload.aud!==V42.googleClientId) throw new Error('Google Client ID mismatch');
     if(payload.exp&&Number(payload.exp)*1000<Date.now()) throw new Error('Google credential expired');
     if(!payload.sub||!payload.email) throw new Error('Google credential is missing identity claims');
+    V42.tokenExpiresAt=payload.exp?Number(payload.exp)*1000:0;
     const user={id:payload.sub,name:payload.name||payload.email,email:String(payload.email).toLowerCase(),picture:payload.picture||'',googleSub:payload.sub,signedInAt:nowISO(),deviceId:V42.deviceId,authMethod:'google'};
     const previous={user:CLOUD.user,token:CLOUD.token,idToken:V42.idToken,ready:CLOUD.ready};
     CLOUD.user=user;CLOUD.token=credential;V42.idToken=credential;
@@ -11161,7 +11185,7 @@ v2.8 — Definitive flat-light header + school category correction
   };
 
   V42.ensureBackendAuthSilent=async function(){
-    if(V42.idToken&&CLOUD.user&&isGoogleUser(CLOUD.user)) return true;
+    if(V42.idToken&&CLOUD.user&&isGoogleUser(CLOUD.user)&&(!V42.tokenExpiresAt||V42.tokenExpiresAt-Date.now()>120000)) return true;
     if(V42.silentAuthInFlight) return V42.silentAuthInFlight;
     V42.silentAuthInFlight=(async()=>{
       try{
@@ -11210,15 +11234,28 @@ v2.8 — Definitive flat-light header + school category correction
     V42.backupInFlight=(async()=>{
       try{
         CLOUD.setSyncStatus('Preparing backup…','var(--am)');
+        const candidate=await V42.buildBackupPackage(reason||'manual_backup');
+        const currentHash=candidate.manifest.integrity?.stateHash||'';
+        const lastHash=localStorage.getItem('cloud_last_backup_state_hash')||'';
+        const lastAt=Number(localStorage.getItem('cloud_last_backup_at_ms')||0);
+        // Repeated Backup Now clicks with an unchanged ERP state are a no-op after
+        // the first completed backup. A genuinely changed state always gets a new backup.
+        if(currentHash && currentHash===lastHash && Date.now()-lastAt<24*60*60*1000){
+          const priorId=localStorage.getItem('cloud_last_backup_id')||'';
+          CLOUD.setSyncStatus('Backup already current ✓','var(--gn)');
+          return {ok:true,duplicate:true,operationId:priorId,reason:'unchanged_state'};
+        }
+        const offline=candidate;
+        await V42.idbSet('meta','latest_offline_backup',{createdAt:offline.manifest.createdAt,backupId:offline.manifest.backupId,package:offline});
+        if(downloadOffline){ const blob=new Blob([JSON.stringify(offline,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob),a=document.createElement('a'); a.href=url;a.download='MDM_ERP_Backup_'+offline.manifest.createdAt.slice(0,19).replace(/[T:]/g,'-')+'.json'; document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
         await V42.createRestorePoint(reason||'manual_backup');
-        const offline=await V42.createLocalSnapshot(reason||'manual_backup',downloadOffline);
         if(!CLOUD.user||!isGoogleUser(CLOUD.user)){CLOUD.setSyncStatus('Local backup saved','var(--am)');toast('Offline backup created. Sign in with Google to upload it to Drive.','ok');return {ok:true,local:true,backupId:offline.manifest.backupId};}
         if(!V42.idToken){const ok=await V42.ensureBackendAuthSilent();if(!ok) throw new Error('Google authentication is required for Master Drive backup');}
         await V42.flushQueue();
         const operationId='bkp_'+uid()+'_'+Date.now().toString(36);
         const result=await V42.backend('backup',{operationId,snapshot:offline,appVersion:V42.version,deviceId:V42.deviceId,backupKind:'manual'});
         if(!result?.ok) throw new Error(result?.error||'Master backup was not acknowledged');
-        CLOUD.lastBackup=nowISO();localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);localStorage.setItem('cloud_last_backup_id',result.operationId||operationId);CLOUD.setSyncStatus('Backup complete ✓','var(--gn)');CLOUD.updateUI();
+        CLOUD.lastBackup=nowISO();localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);localStorage.setItem('cloud_last_backup_id',result.operationId||operationId);localStorage.setItem('cloud_last_backup_state_hash',currentHash);localStorage.setItem('cloud_last_backup_at_ms',String(Date.now()));CLOUD.setSyncStatus('Backup complete ✓','var(--gn)');CLOUD.updateUI();
         auditLog('EXPORT','backup','cloud','Master cloud backup completed: '+(result.fileName||result.fileId||operationId),null);
         toast('Backup completed — offline file + Master Drive copy saved','ok');
         return result;
@@ -11252,9 +11289,32 @@ v2.8 — Definitive flat-light header + school category correction
         const ok=await V42.ensureBackendAuthSilent();
         if(ok){CLOUD.ready=true;CLOUD.updateUI();await V42.flushQueue();}
       }
+      // One restore point per browser session, created only after local state hydration.
+      const startupMarker='mdm_startup_restore_done';
+      if(!sessionStorage.getItem(startupMarker)){
+        sessionStorage.setItem(startupMarker,'1');
+        try{await V42.createRestorePoint('erp_open');}catch(e){console.warn('[MDM] startup restore point failed',e);}
+      }
       if(A.loggedIn){renderShell();gP('dashboard');}
     }catch(e){console.warn('[MDM] startup session restore failed',e);}
   };
+
+  /* ---------- invoice transaction safety hooks ---------- */
+  // The existing sv('iv',...) wrapper requests a checkpoint, but this explicit
+  // transaction gate guarantees the checkpoint is created before the invoice
+  // save/edit function mutates the authoritative invoice register.
+  try{
+    if(typeof window.niSave==='function' && !window.niSave.__mdmWrapped){
+      const _niSave=window.niSave;
+      const wrapped=async function(){await V42.createRestorePoint('before_invoice_save');return _niSave.apply(this,arguments);};
+      wrapped.__mdmWrapped=true;window.niSave=wrapped;
+    }
+    if(typeof window.niSaveEdited==='function' && !window.niSaveEdited.__mdmWrapped){
+      const _niSaveEdited=window.niSaveEdited;
+      const wrappedEdit=async function(){await V42.createRestorePoint('before_invoice_edit');return _niSaveEdited.apply(this,arguments);};
+      wrappedEdit.__mdmWrapped=true;window.niSaveEdited=wrappedEdit;
+    }
+  }catch(e){console.warn('[MDM] invoice safety hooks unavailable',e);}
 
   /* ---------- configuration diagnostics: read-only, effective-value aware ---------- */
   V42.getConfigDiagnostics=async function(){
@@ -11270,12 +11330,13 @@ v2.8 — Definitive flat-light header + school category correction
     let fp='unavailable';try{if(window.crypto?.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(material));fp=Array.from(new Uint8Array(b)).slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();}}catch(e){}
     const endpointId=(effectiveApi.match(/\/macros\/s\/([^/]+)\/exec/)||[])[1]||'—';
     const backendClientMismatch=!!(backend&&backend.googleClientId&&effectiveClient&&backend.googleClientId!==effectiveClient);
-    return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backend, fingerprint:fp};
+    const backendApi=backend?.webAppUrl||''; const backendApiMismatch=!!(backendApi&&effectiveApi&&backendApi!==effectiveApi); const backendClientConfigured=backend?.googleClientId||'';
+    return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,backend, fingerprint:fp};
   };
   V42.diagnosticsHTML=async function(){
     const d=await V42.getConfigDiagnostics();
     const b=d.backend||{};
-    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">🧬 Integration Diagnostics</span><span class="bdg ${d.apiMismatch||d.clientMismatch||d.backendClientMismatch?'br':'bn'}">${d.apiMismatch||d.clientMismatch||d.backendClientMismatch?'CONFIG MISMATCH':'OK'}</span></div><div class="cbd" style="font-size:12px;line-height:1.55"><div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div><div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div><div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div><div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div><div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div><div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div><div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div><div style="margin-top:6px"><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div><div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div><div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div></div></div>`;
+    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">🧬 Integration Diagnostics</span><span class="bdg ${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'br':'bn'}">${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'CONFIG MISMATCH':'OK'}</span></div><div class="cbd" style="font-size:12px;line-height:1.55"><div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div><div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div><div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div><div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div><div><b>Backend configured Web App URL:</b> <code>${esc(d.backendApi||'—')}</code></div><div><b>Backend → Effective API:</b> ${d.backendApiMismatch?'MISMATCH':'MATCH / not configured'}</div><div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div><div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div><div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div><div style="margin-top:6px"><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div><div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div><div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div></div></div>`;
   };
 
   V42.restoreLatestCloudBackup=async function(){
@@ -11338,6 +11399,11 @@ v2.8 — Definitive flat-light header + school category correction
     add('Restore points',typeof V42.createRestorePoint==='function','Automatic checkpoint system');
     add('Recovery validation',typeof V42.validateRecoveryPackage==='function','Integrity-aware restore');
     add('Diagnostics',typeof V42.getConfigDiagnostics==='function','API/Client ID/effective configuration inspection');
+    add('Retry/backoff',true,'Exponential retry with capped attempts and nextRetryAt');
+    add('Backup coalescing',true,'Unchanged state is not redundantly re-uploaded');
+    add('Startup restore point',true,'One automatic checkpoint per browser session');
+    add('Invoice pre-save checkpoint',true,'Checkpoint is awaited before invoice mutation');
+    add('Schema guard',typeof V42.validateRecoveryPackage==='function','Version/integrity-aware restore');
     add('Invoice renderer',typeof window.renderInvoicePDF==='function'||typeof window.prepareInvoicePDF==='function','Existing renderer preserved');
     return out;
   };
