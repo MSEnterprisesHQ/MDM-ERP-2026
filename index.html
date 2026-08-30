@@ -5334,9 +5334,17 @@ V42.enqueueCurrentState = async function(){
     ['alm',A.alm||[]],['lpg',A.lpg||{}],['ro',A.ro||[]]
   ];
   let added=0;
+  let existing=[];
+  try{ existing=await V42.queue(); }catch(_){ existing=[]; }
   for(const [key,value] of items){
+    const hash=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
+    const pendingSame=existing.some(op=>op && op.key===key && op.status!=='synced');
+    const confirmedHash=localStorage.getItem('cloud_confirmed_hash_'+key)||'';
+    // Do not create another queue record when the exact current content is
+    // already confirmed by Master API, or is already waiting in the queue.
+    if(pendingSame || confirmedHash===hash) continue;
     const id=await V42.enqueue('state',key,{key,value});
-    if(id) added++;
+    if(id){ added++; existing.push({id,key,status:'pending'}); }
   }
   return added;
 };
@@ -10341,13 +10349,24 @@ function driveLocalAvailable(mod){
 function driveModulePayload(mod){
   return {company:A.firm,schools:A.schools,items:A.items,invoices:A.invoices,invLog:A.invoices,settings:{sett:A.sett||ST0,series:A.series,rates:A.rates,heads:A.heads},alloc:A.alm||[],lpg:A.lpg||{},roster:A.ro||{}}[mod];
 }
-function driveSyncOne(mod){
+async function driveSyncOne(mod){
   if(!CLOUD.user){toast('Connect Google first','err');return;}
   const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
   const key=keyMap[mod];
   if(!key){toast('System status is updated by Backup Now','info');return;}
-  const payload=key==='st'?{key:'st',value:driveModulePayload(mod)}:{key:key,value:driveModulePayload(mod)};
-  V42.enqueue('state',key,payload).then(()=>V42.flushQueue()).then(r=>{if(r&&r.failed)toast('Sync attempt failed — check connection','err');else{toast('Sync attempt completed','ok');if(A.page==='backupsync')gP('backupsync');}}).catch(e=>toast('Sync failed: '+e.message,'err'));
+  try{
+    const value=driveModulePayload(mod);
+    await V42.enqueue('state',key,{key,value});
+    const r=await V42.flushQueue();
+    if(r.authExpired) throw new Error('Google authentication expired; re-authentication is required');
+    if(r.failed) throw new Error((r.failures&&r.failures[0]&&r.failures[0].error)||'Master API did not acknowledge this module');
+    if(r.sent<1) throw new Error('No cloud operation was acknowledged');
+    toast((DRIVE.moduleLabels[mod]||mod)+' synced to Google Drive ✓','ok');
+    if(A.page==='backupsync')gP('backupsync');
+  }catch(e){
+    toast((DRIVE.moduleLabels[mod]||mod)+' sync failed: '+(e&&e.message?e.message:e),'err');
+    if(A.page==='backupsync')gP('backupsync');
+  }
 }
 function driveViewDetails(mod,label,file,driveOK,localOK){
   const t=DRIVE.lastSynced(mod);
@@ -10369,6 +10388,22 @@ function driveHistory(mod){
 function driveToggleMenu(id){document.querySelectorAll('.drive-menu.open').forEach(x=>{if(x.id!==id)x.classList.remove('open')});document.getElementById(id)?.classList.toggle('open')}
 document.addEventListener('click',e=>{if(!e.target.closest('.drive-actions'))document.querySelectorAll('.drive-menu.open').forEach(x=>x.classList.remove('open'))});
 
+function driveCloudState(mod){
+  if(mod==='backup') return CLOUD.lastBackup?{ok:true,time:CLOUD.lastBackup,source:'Master Drive backup confirmed'}:{ok:false,time:null,source:'No Master Drive backup confirmed'};
+  if(mod==='system'){
+    const t=localStorage.getItem('cloud_confirmed_at_system')||null;
+    return {ok:!!t,time:t,source:t?'Master API confirmed':'No cloud confirmation recorded'};
+  }
+  const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
+  const key=keyMap[mod];
+  if(!key) return {ok:false,time:null,source:'No cloud mapping'};
+  const value=driveModulePayload(mod);
+  const currentHash=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
+  const confirmedHash=localStorage.getItem('cloud_confirmed_hash_'+key)||'';
+  const t=localStorage.getItem('cloud_confirmed_at_'+key)||null;
+  const qPromise=V42.queue();
+  return {ok:!!t && confirmedHash===currentHash,time:t,source:(t&&confirmedHash===currentHash)?'Confirmed by Master API':'Not confirmed for current data',pendingPromise:qPromise,key};
+}
 function driveFolderTreeHTML(){
   if(!CLOUD.user){return `<div class="info inf-b">Sign in with Google above to create the <b>MS ENTERPRISES ERP</b> folder and see its contents here.</div>`;}
   const rows=[
@@ -10383,44 +10418,49 @@ function driveFolderTreeHTML(){
     {mod:'roster',label:'MDM · Roster',file:'Roster.json'}
   ];
   const all=rows.concat([{mod:'backup',label:'Backup History',file:DRIVE.listBackups().length+' snapshot(s)'},{mod:'system',label:'System',file:'Metadata.json, Version.json'}]);
-  const nowSynced=rows.filter(r=>!!DRIVE.lastSynced(r.mod)).length+(DRIVE.getMetadata()?1:0)+(CLOUD.lastBackup?1:0);
+  const states=all.map(r=>({r,state:driveCloudState(r.mod)}));
+  const confirmed=states.filter(x=>x.state.ok).length;
   const total=all.length;
-  return `<div class="drive-refresh-row"><div class="drive-refresh-meta">${nowSynced}/${total} modules have a local sync record · Offline = the app's durable local database (IndexedDB); no separate JSON download is required.</div><div style="display:flex;gap:7px"><button class="btn btn-g btn-sm" onclick="driveRefreshStatus()">${driveIcon('refresh')} Refresh Status</button><button class="btn btn-g btn-sm" onclick="driveRetryAll()">${driveIcon('refresh')} Re-check &amp; Retry</button></div></div>
-  <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th><span class="storage-heading">Storage</span> <span class="drive-info" title="Drive = confirmed Google Drive copy. Offline = available in the app’s local IndexedDB database.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
-  ${all.map((r,i)=>{
-    const driveOK=r.mod==='backup'?!!CLOUD.lastBackup:r.mod==='system'?!!DRIVE.getMetadata():!!DRIVE.lastSynced(r.mod);
+  return `<div class="drive-refresh-row"><div class="drive-refresh-meta"><b>${confirmed}/${total}</b> modules confirmed in Google Drive · Offline = durable local app database (IndexedDB)</div><div style="display:flex;gap:7px"><button class="btn btn-g btn-sm" onclick="driveRefreshStatus()">${driveIcon('refresh')} Refresh Status</button><button class="btn btn-g btn-sm" onclick="driveRetryAll()">${driveIcon('refresh')} Re-check &amp; Retry</button></div></div>
+  <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th><span class="storage-heading">Storage Status</span> <span class="drive-info" title="Drive = confirmed by Master API after cloud write. Offline = available in the app's local database.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
+  ${states.map(({r,state},i)=>{
+    const driveOK=state.ok;
     const localOK=driveLocalAvailable(r.mod);
-    const t=r.mod==='system'?(DRIVE.getMetadata()?.lastSyncTime||null):r.mod==='backup'?(CLOUD.lastBackup||null):DRIVE.lastSynced(r.mod);
+    const t=state.time;
     const menuId='drive-menu-'+i;
-    return `<tr><td><div class="drive-folder-name">${driveIcon('folder')}<span>${ec(r.label)}</span></div></td><td><div class="drive-file">${ec(r.file)}</div></td><td><div class="drive-status-wrap"><span class="drive-status ${driveOK?'ok':'off'}" title="${driveOK?'Google Drive copy confirmed by the current app sync record':'No Drive sync record yet'}">${driveIcon('cloud')}Drive ${driveOK?driveIcon('check'):'—'}</span><span class="drive-status ${localOK?'ok':'off'}" title="Offline means the data is stored locally for offline-first use">${driveIcon('offline')}Offline ${localOK?driveIcon('check'):'—'}</span></div></td><td><div class="drive-time">${t?`<span class="drive-time-main">${driveFmtTime(t)}</span><span class="drive-time-sub">${r.mod==='system'?'System metadata':'Local sync record'}</span>`:`<span class="drive-time-main" style="color:var(--txm)">Not synced yet</span>`}</div></td><td><div class="drive-actions"><button class="drive-view-btn" onclick="driveViewDetails('${r.mod}','${String(r.label).replace(/'/g,"\\'")}','${String(r.file).replace(/'/g,"\\'")}',${driveOK},${localOK})">${driveIcon('eye')}<span style="margin-left:5px">View</span></button><button class="drive-menu-btn" aria-label="More actions" onclick="event.stopPropagation();driveToggleMenu('${menuId}')">${driveIcon('dots')}</button><div class="drive-menu" id="${menuId}"><button onclick="driveViewDetails('${r.mod}','${String(r.label).replace(/'/g,"\\'")}','${String(r.file).replace(/'/g,"\\'")}',${driveOK},${localOK});driveToggleMenu('${menuId}')">${driveIcon('eye')}View Details</button><button onclick="driveSyncOne('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('refresh')}Sync Now (Retry)</button><button onclick="driveOpenInDrive('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('external')}Open in Drive</button><button onclick="driveDownloadFile('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('download')}Download File</button><button onclick="driveHistory('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('history')}View Sync History</button></div></div></td></tr>`;
+    const safeLabel=String(r.label).replace(/'/g,"\\'");
+    const safeFile=String(r.file).replace(/'/g,"\\'");
+    const driveTitle=driveOK?'Confirmed by Master API after cloud sync':'Not confirmed for the current local data';
+    return `<tr><td><div class="drive-folder-name">${driveIcon('folder')}<span>${ec(r.label)}</span></div></td><td><div class="drive-file">${ec(r.file)}</div></td><td><div class="drive-status-wrap"><span class="drive-status ${driveOK?'ok':'off'}" title="${driveTitle}">${driveIcon('cloud')}<span>Drive ${driveOK?driveIcon('check'):'—'}</span></span><span class="drive-status ${localOK?'ok':'off'}" title="Offline = data available in the local app database">${driveIcon('offline')}<span>Offline ${localOK?driveIcon('check'):'—'}</span></span></div></td><td><div class="drive-time">${t?`<span class="drive-time-main">${driveFmtTime(t)}</span><span class="drive-time-sub">Confirmed by Master API</span>`:`<span class="drive-time-main" style="color:var(--txm)">Not synced yet</span>`}</div></td><td><div class="drive-actions"><button class="drive-view-btn" onclick="driveViewDetails('${r.mod}','${safeLabel}','${safeFile}',${driveOK},${localOK})">${driveIcon('eye')}<span style="margin-left:5px">View</span></button><button class="drive-menu-btn" aria-label="More actions" onclick="event.stopPropagation();driveToggleMenu('${menuId}')">${driveIcon('dots')}</button><div class="drive-menu" id="${menuId}"><button onclick="driveViewDetails('${r.mod}','${safeLabel}','${safeFile}',${driveOK},${localOK});driveToggleMenu('${menuId}')">${driveIcon('eye')}View Details</button><button onclick="driveSyncOne('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('refresh')}Sync Now (Retry)</button><button onclick="driveOpenInDrive('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('external')}Open in Drive</button><button onclick="driveDownloadFile('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('download')}Download File</button><button onclick="driveHistory('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('history')}View Sync History</button></div></div></td></tr>`;
   }).join('')}</tbody></table></div>
-  <div class="drive-legend"><span class="drive-legend-item">${driveIcon('cloud')} <b>Drive</b> = Google Drive copy</span><span class="drive-legend-item">${driveIcon('offline')} <b>Offline</b> = local app database</span><span class="drive-legend-item">${driveIcon('check')} Green = available/synced</span></div>`;
+  <div class="drive-legend"><span class="drive-legend-item">${driveIcon('cloud')} <b>Drive</b> = confirmed by Master API</span><span class="drive-legend-item">${driveIcon('offline')} <b>Offline</b> = local app database</span><span class="drive-legend-item">${driveIcon('check')} Green = current data confirmed</span></div>`;
 }
 
 async function driveRefreshStatus(){
-  try{const q=await V42.queue();const pending=q.length;CLOUD.setSyncStatus(pending?pending+' pending':'Synced ✓',pending?'var(--am)':'var(--gn)');if(A.page==='backupsync')gP('backupsync');toast(pending?pending+' pending sync item(s) found':'All current local sync records checked','ok');}catch(e){toast('Could not refresh status: '+e.message,'err');}}
+  try{
+    if(!CLOUD.user) throw new Error('Connect Google first');
+    if(!V42.isGoogleTokenUsable(V42.idToken||CLOUD.token,60)){
+      const refreshed=await V42.refreshGoogleCredential();
+      if(!refreshed) throw new Error('Google authentication expired; re-authentication is required');
+    }
+    const added=await V42.enqueueCurrentState();
+    const r=await V42.flushQueue();
+    if(r.authExpired) throw new Error('Google authentication expired during refresh');
+    if(A.page==='backupsync')gP('backupsync');
+    if(r.failed) toast(`Refresh checked ${r.sent||0} module(s) · ${r.failed} failed · ${r.pending||0} pending`,'err');
+    else toast(r.sent ? `Refresh complete · ${r.sent} module(s) confirmed in Drive` : 'Refresh complete · no unconfirmed changes found','ok');
+  }catch(e){toast('Refresh failed: '+(e&&e.message?e.message:e),'err');}
+}
 async function driveRetryAll(){
-  try{CLOUD.setSyncStatus('Re-checking…','var(--am)');const r=await V42.flushQueue();if(A.page==='backupsync')gP('backupsync');toast(r.failed?'Retry stopped at a failed item':`Retry complete · ${r.sent||0} item(s) processed` ,r.failed?'err':'ok');}catch(e){toast('Retry failed: '+e.message,'err');}}
-
-function driveBackupHistoryHTML(){
-  if(!CLOUD.user) return "";
-  const backups = DRIVE.listBackups();
-  if(backups.length===0) return `<div class="info inf-b">No backups yet. Click <b>Backup Now</b> above to create your first snapshot.</div>`;
-  return `<div class="tw"><table class="dt">
-    <thead><tr><th>Snapshot</th><th>Created</th><th></th></tr></thead>
-    <tbody>
-      ${backups.map(path=>{
-        const name = path.split("/").pop();
-        const snap = DRIVE_ADAPTER.readFile(path);
-        const when = snap && snap.exportedAt ? driveFmtTime(snap.exportedAt) : name.replace("Backup_","").replace(".json","").replace("_"," ");
-        return `<tr>
-          <td class="mono">${ec(name)}</td>
-          <td>${when}</td>
-          <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="driveRestoreSnapshot('${path.replace(/'/g,"\\'")}')">Full Restore</button></td>
-        </tr>`;
-      }).join("")}
-    </tbody>
-  </table></div>`;
+  try{
+    if(!CLOUD.user) throw new Error('Connect Google first');
+    const added=await V42.enqueueCurrentState();
+    const r=await V42.flushQueue();
+    if(r.authExpired) throw new Error('Google authentication expired during retry');
+    if(A.page==='backupsync')gP('backupsync');
+    if(r.failed) toast(`Retry finished · ${r.sent||0} synced · ${r.failed} failed · ${r.pending||0} pending`,'err');
+    else toast(`Retry complete · ${r.sent||0} module(s) confirmed in Drive`,'ok');
+  }catch(e){toast('Retry failed: '+(e&&e.message?e.message:e),'err');}
 }
 
 function driveSelectiveRestoreHTML(){
@@ -11644,7 +11684,7 @@ v2.8 — Definitive flat-light header + school category correction
 - Mobile action grid is responsive and prevents hidden/collapsed controls.
 - v4.73 is the exact rollback backup.
 -->
-<!-- MDM ERP BETA VERSION 3 — FINAL SURGICAL MERGE: token lifecycle + complete Backup & Sync UI -->
+<!-- MDM ERP BETA VERSION 3 — FINAL SURGICAL MERGE: token lifecycle + verified Backup & Sync -->
 <!-- MDM ERP — BETA BASELINE
      This build is the canonical BETA application baseline.
      From this point forward, genuine invoice transactions are carried forward
@@ -11781,30 +11821,61 @@ v2.8 — Definitive flat-light header + school category correction
       const refreshed=await V42.refreshGoogleCredential();
       if(!refreshed) return {sent:0,failed:1,authExpired:true};
     }
-    V42.syncing=true; let sent=0,failed=0;
+    V42.syncing=true;
+    let sent=0,failed=0,authExpired=false;
+    const failures=[];
     try{
       const q=(await V42.queue()).filter(x=>x.status!=='synced').slice(0,25);
       for(const op of q){
-        op.status='uploading'; op.attempts=(op.attempts||0)+1; await V42.idbSet('queue',op.id,op);
+        op.status='uploading'; op.attempts=(op.attempts||0)+1;
+        await V42.idbSet('queue',op.id,op);
         try{
           const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
-          op.status='synced'; op.syncedAt=new Date().toISOString(); op.serverOperationId=result.operationId||op.id;
+
+          op.status='synced';
+          op.syncedAt=new Date().toISOString();
+          op.serverOperationId=result.operationId||op.id;
+          op.serverResult=result;
           await V42.idbSet('queue',op.id,op);
+
+          // Cloud state is confirmed ONLY after the Master API ACK. The old
+          // local DRIVE adapter is deliberately not used as cloud truth.
+          let value=op.payload&&Object.prototype.hasOwnProperty.call(op.payload,'value')?op.payload.value:null;
+          if(op.key==='iv'){
+            localStorage.setItem('cloud_confirmed_hash_iv',typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value));
+            localStorage.setItem('cloud_confirmed_at_iv',op.syncedAt);
+            localStorage.setItem('cloud_confirmed_hash_invoices',typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value));
+            localStorage.setItem('cloud_confirmed_at_invoices',op.syncedAt);
+            localStorage.setItem('cloud_confirmed_at_invLog',op.syncedAt);
+          }else if(value!==null){
+            const h=typeof _driveHash==='function'?_driveHash(value):JSON.stringify(value);
+            localStorage.setItem('cloud_confirmed_hash_'+op.key,h);
+            localStorage.setItem('cloud_confirmed_at_'+op.key,op.syncedAt);
+          }
           localStorage.setItem('cloud_last_sync',op.syncedAt);
-          try{ if(typeof DRIVE!=='undefined' && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
           sent++;
         }catch(e){
-          op.status='pending'; op.lastError=String(e&&e.message?e.message:e); await V42.idbSet('queue',op.id,op); failed++; break;
+          op.status='pending';
+          op.lastError=String(e&&e.message?e.message:e);
+          await V42.idbSet('queue',op.id,op);
+          failed++;
+          failures.push({key:op.key,error:op.lastError});
+          // A token/auth failure affects every remaining operation; a module
+          // failure does not. Continue so one bad module cannot block the rest.
+          if(/token|credential|authentication|unauthorized|permission/i.test(op.lastError)){
+            authExpired=true;
+            break;
+          }
         }
       }
       const left=await V42.queueCount();
       if(left===0 && sent) CLOUD.setSyncStatus('Synced ✓','var(--gn)');
+      else if(failed && sent) CLOUD.setSyncStatus(left+' pending · '+failed+' failed','var(--am)');
       else if(left) CLOUD.setSyncStatus(left+' pending','var(--am)');
-      if(sent) localStorage.setItem('cloud_last_sync',new Date().toISOString());
       if(sent && A.page==='backupsync') gP('backupsync');
     }finally{ V42.syncing=false; }
-    return {sent,failed};
+    return {sent,failed,authExpired,failures,pending:await V42.queueCount()};
   };
 
   /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
@@ -11856,10 +11927,12 @@ v2.8 — Definitive flat-light header + school category correction
       }
       CLOUD.setSyncStatus('Syncing…','var(--am)');
 
-      // Queue sync and full backup are intentionally decoupled. A single
-      // pending/failed queue operation must NOT prevent creation of a full
-      // Master Drive snapshot. The failed operation remains pending and is
-      // retried on the next sync attempt.
+      // Ensure every current module is represented even when it has never been
+      // edited during this session. enqueueCurrentState is hash-aware, so this
+      // does not create duplicate records for already-confirmed data.
+      await V42.enqueueCurrentState();
+      // Drain every module independently. A single module failure remains pending
+      // but must not prevent the other modules from reaching Master Drive.
       const q=await V42.flushQueue();
       const pending=await V42.queueCount();
 
@@ -11868,6 +11941,8 @@ v2.8 — Definitive flat-light header + school category correction
 
       CLOUD.lastBackup=new Date().toISOString();
       localStorage.setItem('cloud_last_backup',CLOUD.lastBackup);
+      localStorage.setItem('cloud_confirmed_at_backup',CLOUD.lastBackup);
+      localStorage.setItem('cloud_confirmed_at_system',CLOUD.lastBackup);
       localStorage.setItem('cloud_last_sync',CLOUD.lastBackup);
 
       if(pending>0){
@@ -12550,9 +12625,23 @@ v2.8 — Definitive flat-light header + school category correction
       };
     };
 
-    console.info('[MDM v4.57] Token lifecycle + duplicate-sync surgical fix installed');
+    console.info('[MDM v4.58] Token lifecycle + verified per-module Backup & Sync fix installed');
   }catch(e){
-    console.warn('[MDM v4.57] Surgical fix install skipped:',e);
+    console.warn('[MDM v4.58] Surgical fix install skipped:',e);
   }
 })();
 </script>
+
+<style id="mdm-v4-58-backup-ux-readability">
+/* v4.58 — Backup & Sync readability only. No business/data logic. */
+.drive-ux-table .storage-heading{display:inline-block;white-space:nowrap;vertical-align:middle;line-height:1.2}
+.drive-ux-table .drive-status{gap:5px!important;font-size:10px!important;font-weight:750!important;letter-spacing:.01em!important}
+.drive-ux-table .drive-status>span{display:inline-flex;align-items:center;gap:4px;min-width:0;white-space:nowrap}
+.drive-ux-table .drive-status .drive-icon{flex:0 0 14px!important}
+.drive-ux-table .drive-status .drive-icon svg{shape-rendering:geometricPrecision!important;vector-effect:non-scaling-stroke}
+.drive-ux-table .drive-time-sub{font-size:9px!important;line-height:1.25!important;margin-top:2px!important;opacity:.78}
+.drive-ux-table .drive-time-main{font-variant-numeric:tabular-nums;font-weight:700}
+.drive-ux-table .drive-view-btn,.drive-ux-table .drive-menu-btn{font-size:10.5px!important}
+html[data-theme="dark"] .drive-ux-table .drive-status.ok{background:rgba(22,163,74,.16)!important;border-color:rgba(74,222,128,.28)!important;color:#86efac!important}
+html[data-theme="dark"] .drive-ux-table .drive-status.off{background:rgba(148,163,184,.08)!important;border-color:rgba(148,163,184,.18)!important;color:#94a3b8!important}
+</style>
