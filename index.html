@@ -1541,6 +1541,92 @@ Invoice/PDF/business logic intentionally preserved.
 
 
 
+<style id="mdm-drive-ux-surgical">
+/* BETA 3 surgical Drive/Offline table UX — no business logic changes */
+.drive-ux-table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+.drive-ux-table th{font-size:10px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;color:var(--txm);background:var(--slx);padding:11px 12px;border-bottom:1px solid var(--bd);font-weight:800}
+.drive-ux-table td{padding:11px 12px;border-bottom:1px solid var(--bd);vertical-align:middle;min-width:0}
+.drive-ux-table tr:last-child td{border-bottom:0}
+.drive-ux-table th:nth-child(1){width:24%}.drive-ux-table th:nth-child(2){width:24%}.drive-ux-table th:nth-child(3){width:23%}.drive-ux-table th:nth-child(4){width:18%}.drive-ux-table th:nth-child(5){width:11%}
+.drive-folder-name{display:flex;align-items:center;gap:8px;min-width:0;font-weight:750;color:var(--tx)}
+.drive-folder-name span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drive-file{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;color:var(--txl);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drive-icon{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 16px;color:var(--txl)}
+.drive-icon svg{width:15px;height:15px;display:block;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.drive-status-wrap{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.drive-status{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:4px 8px;border-radius:999px;border:1px solid transparent;font-size:10px;line-height:1;white-space:nowrap;font-weight:750;box-sizing:border-box}
+.drive-status.ok{background:color-mix(in srgb,var(--gn) 12%,transparent);border-color:color-mix(in srgb,var(--gn) 24%,var(--bd));color:var(--gn)}
+.drive-status.pending{background:color-mix(in srgb,var(--am) 12%,transparent);border-color:color-mix(in srgb,var(--am) 24%,var(--bd));color:var(--am)}
+.drive-status.off{background:var(--slx);border-color:var(--bd);color:var(--txl)}
+.drive-status .drive-icon{width:13px;height:13px;flex-basis:13px}.drive-status .drive-icon svg{width:13px;height:13px}
+.drive-time{display:flex;flex-direction:column;gap:3px;min-width:0}.drive-time-main{font-size:10.5px;font-weight:750;color:var(--tx);white-space:nowrap}.drive-time-sub{font-size:9px;color:var(--txm);white-space:nowrap}
+.drive-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;position:relative}.drive-view-btn,.drive-menu-btn{height:30px;border:1px solid var(--bd);background:transparent;color:var(--tx);border-radius:7px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-weight:700}.drive-view-btn{padding:0 10px;font-size:10.5px}.drive-menu-btn{width:30px;padding:0}.drive-menu-btn svg{width:15px;height:15px}
+.drive-menu{position:absolute;right:0;top:34px;z-index:1200;width:220px;padding:6px;background:var(--card,#fff);border:1px solid var(--bd);border-radius:10px;box-shadow:0 14px 35px rgba(0,0,0,.22);display:none}.drive-menu.open{display:block}.drive-menu button{width:100%;display:flex;align-items:center;gap:9px;padding:9px 10px;border:0;background:transparent;color:var(--tx);border-radius:7px;text-align:left;font-size:11px;cursor:pointer}.drive-menu button:hover{background:var(--slx)}.drive-menu button .drive-icon{color:var(--txl)}
+.drive-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:10px;padding:9px 11px;border:1px solid var(--bd);border-radius:8px;background:var(--slx);font-size:10px;color:var(--txl)}
+.drive-legend-item{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.drive-info{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border:1px solid var(--txm);border-radius:50%;font-size:9px;color:var(--txm);font-weight:800;cursor:help}
+.drive-refresh-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.drive-refresh-meta{font-size:10px;color:var(--txm)}
+@media(max-width:900px){.drive-ux-table{min-width:760px}.drive-table-scroll{overflow-x:auto}.drive-ux-table th,.drive-ux-table td{padding:10px 9px}.drive-menu{right:0}}
+</style>
+
+<!-- SURGICAL DRIVE TABLE UX POLISH v4.56.1 — HTML/CSS ONLY; Code.gs untouched -->
+<style id="drive-table-ux-polish">
+/* Keep the Drive/Offline table crisp at both light and dark theme. */
+.drive-ux-table{table-layout:fixed}
+.drive-ux-table th{height:38px;padding:9px 12px;font-size:10px;letter-spacing:.045em;line-height:1.15;vertical-align:middle}
+.drive-ux-table td{padding:12px 12px;line-height:1.2}
+.drive-ux-table th:nth-child(1){width:23%}
+.drive-ux-table th:nth-child(2){width:22%}
+.drive-ux-table th:nth-child(3){width:25%}
+.drive-ux-table th:nth-child(4){width:20%}
+.drive-ux-table th:nth-child(5){width:10%}
+.drive-folder-name{gap:9px}
+.drive-folder-name .drive-icon{width:16px;height:16px;flex:0 0 16px;color:var(--tx)}
+.drive-folder-name .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
+.drive-file{font-size:11px;line-height:1.25}
+.drive-status-wrap{gap:7px;flex-wrap:nowrap;overflow:visible}
+.drive-status{min-height:26px;height:26px;padding:0 8px;gap:5px;border-radius:8px;font-size:10px;line-height:1;white-space:nowrap;flex:0 0 auto;letter-spacing:.01em}
+.drive-status .drive-icon{width:14px;height:14px;flex-basis:14px}
+.drive-status .drive-icon svg{width:14px;height:14px;stroke-width:1.9}
+.drive-status.ok{background:color-mix(in srgb,var(--gn) 11%,transparent);border-color:color-mix(in srgb,var(--gn) 25%,var(--bd));color:var(--gn)}
+.drive-status.off{background:color-mix(in srgb,var(--txm) 7%,transparent);border-color:var(--bd);color:var(--txl)}
+.drive-time{gap:3px}
+.drive-time-main{font-size:10.5px;line-height:1.2;font-variant-numeric:tabular-nums}
+.drive-time-sub{font-size:9px;line-height:1.2}
+.drive-actions{gap:7px}
+.drive-view-btn,.drive-menu-btn{height:32px;min-height:32px;border-radius:8px;box-sizing:border-box}
+.drive-view-btn{padding:0 9px;gap:5px;font-size:10.5px;white-space:nowrap}
+.drive-view-btn .drive-icon{width:14px;height:14px;flex-basis:14px}
+.drive-view-btn .drive-icon svg{width:14px;height:14px;stroke-width:1.9}
+.drive-menu-btn{width:32px;min-width:32px;padding:0}
+.drive-menu-btn .drive-icon{width:16px;height:16px;flex-basis:16px}
+.drive-menu-btn .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
+.drive-menu{width:228px;padding:6px;border-radius:10px}
+.drive-menu button{min-height:38px;padding:9px 10px;gap:9px;font-size:11px;line-height:1.2}
+.drive-menu button .drive-icon{width:16px;height:16px;flex-basis:16px}
+.drive-menu button .drive-icon svg{width:16px;height:16px;stroke-width:1.9}
+.drive-info{width:15px;height:15px;font-size:9px;vertical-align:-2px}
+.drive-refresh-row{margin-bottom:10px;min-height:32px}
+.drive-refresh-meta{font-size:10px;line-height:1.35}
+.drive-legend{gap:12px 18px;font-size:10px;line-height:1.35}
+.drive-legend-item{gap:6px}
+.drive-legend-item .drive-icon{width:14px;height:14px;flex-basis:14px}
+.drive-legend-item .drive-icon svg{width:14px;height:14px;stroke-width:1.9}
+
+/* Dark mode: retain clear text/borders without changing the theme palette. */
+[data-theme="dark"] .drive-ux-table th{color:var(--tx);background:color-mix(in srgb,var(--slx) 82%,var(--card) 18%)}
+[data-theme="dark"] .drive-status.off{background:rgba(255,255,255,.045);color:var(--txl);border-color:rgba(255,255,255,.10)}
+[data-theme="dark"] .drive-menu{box-shadow:0 16px 36px rgba(0,0,0,.42)}
+
+/* Small screens: keep the table readable by horizontal scrolling, never by crushing cells. */
+@media(max-width:900px){
+  .drive-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .drive-ux-table{min-width:900px}
+  .drive-ux-table th,.drive-ux-table td{padding:10px 10px}
+  .drive-status-wrap{gap:6px}
+  .drive-status{font-size:9.5px;padding:0 7px}
+  .drive-refresh-row{align-items:flex-start;flex-wrap:wrap}
+}
+</style>
 </head>
 <body>
 <div id="app"></div>
@@ -4721,14 +4807,14 @@ function doLogin(){
    - version/migration manifest + local recovery snapshot
    - existing invoice/PDF/business logic remains untouched
    ═════════════════════════════════════════════════════════════════════ */
-const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz-fjDuTmRiLpzPb74P1gGn7YQYWRVG8t1R4clp3syOX6BRycoCMm6QLve600Pn-irx/exec";
+const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec";
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
   version: "4.42",
   previousVersion: "4.41",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
-  apiUrl: ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : (localStorage.getItem("mdm_api_url") === V42_DEFAULT_API_URL ? V42_DEFAULT_API_URL : V42_DEFAULT_API_URL)),
+  apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
   googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
   showConfigModal: false,
   deviceId: localStorage.getItem("mdm_device_id") || ("dev_"+uid()),
@@ -4743,7 +4829,6 @@ const V42 = {
   idToken: null,
 };
 localStorage.setItem("mdm_device_id", V42.deviceId);
-if(!(window.google && google.script && google.script.run)){ localStorage.setItem("mdm_api_url", V42_DEFAULT_API_URL); }
 
 V42.openDB = function(){
   return new Promise((resolve,reject)=>{
@@ -9661,33 +9746,100 @@ function driveFmtTime(iso){
   return new Date(iso).toLocaleString("en-IN",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"});
 }
 
-function driveFolderTreeHTML(){
-  if(!CLOUD.user){
-    return `<div class="info inf-b">Sign in with Google above to create the <b>MS ENTERPRISES ERP</b> folder and see its contents here.</div>`;
-  }
-  const rows = [
-    {mod:"company",  label:"Company",           file:"Company.json"},
-    {mod:"schools",  label:"Schools",           file:"Schools.json"},
-    {mod:"items",    label:"Items",             file:"Items.json"},
-    {mod:"invoices", label:"Invoices",          file:DRIVE.invoiceFileCount()+" file(s) under YYYY/MM/"},
-    {mod:"invLog",   label:"Invoice Logs",      file:"InvoiceLog.json"},
-    {mod:"settings", label:"Settings",          file:"Settings.json"},
-    {mod:"alloc",    label:"MDM · Allocation",  file:"Allocation.json"},
-    {mod:"lpg",      label:"MDM · LPG",         file:"LPG.json"},
-    {mod:"roster",   label:"MDM · Roster",      file:"Roster.json"},
-  ];
-  return `<div class="tw"><table class="dt">
-    <thead><tr><th>Folder / Module</th><th>File(s)</th><th>Last Synced</th></tr></thead>
-    <tbody>
-      ${rows.map(r=>{
-        const t = DRIVE.lastSynced(r.mod);
-        return `<tr><td style="font-weight:700">&#128193; ${r.label}</td><td class="mono" style="color:var(--txl)">${ec(r.file)}</td><td>${t?`<span class="bdg bg">${driveFmtTime(t)}</span>`:`<span class="bdg bs">Not synced yet</span>`}</td></tr>`;
-      }).join("")}
-      <tr><td style="font-weight:700">&#128193; Backup History</td><td class="mono" style="color:var(--txl)">${DRIVE.listBackups().length} snapshot(s)</td><td>${CLOUD.lastBackup?`<span class="bdg bg">${driveFmtTime(CLOUD.lastBackup)}</span>`:`<span class="bdg bs">No backups yet</span>`}</td></tr>
-      <tr><td style="font-weight:700">&#128193; System</td><td class="mono" style="color:var(--txl)">Metadata.json, Version.json</td><td>${DRIVE.getMetadata()?`<span class="bdg bg">${driveFmtTime(DRIVE.getMetadata().lastSyncTime)}</span>`:`<span class="bdg bs">—</span>`}</td></tr>
-    </tbody>
-  </table></div>`;
+function driveIcon(name){
+  const p={
+    folder:'<path d="M3 6.5h6l2 2h10v9.5H3z"/><path d="M3 8.5h18"/>',
+    cloud:'<path d="M6.5 18h11a4 4 0 0 0 .6-7.95A6.2 6.2 0 0 0 6.3 8.9 4.6 4.6 0 0 0 6.5 18z"/>',
+    offline:'<rect x="4" y="5" width="16" height="13" rx="2"/><path d="M8 21h8M12 18v3"/>',
+    check:'<path d="m5 12 4 4L19 6"/>',
+    refresh:'<path d="M20 11a8 8 0 0 0-14.7-4L3 10"/><path d="M3 5v5h5"/><path d="M4 13a8 8 0 0 0 14.7 4L21 14"/><path d="M21 19v-5h-5"/>',
+    eye:'<path d="M2.5 12s3.4-5 9.5-5 9.5 5 9.5 5-3.4 5-9.5 5-9.5-5-9.5-5z"/><circle cx="12" cy="12" r="2.5"/>',
+    external:'<path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"/>',
+    download:'<path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M5 20h14"/>',
+    history:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>',
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+    dots:'<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>'
+  };
+  return `<span class="drive-icon" aria-hidden="true"><svg viewBox="0 0 24 24">${p[name]||p.info}</svg></span>`;
 }
+
+function driveLocalAvailable(mod){
+  if(mod==='company') return !!A.firm;
+  if(mod==='schools') return Array.isArray(A.schools);
+  if(mod==='items') return Array.isArray(A.items);
+  if(mod==='invoices') return Array.isArray(A.invoices);
+  if(mod==='invLog') return Array.isArray(A.invoices);
+  if(mod==='settings') return !!(A.sett||A.series||A.rates||A.heads);
+  if(mod==='alloc') return Array.isArray(A.alm);
+  if(mod==='lpg') return !!A.lpg;
+  if(mod==='roster') return Array.isArray(A.ro);
+  if(mod==='backup') return true;
+  if(mod==='system') return true;
+  return false;
+}
+function driveModulePayload(mod){
+  return {company:A.firm,schools:A.schools,items:A.items,invoices:A.invoices,invLog:A.invoices,settings:{sett:A.sett||ST0,series:A.series,rates:A.rates,heads:A.heads},alloc:A.alm||[],lpg:A.lpg||{},roster:A.ro||{}}[mod];
+}
+function driveSyncOne(mod){
+  if(!CLOUD.user){toast('Connect Google first','err');return;}
+  const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
+  const key=keyMap[mod];
+  if(!key){toast('System status is updated by Backup Now','info');return;}
+  const payload=key==='st'?{key:'st',value:driveModulePayload(mod)}:{key:key,value:driveModulePayload(mod)};
+  V42.enqueue('state',key,payload).then(()=>V42.flushQueue()).then(r=>{if(r&&r.failed)toast('Sync attempt failed — check connection','err');else{toast('Sync attempt completed','ok');if(A.page==='backupsync')gP('backupsync');}}).catch(e=>toast('Sync failed: '+e.message,'err'));
+}
+function driveViewDetails(mod,label,file,driveOK,localOK){
+  const t=DRIVE.lastSynced(mod);
+  const text=`${label}\n\nFile: ${file}\nDrive: ${driveOK?'Synced':'Not synced'}\nOffline: ${localOK?'Available':'Not available'}\nLast synced: ${t?driveFmtTime(t):'Not synced yet'}\n\nOffline means the application has a local copy in its offline-first storage (IndexedDB/local app storage). It is not a separate downloaded JSON file.`;
+  alert(text);
+}
+function driveOpenInDrive(mod){toast('Open in Drive is available after the corresponding cloud file is confirmed.','info');}
+function driveDownloadFile(mod){
+  const payload=driveModulePayload(mod);
+  if(payload===undefined){toast('No local copy available','err');return;}
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(DRIVE.moduleLabels[mod]||mod).replace(/[^a-z0-9]+/gi,'_')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function driveHistory(mod){
+  const q=V42.queue?V42.queue():Promise.resolve([]);
+  const keyMap={company:'f',schools:'sc',items:'it',invoices:'iv',invLog:'iv',settings:'st',alloc:'alm',lpg:'lpg',roster:'ro'};
+  q.then(rows=>{const related=rows.filter(x=>x.key===keyMap[mod]);alert(`${DRIVE.moduleLabels[mod]||mod} sync history\n\nPending/retry records: ${related.length}\nLast confirmed sync: ${DRIVE.lastSynced(mod)?driveFmtTime(DRIVE.lastSynced(mod)):'None recorded locally'}`)});
+}
+function driveToggleMenu(id){document.querySelectorAll('.drive-menu.open').forEach(x=>{if(x.id!==id)x.classList.remove('open')});document.getElementById(id)?.classList.toggle('open')}
+document.addEventListener('click',e=>{if(!e.target.closest('.drive-actions'))document.querySelectorAll('.drive-menu.open').forEach(x=>x.classList.remove('open'))});
+
+function driveFolderTreeHTML(){
+  if(!CLOUD.user){return `<div class="info inf-b">Sign in with Google above to create the <b>MS ENTERPRISES ERP</b> folder and see its contents here.</div>`;}
+  const rows=[
+    {mod:'company',label:'Company',file:'Company.json'},
+    {mod:'schools',label:'Schools',file:'Schools.json'},
+    {mod:'items',label:'Items',file:'Items.json'},
+    {mod:'invoices',label:'Invoices',file:DRIVE.invoiceFileCount()+' file(s) under YYYY/MM/'},
+    {mod:'invLog',label:'Invoice Logs',file:'InvoiceLog.json'},
+    {mod:'settings',label:'Settings',file:'Settings.json'},
+    {mod:'alloc',label:'MDM · Allocation',file:'Allocation.json'},
+    {mod:'lpg',label:'MDM · LPG',file:'LPG.json'},
+    {mod:'roster',label:'MDM · Roster',file:'Roster.json'}
+  ];
+  const all=rows.concat([{mod:'backup',label:'Backup History',file:DRIVE.listBackups().length+' snapshot(s)'},{mod:'system',label:'System',file:'Metadata.json, Version.json'}]);
+  const nowSynced=rows.filter(r=>!!DRIVE.lastSynced(r.mod)).length+(DRIVE.getMetadata()?1:0)+(CLOUD.lastBackup?1:0);
+  const total=all.length;
+  return `<div class="drive-refresh-row"><div class="drive-refresh-meta">${nowSynced}/${total} modules have a local sync record · Offline storage is the app's durable local database.</div><div style="display:flex;gap:7px"><button class="btn btn-g btn-sm" onclick="driveRefreshStatus()">${driveIcon('refresh')} Refresh Status</button><button class="btn btn-g btn-sm" onclick="driveRetryAll()">${driveIcon('refresh')} Re-check &amp; Retry</button></div></div>
+  <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th>Storage <span class="drive-info" title="Drive = Google Drive copy. Offline = local app copy in IndexedDB/local storage.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
+  ${all.map((r,i)=>{
+    const driveOK=r.mod==='backup'?!!CLOUD.lastBackup:r.mod==='system'?!!DRIVE.getMetadata():!!DRIVE.lastSynced(r.mod);
+    const localOK=driveLocalAvailable(r.mod);
+    const t=r.mod==='system'?(DRIVE.getMetadata()?.lastSyncTime||null):r.mod==='backup'?(CLOUD.lastBackup||null):DRIVE.lastSynced(r.mod);
+    const menuId='drive-menu-'+i;
+    return `<tr><td><div class="drive-folder-name">${driveIcon('folder')}<span>${ec(r.label)}</span></div></td><td><div class="drive-file">${ec(r.file)}</div></td><td><div class="drive-status-wrap"><span class="drive-status ${driveOK?'ok':'off'}" title="${driveOK?'Google Drive copy confirmed by the current app sync record':'No Drive sync record yet'}">${driveIcon('cloud')}Drive ${driveOK?driveIcon('check'):'—'}</span><span class="drive-status ${localOK?'ok':'off'}" title="Offline means the data is stored locally for offline-first use">${driveIcon('offline')}Offline ${localOK?driveIcon('check'):'—'}</span></div></td><td><div class="drive-time">${t?`<span class="drive-time-main">${driveFmtTime(t)}</span><span class="drive-time-sub">${r.mod==='system'?'System metadata':'Local sync record'}</span>`:`<span class="drive-time-main" style="color:var(--txm)">Not synced yet</span>`}</div></td><td><div class="drive-actions"><button class="drive-view-btn" onclick="driveViewDetails('${r.mod}','${String(r.label).replace(/'/g,"\\'")}','${String(r.file).replace(/'/g,"\\'")}',${driveOK},${localOK})">${driveIcon('eye')}<span style="margin-left:5px">View</span></button><button class="drive-menu-btn" aria-label="More actions" onclick="event.stopPropagation();driveToggleMenu('${menuId}')">${driveIcon('dots')}</button><div class="drive-menu" id="${menuId}"><button onclick="driveViewDetails('${r.mod}','${String(r.label).replace(/'/g,"\\'")}','${String(r.file).replace(/'/g,"\\'")}',${driveOK},${localOK});driveToggleMenu('${menuId}')">${driveIcon('eye')}View Details</button><button onclick="driveSyncOne('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('refresh')}Sync Now (Retry)</button><button onclick="driveOpenInDrive('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('external')}Open in Drive</button><button onclick="driveDownloadFile('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('download')}Download File</button><button onclick="driveHistory('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('history')}View Sync History</button></div></div></td></tr>`;
+  }).join('')}</tbody></table></div>
+  <div class="drive-legend"><span class="drive-legend-item">${driveIcon('cloud')} <b>Drive</b> = Google Drive copy</span><span class="drive-legend-item">${driveIcon('offline')} <b>Offline</b> = local app database</span><span class="drive-legend-item">${driveIcon('check')} Green = available/synced</span></div>`;
+}
+
+async function driveRefreshStatus(){
+  try{const q=await V42.queue();const pending=q.length;CLOUD.setSyncStatus(pending?pending+' pending':'Synced ✓',pending?'var(--am)':'var(--gn)');if(A.page==='backupsync')gP('backupsync');toast(pending?pending+' pending sync item(s) found':'All current local sync records checked','ok');}catch(e){toast('Could not refresh status: '+e.message,'err');}}
+async function driveRetryAll(){
+  try{CLOUD.setSyncStatus('Re-checking…','var(--am)');const r=await V42.flushQueue();if(A.page==='backupsync')gP('backupsync');toast(r.failed?'Retry stopped at a failed item':`Retry complete · ${r.sent||0} item(s) processed` ,r.failed?'err':'ok');}catch(e){toast('Retry failed: '+e.message,'err');}}
 
 function driveBackupHistoryHTML(){
   if(!CLOUD.user) return "";
