@@ -2539,7 +2539,7 @@ function pgDash(){
   const invMoPct=pct(thisMo.length,lastMo.length), amtMoPct=pct(thisMoAmt,lastMoAmt);
   const trendHtml=(p,suffix)=>`<span class="kpi-trend ${p>0?"up":p<0?"down":"flat"}">${p>0?"&#8593;":p<0?"&#8595;":"&#8226;"} ${Math.abs(p)}% ${suffix}</span>`;
   const backupFresh=CLOUD.lastBackup && (now-new Date(CLOUD.lastBackup))<24*3600*1000;
-  const lastSyncTime=localStorage.getItem("cloud_last_sync")||(typeof DRIVE!=="undefined"&&DRIVE.getMetadata&&DRIVE.getMetadata()?.lastSyncTime)||CLOUD.lastBackup||null;
+  const lastSyncTime=(typeof DRIVE!=="undefined"&&DRIVE.getMetadata&&DRIVE.getMetadata()?.lastSyncTime)||CLOUD.lastBackup||null;
 
   // Last-7-days series (real data) for KPI sparklines
   const last7Inv=[], last7Amt=[];
@@ -4809,6 +4809,12 @@ V42.hydrateFromIDB = async function(){
     const sess=await V42.idbGet("meta","session");
     if(sess && sess.user && sess.expiresAt && Date.now()<sess.expiresAt){
       A.loggedIn=true; A.currentUser=sess.user;
+      if(isGoogleUser(sess.user)){
+        CLOUD.user=sess.user; CLOUD.ready=true;
+        try{
+          await V42.restoreGoogleSessionSilently();
+        }catch(e){ console.warn('[MDM] silent session restore skipped',e); }
+      }
     }
     V42.ready=true;
   }catch(e){
@@ -4939,97 +4945,212 @@ V42.acceptGoogleCredential = async function(credential){
   }catch(e){toast("Google sign-in failed: "+e.message,"err");}
 };
 
-V42._createApiBridge = function(){
-  return new Promise((resolve,reject)=>{
-    const frame=document.createElement('iframe');
-    frame.id='mdm-api-bridge-frame-'+Date.now()+'-'+Math.random().toString(36).slice(2);
-    frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-    let settled=false;
-    const cleanup=()=>{
-      window.removeEventListener('message',onReady);
-      try{frame.remove();}catch(_e){}
-    };
-    const fail=(err)=>{if(settled)return;settled=true;cleanup();reject(err instanceof Error?err:new Error(String(err||'Bridge load failed')));};
-    const onReady=ev=>{
-      if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready') return;
-      if(settled)return;
-      settled=true;
-      window.removeEventListener('message',onReady);
-      resolve(frame);
-    };
-    const timer=setTimeout(()=>fail(new Error('Master API bridge did not become ready')),12000);
-    window.addEventListener('message',onReady);
-    document.body.appendChild(frame);
-    try{
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51')+'&cb='+Date.now();
-    }catch(e){clearTimeout(timer);fail(e);return;}
-  });
-};
-
-V42._bridgeRequest = async function(body){
-  let lastError=null;
-  // A fresh bridge is deliberately used for each cloud operation. This avoids
-  // reusing a stale/suspended Apps Script HTML-service iframe after the browser
-  // has frozen or detached it. It also isolates concurrent requests from each other.
-  for(let attempt=1;attempt<=3;attempt++){
-    let frame=null;
-    try{
-      frame=await V42._createApiBridge();
-      const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-      const result=await new Promise((resolve,reject)=>{
-        let done=false;
-        const finish=(fn,v)=>{if(done)return;done=true;window.removeEventListener('message',onMessage);clearTimeout(timeout);fn(v);};
-        const timeout=setTimeout(()=>finish(reject,new Error('Master API bridge request timeout')),30000);
-        const onMessage=ev=>{
-          if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
-          if(ev.data.ok && ev.data.result?.ok) finish(resolve,ev.data.result);
-          else finish(reject,new Error(ev.data.error || ev.data.result?.error || 'Master API request failed'));
-        };
-        window.addEventListener('message',onMessage);
-        try{
-          frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
-        }catch(e){finish(reject,e);}
-      });
-      try{frame.remove();}catch(_e){}
-      return result;
-    }catch(e){
-      lastError=e;
-      try{if(frame)frame.remove();}catch(_e){}
-      // Only transport/bridge failures are retried. Server/application errors
-      // have already crossed the bridge and must be surfaced unchanged.
-      const msg=String(e&&e.message||e).toLowerCase();
-      const retryable=msg.includes('bridge') || msg.includes('timeout') || msg.includes('failed to execute') || msg.includes('message channel');
-      if(!retryable || attempt>=3) break;
-      await new Promise(r=>setTimeout(r,350*attempt));
-    }
-  }
-  throw new Error('Master API transport failed after 3 bridge attempts: '+String(lastError&&lastError.message||lastError||'unknown transport error'));
-};
-
 V42.backend = async function(action,payload){
-  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
+  const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null),requestId:"req_"+uid()+"_"+Date.now().toString(36)};
 
-  // Apps Script hosted mode: use the server-side bridge directly.
+  // Apps Script-hosted mode keeps the native server-side bridge.
   if(window.google && google.script && google.script.run){
     return await new Promise((resolve,reject)=>{
-      google.script.run
-        .withSuccessHandler(d=>{
-          try{
-            if(!d || !d.ok) throw new Error((d && d.error) || 'API request failed');
-            resolve(d);
-          }catch(e){reject(e);}
-        })
-        .withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||'Apps Script request failed')))
-        .apiRequest(body);
+      google.script.run.withSuccessHandler(d=>{try{if(!d||!d.ok)throw new Error((d&&d.error)||"API request failed");resolve(d);}catch(e){reject(e);}}).withFailureHandler(e=>reject(new Error((e&&e.message)||String(e)||"Apps Script request failed"))).apiRequest(body);
     });
   }
 
-  if(!V42.apiUrl) throw new Error('API endpoint not configured');
-  // Standalone/GitHub mode: use the Apps Script HTML-service bridge only.
-  // Direct fetch is intentionally NOT used here because the deployed Apps
-  // Script endpoint does not provide a reliable readable CORS response.
-  return await V42._bridgeRequest(body);
+  if(!V42.apiUrl) throw new Error("API endpoint not configured");
+
+  // GitHub Pages cannot reliably read Apps Script POST responses because the Web App
+  // response is cross-origin. Use a normal HTML form POST (no CORS preflight) and
+  // poll a tiny JSONP result endpoint for the server ACK. This preserves real ACKs
+  // without adding a third bridge file.
+  return await new Promise((resolve,reject)=>{
+    const requestId=body.requestId;
+    const frameName="mdm_api_frame_"+requestId;
+    const iframe=document.createElement("iframe"); iframe.name=frameName; iframe.style.cssText="position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;border:0"; document.body.appendChild(iframe);
+    const form=document.createElement("form"); form.method="POST"; form.action=V42.apiUrl; form.target=frameName; form.style.display="none";
+    const input=document.createElement("input"); input.type="hidden"; input.name="body"; input.value=JSON.stringify(body); form.appendChild(input); document.body.appendChild(form);
+    const cb="mdmApiResult_"+requestId.replace(/[^A-Za-z0-9_]/g,"");
+    let done=false, tries=0;
+    const cleanup=()=>{try{delete window[cb];}catch(e){} form.remove(); setTimeout(()=>iframe.remove(),200);};
+    window[cb]=(d)=>{
+      if(done)return;
+      if(d&&d.pending)return;
+      done=true;cleanup();
+      if(d&&d.ok)resolve(d);else reject(new Error((d&&d.error)||"Master API request failed"));
+    };
+    const poll=()=>{if(done)return;tries++;const sc=document.createElement("script");sc.src=V42.apiUrl+(V42.apiUrl.includes("?")?"&":"?")+"result=1&requestId="+encodeURIComponent(requestId)+"&callback="+encodeURIComponent(cb)+"&_="+Date.now();sc.onerror=()=>{sc.remove();};document.head.appendChild(sc);setTimeout(()=>{sc.remove();if(!done&&tries<50)poll();},400);};
+    try{form.submit();}catch(e){done=true;cleanup();reject(e);return;}
+    setTimeout(poll,700);
+    setTimeout(()=>{if(!done){done=true;cleanup();reject(new Error("Master API transport timeout"));}},22000);
+  });
 };
+
+/* ================================================================
+   BETA 3 SURGICAL PATCH — GOOGLE ID TOKEN LIFECYCLE ONLY
+   Surgical: no UI, invoice, Drive folder, queue, or backup layout changes.
+   Google GIS ID tokens are short-lived; refresh them automatically while
+   the Google session is still available, and retry the failed cloud call once.
+   ================================================================ */
+(function(){
+  'use strict';
+  if(typeof V42==='undefined') return;
+
+  function parseJwt(token){
+    try{
+      const p=String(token||'').split('.')[1];
+      if(!p) return null;
+      return JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(p.length/4)*4,'=')));
+    }catch(e){return null;}
+  }
+
+  V42.__tokenRefreshTimer=null;
+  V42.__tokenRefreshing=null;
+
+  V42.refreshGoogleIdToken = function(){
+    if(V42.__tokenRefreshing) return V42.__tokenRefreshing;
+    V42.__tokenRefreshing = (async function(){
+      try{
+        await V42.loadGIS();
+        if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
+
+        return await new Promise(resolve=>{
+          let done=false;
+          const finish=v=>{
+            if(done)return;
+            done=true;
+            try{google.accounts.id.cancel();}catch(_){}
+            resolve(!!v);
+          };
+
+          const callback=async resp=>{
+            try{
+              if(!resp || !resp.credential) return finish(false);
+              const claims=parseJwt(resp.credential);
+              if(!claims || !claims.sub) return finish(false);
+              if(claims.aud && String(claims.aud)!==String(V42.googleClientId)) return finish(false);
+
+              const previous=CLOUD.user||{};
+              const user={
+                ...previous,
+                id:claims.sub,
+                googleSub:claims.sub,
+                name:claims.name||previous.name||claims.email||'Google User',
+                email:String(claims.email||previous.email||'').toLowerCase(),
+                picture:claims.picture||previous.picture||'',
+                authMethod:'google',
+                deviceId:V42.deviceId
+              };
+
+              CLOUD.user=user;
+              CLOUD.ready=true;
+              CLOUD.token=resp.credential;
+              V42.idToken=resp.credential;
+              await V42.saveSession(user);
+              localStorage.setItem('cloud_user',JSON.stringify(user));
+              CLOUD.updateUI();
+              scheduleRefresh(resp.credential);
+              finish(true);
+            }catch(e){console.warn('[MDM] automatic Google token refresh failed',e);finish(false);}
+          };
+
+          google.accounts.id.initialize({
+            client_id:V42.googleClientId,
+            callback
+          });
+
+          // GIS can silently return a fresh ID token when the Google session
+          // is still available. No logout/sign-in cycle is performed.
+          google.accounts.id.prompt();
+          setTimeout(()=>finish(false),9000);
+        });
+      }catch(e){
+        console.warn('[MDM] automatic Google token refresh unavailable',e);
+        return false;
+      }finally{
+        V42.__tokenRefreshing=null;
+      }
+    })();
+    return V42.__tokenRefreshing;
+  };
+
+  function scheduleRefresh(token){
+    try{
+      const c=parseJwt(token);
+      if(!c || !c.exp) return;
+      if(V42.__tokenRefreshTimer) clearTimeout(V42.__tokenRefreshTimer);
+      // Refresh 5 minutes before expiry, with a safe minimum of 30 seconds.
+      const delay=Math.max(30000,(Number(c.exp)*1000)-Date.now()-5*60*1000);
+      V42.__tokenRefreshTimer=setTimeout(async()=>{
+        const ok=await V42.refreshGoogleIdToken();
+        if(!ok) scheduleRefresh(token); // retry later; never sign the user out
+      },delay);
+    }catch(e){}
+  }
+
+  V42.scheduleGoogleTokenRefresh=function(){
+    if(V42.idToken) scheduleRefresh(V42.idToken);
+  };
+
+  /* Wrap only the transport call. A token-expiry/authentication rejection
+     triggers one automatic GIS refresh and one retry. All other errors are
+     propagated unchanged. */
+  if(!V42.__tokenLifecycleWrapped){
+    const originalBackend=V42.backend;
+    V42.backend=async function(action,payload){
+      try{
+        return await originalBackend.call(this,action,payload);
+      }catch(err){
+        const msg=String(err&&err.message||err).toLowerCase();
+        const authFailure=msg.includes('token expired') ||
+          msg.includes('id token expired') ||
+          msg.includes('token verification failed') ||
+          msg.includes('authentication required') ||
+          msg.includes('google authentication is required');
+
+        if(!authFailure) throw err;
+
+        const refreshed=await V42.refreshGoogleIdToken();
+        if(!refreshed || !V42.idToken) throw err;
+
+        return await originalBackend.call(this,action,payload);
+      }
+    };
+    V42.__tokenLifecycleWrapped=true;
+  }
+
+  // Start/continue automatic lifecycle from the credential that is already
+  // present. No visible UI is changed.
+  if(V42.idToken) scheduleRefresh(V42.idToken);
+
+  // When the page resumes after being backgrounded, refresh if the token is
+  // expired or close to expiry, then let the existing queue/backup machinery run.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState!=='visible' || !CLOUD.user) return;
+    const c=parseJwt(V42.idToken);
+    if(!c || !c.exp || (Number(c.exp)*1000-Date.now())<5*60*1000){
+      V42.refreshGoogleIdToken().catch(()=>{});
+    }
+  });
+
+  window.addEventListener('online',()=>{
+    if(CLOUD.user){
+      const c=parseJwt(V42.idToken);
+      if(!c || !c.exp || (Number(c.exp)*1000-Date.now())<5*60*1000){
+        V42.refreshGoogleIdToken().catch(()=>{});
+      }
+    }
+  });
+
+  // Re-schedule whenever the existing sign-in flow accepts a fresh credential.
+  const originalAccept=V42.acceptGoogleCredential;
+  if(originalAccept && !V42.__acceptRefreshWrapped){
+    V42.acceptGoogleCredential=async function(credential){
+      const result=await originalAccept.apply(this,arguments);
+      if(V42.idToken) scheduleRefresh(V42.idToken);
+      return result;
+    };
+    V42.__acceptRefreshWrapped=true;
+  }
+})();
+
 
 V42.ensureBackendAuth = async function(){
   if(!V42.apiUrl || !CLOUD.user) return false;
@@ -5213,10 +5334,7 @@ cloudBackupNow=async function(){
     const q=await V42.flushQueue();
     if(V42.apiUrl){await V42.backend("backup",{snapshot:CLOUD.getPayload(),appVersion:V42.version});}
     else {await V42.createLocalSnapshot();}
-    CLOUD.lastBackup=new Date().toISOString();
-    localStorage.setItem("cloud_last_backup",CLOUD.lastBackup);
-    localStorage.setItem("cloud_last_sync",CLOUD.lastBackup);
-    try{ if(typeof DRIVE!=="undefined" && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
+    CLOUD.lastBackup=new Date().toISOString();localStorage.setItem("cloud_last_backup",CLOUD.lastBackup);
     CLOUD.setSyncStatus("Synced ✓","var(--gn)");CLOUD.updateUI();toast("Backup completed","ok");
   }catch(e){CLOUD.setSyncStatus("Backup failed","var(--rd)");toast("Backup failed: "+e.message,"err");}
 };
@@ -11065,10 +11183,7 @@ v2.8 — Definitive flat-light header + school category correction
           const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:op.appVersion});
           if(!result || !result.ok) throw new Error((result&&result.error)||'Server did not acknowledge sync');
           op.status='synced'; op.syncedAt=new Date().toISOString(); op.serverOperationId=result.operationId||op.id;
-          await V42.idbSet('queue',op.id,op);
-          localStorage.setItem('cloud_last_sync',op.syncedAt);
-          try{ if(typeof DRIVE!=='undefined' && typeof DRIVE.touchMetadata==='function') DRIVE.touchMetadata(); }catch(_metaErr){}
-          sent++;
+          await V42.idbSet('queue',op.id,op); sent++;
         }catch(e){
           op.status='pending'; op.lastError=String(e&&e.message?e.message:e); await V42.idbSet('queue',op.id,op); failed++; break;
         }
@@ -11079,6 +11194,44 @@ v2.8 — Definitive flat-light header + school category correction
       if(sent && A.page==='backupsync') gP('backupsync');
     }finally{ V42.syncing=false; }
     return {sent,failed};
+  };
+
+  /* ---- Silent GIS session restoration after browser refresh ---- */
+  V42.restoreGoogleSessionSilently = async function(){
+    if(!isGoogleUser(CLOUD.user) || V42.idToken || !V42.googleClientId) return false;
+    try{
+      await V42.loadGIS();
+      return await new Promise(resolve=>{
+        let settled=false;
+        const finish=v=>{if(settled)return;settled=true;resolve(!!v);};
+        google.accounts.id.initialize({
+          client_id:V42.googleClientId,
+          auto_select:true,
+          cancel_on_tap_outside:false,
+          callback:async resp=>{
+            try{
+              if(!resp || !resp.credential) return finish(false);
+              await V42.acceptGoogleCredential(resp.credential);
+              finish(!!V42.idToken);
+            }catch(e){
+              console.warn('[MDM] silent Google session restore failed',e);
+              finish(false);
+            }
+          }
+        });
+        // Do not render a button or custom overlay here. GIS either restores the
+        // prior account automatically or quietly reports that it cannot.
+        google.accounts.id.prompt(notification=>{
+          try{
+            if(notification && (notification.isNotDisplayed?.() || notification.isSkippedMoment?.() || notification.isDismissedMoment?.())) finish(false);
+          }catch(_){ finish(false); }
+        });
+        setTimeout(()=>finish(!!V42.idToken),5000);
+      });
+    }catch(e){
+      console.warn('[MDM] silent Google session restore unavailable',e);
+      return false;
+    }
   };
 
   /* ---- Interactive GIS re-auth when a persisted cloud session has no live credential ---- */
@@ -11161,22 +11314,6 @@ v2.8 — Definitive flat-light header + school category correction
       console.error('[MDM v4.51] Backup failure',e);
     }
   };
-
-  /* Prevent overlapping full backups. Auto-sync, the post-login backup, and a
-     manual Backup Now click can otherwise reach Apps Script simultaneously.
-     The first operation owns the cloud write; later callers await the same run. */
-  if(!window.__mdmBackupMutexWrapped){
-    const originalCloudBackupNow=window.cloudBackupNow;
-    window.cloudBackupNow=async function(){
-      if(V42.__backupInFlight) return await V42.__backupInFlight;
-      V42.__backupInFlight=(async()=>{
-        try{return await originalCloudBackupNow();}
-        finally{V42.__backupInFlight=null;}
-      })();
-      return await V42.__backupInFlight;
-    };
-    window.__mdmBackupMutexWrapped=true;
-  }
 
   /* ---- Cloud sign-in button: always use GIS, never the old email prompt ---- */
   window.cloudSignIn = function(){ return V42.googleSignIn(); };
@@ -11692,360 +11829,3 @@ v2.8 — Definitive flat-light header + school category correction
   .hist-mobile-more-info span{font-size:15px!important;}
 }
 </style>
-
-
-
-<script>
-/* ================================================================
-   BETA 3 SURGICAL PATCH — GOOGLE ID TOKEN LIFECYCLE ONLY
-   Surgical: no UI, invoice, Drive folder, queue, or backup layout changes.
-   Google GIS ID tokens are short-lived; refresh them automatically while
-   the Google session is still available, and retry the failed cloud call once.
-   ================================================================ */
-(function(){
-  'use strict';
-  if(typeof V42==='undefined') return;
-
-  function parseJwt(token){
-    try{
-      const p=String(token||'').split('.')[1];
-      if(!p) return null;
-      return JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(p.length/4)*4,'=')));
-    }catch(e){return null;}
-  }
-
-  V42.__tokenRefreshTimer=null;
-  V42.__tokenRefreshing=null;
-
-  V42.refreshGoogleIdToken = function(){
-    if(V42.__tokenRefreshing) return V42.__tokenRefreshing;
-    V42.__tokenRefreshing = (async function(){
-      try{
-        await V42.loadGIS();
-        if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
-
-        return await new Promise(resolve=>{
-          let done=false;
-          const finish=v=>{
-            if(done)return;
-            done=true;
-            try{google.accounts.id.cancel();}catch(_){}
-            resolve(!!v);
-          };
-
-          const callback=async resp=>{
-            try{
-              if(!resp || !resp.credential) return finish(false);
-              const claims=parseJwt(resp.credential);
-              if(!claims || !claims.sub) return finish(false);
-              if(claims.aud && String(claims.aud)!==String(V42.googleClientId)) return finish(false);
-
-              const previous=CLOUD.user||{};
-              const user={
-                ...previous,
-                id:claims.sub,
-                googleSub:claims.sub,
-                name:claims.name||previous.name||claims.email||'Google User',
-                email:String(claims.email||previous.email||'').toLowerCase(),
-                picture:claims.picture||previous.picture||'',
-                authMethod:'google',
-                deviceId:V42.deviceId
-              };
-
-              CLOUD.user=user;
-              CLOUD.ready=true;
-              CLOUD.token=resp.credential;
-              V42.idToken=resp.credential;
-              await V42.saveSession(user);
-              localStorage.setItem('cloud_user',JSON.stringify(user));
-              CLOUD.updateUI();
-              scheduleRefresh(resp.credential);
-              finish(true);
-            }catch(e){console.warn('[MDM] automatic Google token refresh failed',e);finish(false);}
-          };
-
-          google.accounts.id.initialize({
-            client_id:V42.googleClientId,
-            callback
-          });
-
-          // GIS can silently return a fresh ID token when the Google session
-          // is still available. No logout/sign-in cycle is performed.
-          google.accounts.id.prompt();
-          setTimeout(()=>finish(false),9000);
-        });
-      }catch(e){
-        console.warn('[MDM] automatic Google token refresh unavailable',e);
-        return false;
-      }finally{
-        V42.__tokenRefreshing=null;
-      }
-    })();
-    return V42.__tokenRefreshing;
-  };
-
-  function scheduleRefresh(token){
-    try{
-      const c=parseJwt(token);
-      if(!c || !c.exp) return;
-      if(V42.__tokenRefreshTimer) clearTimeout(V42.__tokenRefreshTimer);
-      // Refresh 5 minutes before expiry, with a safe minimum of 30 seconds.
-      const delay=Math.max(30000,(Number(c.exp)*1000)-Date.now()-5*60*1000);
-      V42.__tokenRefreshTimer=setTimeout(async()=>{
-        const ok=await V42.refreshGoogleIdToken();
-        if(!ok) scheduleRefresh(token); // retry later; never sign the user out
-      },delay);
-    }catch(e){}
-  }
-
-  V42.scheduleGoogleTokenRefresh=function(){
-    if(V42.idToken) scheduleRefresh(V42.idToken);
-  };
-
-  /* Wrap only the transport call. Before every cloud operation, reject an
-     expired/near-expiry ID token and obtain a fresh GIS credential first.
-     If the server still reports an auth failure, refresh once and retry. */
-  if(!V42.__tokenLifecycleWrapped){
-    const originalBackend=V42.backend;
-    V42.backend=async function(action,payload){
-      if(action!=='auth' && isGoogleUser(CLOUD.user)){
-        const c=parseJwt(V42.idToken||CLOUD.token);
-        const remaining=c&&c.exp ? (Number(c.exp)*1000-Date.now()) : 0;
-        if(!c || !c.exp || remaining < 90000){
-          const refreshed=await V42.refreshGoogleIdToken();
-          if(!refreshed || !V42.idToken) throw new Error('Google session token could not be refreshed automatically');
-        }
-      }
-      try{
-        return await originalBackend.call(this,action,payload);
-      }catch(err){
-        const msg=String(err&&err.message||err).toLowerCase();
-        const authFailure=msg.includes('token expired') || msg.includes('id token expired') || msg.includes('token verification failed') || msg.includes('authentication required') || msg.includes('google authentication is required');
-        if(!authFailure) throw err;
-        const refreshed=await V42.refreshGoogleIdToken();
-        if(!refreshed || !V42.idToken) throw err;
-        return await originalBackend.call(this,action,payload);
-      }
-    };
-    V42.__tokenLifecycleWrapped=true;
-  }
-
-  // Start/continue automatic lifecycle from the credential that is already
-  // present. No visible UI is changed.
-  if(V42.idToken) scheduleRefresh(V42.idToken);
-
-  // When the page resumes after being backgrounded, refresh if the token is
-  // expired or close to expiry, then let the existing queue/backup machinery run.
-  document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState!=='visible' || !CLOUD.user) return;
-    const c=parseJwt(V42.idToken);
-    if(!c || !c.exp || (Number(c.exp)*1000-Date.now())<5*60*1000){
-      V42.refreshGoogleIdToken().catch(()=>{});
-    }
-  });
-
-  window.addEventListener('online',()=>{
-    if(CLOUD.user){
-      const c=parseJwt(V42.idToken);
-      if(!c || !c.exp || (Number(c.exp)*1000-Date.now())<5*60*1000){
-        V42.refreshGoogleIdToken().catch(()=>{});
-      }
-    }
-  });
-
-  // Re-schedule whenever the existing sign-in flow accepts a fresh credential.
-  const originalAccept=V42.acceptGoogleCredential;
-  if(originalAccept && !V42.__acceptRefreshWrapped){
-    V42.acceptGoogleCredential=async function(credential){
-      const result=await originalAccept.apply(this,arguments);
-      if(V42.idToken) scheduleRefresh(V42.idToken);
-      return result;
-    };
-    V42.__acceptRefreshWrapped=true;
-  }
-})();
-</script>
-
-<script>
-/* ================================================================
-   BETA 3 SURGICAL PATCH — REAL DRIVE STATUS + FULL MODULE RECONCILE
-   This layer does not replace invoice/business logic. It only upgrades
-   Backup & Sync presentation and asks the existing Master API to verify
-   the actual Drive state.
-   ================================================================ */
-(function(){
-  'use strict';
-  const MODS=[
-    ['company','Company','Company.json'],['schools','Schools','Schools.json'],
-    ['items','Items','Items.json'],['invoices','Invoices','YYYY/MM/ files'],
-    ['invLog','Invoice Logs','InvoiceLog.json'],['settings','Settings','Settings.json'],
-    ['alloc','MDM · Allocation','Allocation.json'],['lpg','MDM · LPG','LPG.json'],
-    ['roster','MDM · Roster','Roster.json'],['backupHistory','Backup History','Snapshots'],
-    ['system','System','Metadata.json, Version.json']
-  ];
-  window.MDM_DRIVE_STATUS=window.MDM_DRIVE_STATUS||null;
-  window.MDM_DRIVE_STATUS_AT=window.MDM_DRIVE_STATUS_AT||null;
-
-  function esc(v){ try{return ec(String(v));}catch(e){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));} }
-  function localAvailable(mod){
-    try{
-      if(mod==='company') return !!A.firm;
-      if(mod==='schools') return Array.isArray(A.schools);
-      if(mod==='items') return Array.isArray(A.items);
-      if(mod==='invoices') return Array.isArray(A.invoices);
-      if(mod==='invLog') return Array.isArray(A.al);
-      if(mod==='settings') return !!A.sett;
-      if(mod==='alloc') return Array.isArray(A.alm);
-      if(mod==='lpg') return !!A.lpg;
-      if(mod==='roster') return Array.isArray(A.ro);
-      if(mod==='backupHistory'||mod==='system') return true;
-    }catch(e){}
-    return false;
-  }
-  function driveState(mod){
-    const s=window.MDM_DRIVE_STATUS&&window.MDM_DRIVE_STATUS.modules&&window.MDM_DRIVE_STATUS.modules[mod];
-    return !!(s&&s.drive);
-  }
-  function statusPair(mod){
-    const d=driveState(mod), l=localAvailable(mod);
-    return '<span class="mdm-store '+(d?'ok':'muted')+'">☁ Drive '+(d?'✓':'—')+'</span><span class="mdm-store '+(l?'ok':'muted')+'">▣ Offline '+(l?'✓':'—')+'</span>';
-  }
-  function syncedTime(mod){
-    if(window.MDM_DRIVE_STATUS_AT && driveState(mod)) return window.MDM_DRIVE_STATUS_AT;
-    return null;
-  }
-  function actionMenu(mod,label){
-    const id='mdm-more-'+mod;
-    return `<div class="mdm-row-actions"><button class="btn btn-g btn-sm mdm-view" onclick="MDMDrive.view('${mod}')">View</button><button class="mdm-kebab" aria-label="More actions" onclick="MDMDrive.menu(event,'${mod}')">⋮</button><div id="${id}" class="mdm-menu" hidden>
-      <button onclick="MDMDrive.view('${mod}')">◉ View Details</button>
-      <button onclick="MDMDrive.retry('${mod}')">↻ Sync Now (Retry)</button>
-      <button onclick="MDMDrive.openDrive('${mod}')">☁ Open in Drive</button>
-      <button onclick="MDMDrive.download('${mod}')">⇩ Download File</button>
-      <button onclick="MDMDrive.history('${mod}')">◷ View Sync History</button>
-      <button class="danger" onclick="MDMDrive.remove('${mod}')">× Remove from Drive</button>
-    </div></div>`;
-  }
-  function fileLabel(r){
-    if(r[0]==='invoices') return (Array.isArray(A.invoices)?A.invoices.length:0)+' file(s) under YYYY/MM/';
-    if(r[0]==='backupHistory') return (window.MDM_DRIVE_STATUS?.modules?.backupHistory?.files||0)+' snapshot(s)';
-    return r[2];
-  }
-  function driveFolderTreeHTMLFinal(){
-    if(!CLOUD.user) return `<div class="info inf-b">Sign in with Google above to create and synchronize the <b>MS ENTERPRISES ERP</b> Drive structure.</div>`;
-    return `<div class="mdm-drive-table-wrap"><table class="dt mdm-drive-table"><thead><tr><th>FOLDER / MODULE</th><th>FILE(S)</th><th>STORAGE STATUS <span title="Drive = confirmed on Google Drive • Offline = available locally">ⓘ</span></th><th>LAST SYNCED</th><th>ACTION</th></tr></thead><tbody>${MODS.map(r=>{
-      const t=syncedTime(r[0]);
-      return `<tr><td><span class="mdm-folder">▰</span><b>${esc(r[1])}</b></td><td class="mono">${esc(fileLabel(r))}</td><td><div class="mdm-storage">${statusPair(r[0])}</div></td><td>${t?`<span class="bdg bg">${esc(driveFmtTime(t))}</span><div class="mdm-today">Confirmed by Drive</div>`:`<span class="bdg bs">Not synced yet</span>`}</td><td>${actionMenu(r[0],r[1])}</td></tr>`;
-    }).join('')}</tbody></table></div>`;
-  }
-
-  const MDMDrive={
-    menu(ev,mod){
-      ev.stopPropagation();
-      document.querySelectorAll('.mdm-menu').forEach(x=>{if(x.id!=='mdm-more-'+mod)x.hidden=true;});
-      const m=document.getElementById('mdm-more-'+mod); if(m)m.hidden=!m.hidden;
-    },
-    async refresh(retry){
-      if(!CLOUD.user||!V42.idToken){
-        toast('Connect Google first to verify Drive status','err'); return;
-      }
-      try{
-        if(retry){
-          toast('Re-checking and retrying all pending modules…','info');
-          await cloudBackupNow();
-          return;
-        }
-        const r=await V42.backend('status',{});
-        window.MDM_DRIVE_STATUS=r; window.MDM_DRIVE_STATUS_AT=r.timestamp||new Date().toISOString();
-        if(A.page==='backupsync') gP('backupsync');
-      }catch(e){toast('Drive status check failed: '+e.message,'err');}
-    },
-    async retry(mod){
-      if(!CLOUD.user||!V42.idToken){toast('Connect Google first','err');return;}
-      try{
-        // A module retry uses the same authoritative complete snapshot. The backend
-        // writes only the real module files and ACKs after the writes finish.
-        CLOUD.setSyncStatus('Syncing '+mod+'…','var(--am)');
-        const r=await V42.backend('reconcile',{snapshot:CLOUD.getPayload(),appVersion:V42.version});
-        window.MDM_DRIVE_STATUS=r; window.MDM_DRIVE_STATUS_AT=r.timestamp||new Date().toISOString();
-        CLOUD.setSyncStatus('Synced ✓','var(--gn)');
-        toast((MODS.find(x=>x[0]===mod)||['',mod])[1]+' synchronized to Google Drive','ok');
-        gP('backupsync');
-      }catch(e){CLOUD.setSyncStatus('Sync attention required','var(--rd)');toast('Sync failed: '+e.message,'err');}
-    },
-    view(mod){
-      const r=MODS.find(x=>x[0]===mod)||['',mod,''];
-      const d=window.MDM_DRIVE_STATUS?.modules?.[mod];
-      const l=localAvailable(mod);
-      const dlg=document.createElement('div');dlg.className='ov';dlg.id='mdm-drive-detail';
-      dlg.innerHTML=`<div class="modal" style="max-width:460px"><div class="mhd"><div class="mt">${esc(r[1])} — Storage Details</div><button class="btn btn-g btn-sm" onclick="this.closest('.ov').remove()">×</button></div><div class="mbd"><div class="mdm-detail-grid"><div><b>Google Drive</b><strong class="${d?.drive?'ok':'bad'}">${d?.drive?'✓ Confirmed':'— Not confirmed'}</strong></div><div><b>Offline / Local</b><strong class="${l?'ok':'bad'}">${l?'✓ Available':'— Not available'}</strong></div><div><b>File(s)</b><strong>${esc(fileLabel(r))}</strong></div><div><b>Checked</b><strong>${esc(window.MDM_DRIVE_STATUS_AT?driveFmtTime(window.MDM_DRIVE_STATUS_AT):'Not checked')}</strong></div></div></div></div>`;
-      document.body.appendChild(dlg);
-    },
-    async openDrive(mod){
-      const root=window.MDM_DRIVE_STATUS?.rootFolderId;
-      if(root){window.open('https://drive.google.com/drive/folders/'+encodeURIComponent(root),'_blank','noopener');return;}
-      toast('Drive folder ID is not available until status is checked','info');
-    },
-    download(mod){toast('Download is available from View Details after the Drive file is confirmed.','info');},
-    history(mod){toast('Sync history is recorded in the Master Drive Audit log.','info');},
-    remove(mod){toast('Remove is intentionally disabled in this safety patch. Use Drive directly if deletion is required.','info');}
-  };
-  window.MDMDrive=MDMDrive;
-
-  /* Replace only the folder table renderer. The original page/card structure remains. */
-  try{ window.driveFolderTreeHTML=driveFolderTreeHTMLFinal; }catch(e){}
-
-  /* Upgrade the existing Backup & Sync page with the new controls/status row. */
-  const oldPg=window.pgBackupSync;
-  window.pgBackupSync=function(){
-    const base=oldPg.apply(this,arguments);
-    const cloudOk=!!(CLOUD.user&&V42.idToken);
-    const ms=window.MDM_DRIVE_STATUS;
-    const count=ms?Number(ms.driveSynced||0):0;
-    const total=11;
-    const title=`<div class="mdm-bsync-head"><div><div class="stl">Backup &amp; Sync</div><div class="sst">Keep your data safe — Google Drive + Offline</div></div><div class="mdm-bsync-head-actions"><button class="btn btn-g btn-sm" onclick="MDMDrive.refresh(false)">↻ Refresh Status<span>Re-check Drive</span></button><button class="btn btn-g btn-sm" onclick="MDMDrive.refresh(true)">↻ Re-check &amp; Retry<span>Sync Pending</span></button></div></div>`;
-    const summary=`<div class="mdm-summary-grid"><div class="mdm-stat"><span>✓</span><div><small>SYNC STATUS</small><b>${count===total?'Fully Synced':(count?count+' / '+total+' modules':'Awaiting Drive check')}</b><em>${count===total?'All modules confirmed':'Drive confirmation required'}</em></div></div><div class="mdm-stat"><span>☁</span><div><small>CLOUD (DRIVE)</small><b>${count} / ${total}</b><em>${count===total?'All files up to date':'Pending / not confirmed'}</em></div></div><div class="mdm-stat"><span>▣</span><div><small>OFFLINE (LOCAL)</small><b>11 / 11</b><em>Local data available</em></div></div><div class="mdm-stat"><span>◷</span><div><small>LAST BACKUP</small><b>${CLOUD.lastBackup?esc(driveFmtTime(CLOUD.lastBackup)):'Never'}</b><em>${CLOUD.lastBackup?'Confirmed backup':'No backup yet'}</em></div></div></div>`;
-    const originalHead='<div class="shd">\n    <div><div class="stl">Backup &amp; Sync</div><div class="sst">Google account, Drive folder structure, backups and restore</div></div>\n  </div>';
-    return title+summary+base.replace(originalHead,'');
-  };
-
-  /* The page renderer above can leave the original title in the DOM. Add CSS to
-     hide only that original heading when our replacement is present. */
-  const style=document.createElement('style');style.textContent=`
-    .mdm-bsync-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;padding:2px 0}
-    .mdm-bsync-head-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-    .mdm-bsync-head-actions button{min-width:142px;line-height:1.1}.mdm-bsync-head-actions button span{display:block;font-size:9px;opacity:.72;margin-top:3px}
-    .mdm-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}.mdm-stat{display:flex;gap:10px;align-items:center;padding:13px;border:1px solid var(--bd);border-radius:12px;background:var(--card)}
-    .mdm-stat>span{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(99,75,220,.14);color:var(--ac);font-size:18px;font-weight:900}.mdm-stat small{display:block;color:var(--txl);font-size:9px;font-weight:800;letter-spacing:.05em}.mdm-stat b{display:block;font-size:14px;margin-top:2px}.mdm-stat em{display:block;font-style:normal;color:var(--txl);font-size:10px;margin-top:2px}
-    .mdm-drive-table-wrap{overflow-x:auto}.mdm-drive-table{min-width:920px}.mdm-drive-table th{white-space:nowrap}.mdm-drive-table td{vertical-align:middle}.mdm-folder{display:inline-block;margin-right:7px;color:var(--ac)}
-    .mdm-storage{display:flex;gap:7px;flex-wrap:wrap}.mdm-store{display:inline-flex;align-items:center;gap:4px;padding:4px 7px;border-radius:999px;font-size:10px;font-weight:800;border:1px solid var(--bd)}.mdm-store.ok{color:var(--gn);background:rgba(34,197,94,.09)}.mdm-store.muted{color:var(--txl);background:rgba(148,163,184,.08)}.mdm-today{font-size:9px;color:var(--txl);margin-top:3px}
-    .mdm-row-actions{position:relative;display:flex;align-items:center;gap:5px}.mdm-view{padding:6px 10px!important}.mdm-kebab{width:30px;height:30px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);font-size:18px;cursor:pointer}.mdm-menu{position:absolute;right:0;top:35px;z-index:5000;min-width:205px;padding:6px;border:1px solid var(--bd);border-radius:10px;background:var(--card);box-shadow:0 14px 35px rgba(0,0,0,.22)}.mdm-menu button{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--tx);padding:8px 9px;border-radius:7px;font-size:11px;cursor:pointer}.mdm-menu button:hover{background:rgba(99,75,220,.12)}.mdm-menu .danger{color:var(--rd)}
-    .mdm-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mdm-detail-grid>div{padding:11px;border:1px solid var(--bd);border-radius:9px}.mdm-detail-grid b{display:block;color:var(--txl);font-size:10px}.mdm-detail-grid strong{display:block;margin-top:4px;font-size:12px}.mdm-detail-grid .ok{color:var(--gn)}.mdm-detail-grid .bad{color:var(--rd)}
-    @media(max-width:800px){.mdm-bsync-head{align-items:flex-start;flex-direction:column}.mdm-bsync-head-actions{width:100%;justify-content:stretch}.mdm-bsync-head-actions button{flex:1;min-width:0}.mdm-summary-grid{grid-template-columns:1fr 1fr}.mdm-detail-grid{grid-template-columns:1fr}}
-    @media(max-width:480px){.mdm-summary-grid{grid-template-columns:1fr}.mdm-bsync-head-actions{display:grid;grid-template-columns:1fr 1fr}.mdm-bsync-head-actions button{font-size:10px!important}}
-    [data-theme="dark"] .mdm-stat,.dark .mdm-stat{background:var(--card)}
-  `;document.head.appendChild(style);
-
-  /* Close kebab menus when tapping elsewhere. */
-  document.addEventListener('click',function(e){if(!e.target.closest('.mdm-row-actions'))document.querySelectorAll('.mdm-menu').forEach(x=>x.hidden=true);});
-
-  /* Verify actual Drive state shortly after opening Backup & Sync. */
-  const oldGP=window.gP;
-  if(typeof oldGP==='function' && !window.__mdmGPDrivePatch){
-    window.__mdmGPDrivePatch=true;
-    window.gP=function(page){const r=oldGP.apply(this,arguments);if(page==='backupsync'&&CLOUD.user&&V42.idToken)setTimeout(()=>MDMDrive.refresh(false),250);return r;};
-  }
-
-  /* After a successful Google login, immediately materialize the complete local
-     dataset to Drive. This fixes the old behavior where only recently edited
-     modules became green. */
-  if(V42.acceptGoogleCredential&&!V42.__mdmAutoFullBackup){
-    const origAuth=V42.acceptGoogleCredential;
-    V42.acceptGoogleCredential=async function(credential){
-      const r=await origAuth.apply(this,arguments);
-      setTimeout(()=>{if(CLOUD.user&&V42.idToken&&navigator.onLine)cloudBackupNow();},350);
-      return r;
-    };
-    V42.__mdmAutoFullBackup=true;
-  }
-})();
-</script>
