@@ -10462,6 +10462,23 @@ async function driveRetryAll(){
   }catch(e){toast('Retry failed: '+(e&&e.message?e.message:e),'err');}
 }
 
+function driveBackupHistoryHTML(){
+  const backups=DRIVE.listBackups();
+  if(!backups.length){
+    return `<div class="info inf-b">No local backup snapshots are recorded yet. Backup History will appear here after a confirmed snapshot is created.</div>`;
+  }
+  return `<div class="drive-backup-history">${backups.slice(0,20).map((path,i)=>{
+    const name=String(path).split('/').pop();
+    const safePath=String(path).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+    const m=name.match(/^Backup_(\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2})\\.json$/);
+    const stamp=m?m[1].replace('_',' ').replace(/^(\\d{4}-\\d{2}-\\d{2}) (\\d{2})-(\\d{2})$/,(_,d,h,mi)=>`${d} ${h}:${mi}`):name;
+    return `<div class="drive-history-row" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--bd)">
+      <div><div style="font-weight:700">${ec(stamp)}</div><div style="font-size:10.5px;color:var(--txl)">${ec(name)}</div></div>
+      <button class="btn btn-g btn-sm" onclick="driveRestoreSnapshot('${safePath}')">${driveIcon('refresh')} Restore</button>
+    </div>`;
+  }).join('')}</div>`;
+}
+
 function driveSelectiveRestoreHTML(){
   if(!CLOUD.user) return "";
   const opts = [
