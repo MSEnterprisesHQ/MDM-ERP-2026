@@ -6112,12 +6112,10 @@ niSave = function(){
   }
 };
 
-// Patch doLogin to log
-const _doLogin_orig = doLogin;
-doLogin = function(){
-  _doLogin_orig();
-  if(A.loggedIn) auditLog("LOGIN","user",A.currentUser?.id||"","User logged in: "+(A.currentUser?.name||""),null);
-};
+// NOTE: doLogin is defined later by the infrastructure layer.
+// Do not reference it here; doing so during script evaluation causes a
+// ReferenceError and aborts the ERP bootstrap/render path. Login auditing is
+// attached inside the final doLogin implementation after successful auth.
 
 // ── PATCH gP() TO HANDLE AUDIT FULL VIEW ──────────────────
 const _gP_orig = gP;
@@ -10997,7 +10995,7 @@ v2.8 — Definitive flat-light header + school category correction
 <script>
 (function(){
   'use strict';
-  const FINAL_INFRA_VERSION='5.5';
+  const FINAL_INFRA_VERSION='5.6';
   const RESTORE_LIMIT=10;
   const CLOUD_BACKUP_RETENTION=20;
   const MAX_SYNC_ATTEMPTS=8;
@@ -11318,7 +11316,7 @@ v2.8 — Definitive flat-light header + school category correction
 
   /* ---------- local emergency login remains unchanged in business semantics ---------- */
   window.doLogin=async function(){
-    try{const user=(document.getElementById('lu')||{}).value?.trim()||'',pass=(document.getElementById('lp')||{}).value||'',found=(A.users||[]).find(u=>u.username===user&&u.password===pass);if(!found){toast('Invalid username or password','err');return;}const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:nowISO()};A.loggedIn=true;A.currentUser=localUser;CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.saveSession(localUser).catch(()=>{});localStorage.setItem('mdm_local_user',JSON.stringify(localUser));localStorage.removeItem('cloud_user');renderShell();gP('dashboard');toast('Local emergency login active — cloud sync requires Google sign-in','ok');}catch(e){toast('Local login failed: '+e.message,'err');}
+    try{const user=(document.getElementById('lu')||{}).value?.trim()||'',pass=(document.getElementById('lp')||{}).value||'',found=(A.users||[]).find(u=>u.username===user&&u.password===pass);if(!found){toast('Invalid username or password','err');return;}const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:nowISO()};A.loggedIn=true;A.currentUser=localUser;CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.saveSession(localUser).catch(()=>{});localStorage.setItem('mdm_local_user',JSON.stringify(localUser));localStorage.removeItem('cloud_user');auditLog('LOGIN','user',localUser.id||'', 'User logged in: '+(localUser.name||''),null);renderShell();gP('dashboard');toast('Local emergency login active — cloud sync requires Google sign-in','ok');}catch(e){toast('Local login failed: '+e.message,'err');}
   };
 
   /* ---------- restore browser session + silent credential recovery ---------- */
