@@ -4692,7 +4692,7 @@ function v42NormalizeApiUrl(){
 }
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
-  version: "5.2",
+  version: "5.5",
   previousVersion: "4.42",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
@@ -4940,16 +4940,28 @@ V42.backend = async function(action,payload){
         f.id='mdm-api-bridge-frame';
         f.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
         let settled=false;
-        const cleanup=()=>window.removeEventListener('message',onReady);
+        let pingTimer=null;
+        const cleanup=()=>{window.removeEventListener('message',onReady);if(pingTimer)clearInterval(pingTimer);};
         const fail=err=>{if(settled)return;settled=true;clearTimeout(timer);cleanup();try{f.remove();}catch(_){};reject(err);};
-        const timer=setTimeout(()=>fail(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.')),12000);
+        const timer=setTimeout(()=>fail(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.')),15000);
         const onReady=ev=>{
-          if(ev.source!==f.contentWindow || ev.data?.type!=='mdm-api-bridge-ready') return;
+          if(ev.data?.type!=='mdm-api-bridge-ready') return;
           if(settled)return; settled=true; clearTimeout(timer); cleanup(); resolve(f);
         };
         window.addEventListener('message',onReady);
         document.body.appendChild(f);
+        let loaded=false;
+        f.onload=()=>{
+          loaded=true;
+          try{f.contentWindow.postMessage({type:'mdm-api-bridge-ping'},'*')}catch(_){ }
+          // HtmlService can load successfully while the custom READY message is
+          // lost during Google's sandbox/redirect. Treat load as a fallback.
+          setTimeout(()=>{
+            if(!settled && loaded){ settled=true; clearTimeout(timer); cleanup(); resolve(f); }
+          },800);
+        };
         f.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'5.2')+'&_='+Date.now();
+        pingTimer=setInterval(()=>{if(settled)return;try{f.contentWindow.postMessage({type:'mdm-api-bridge-ping'},'*')}catch(_){}},500);
       });
 
       const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
@@ -4958,7 +4970,7 @@ V42.backend = async function(action,payload){
         const finish=(fn,v)=>{if(done)return;done=true;window.removeEventListener('message',onMessage);clearTimeout(timeout);fn(v);};
         const timeout=setTimeout(()=>finish(reject,new Error('Master API bridge timeout')),30000);
         const onMessage=ev=>{
-          if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
+          if(ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
           if(ev.data.ok && ev.data.result?.ok) finish(resolve,ev.data.result);
           else finish(reject,new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
         };
