@@ -4811,7 +4811,7 @@ const V42_LEGACY_API_URLS = ["https://script.google.com/macros/s/AKfycbz7sA5B8LH
 try { const __savedApi=localStorage.getItem("mdm_api_url")||""; if(V42_LEGACY_API_URLS.includes(__savedApi)) localStorage.setItem("mdm_api_url",V42_CANONICAL_API_URL); } catch(_) {}
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
-  version: "5.4",
+  version: "5.6",
   previousVersion: "4.42",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
@@ -5046,49 +5046,39 @@ V42.backend = async function(action,payload){
     });
   }
 
-  // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
-  // This avoids the browser CORS/redirect problem of reading a ContentService
-  // POST response directly from GitHub Pages. The bridge calls google.script.run
-  // server-side, so the API response remains readable and ACK can be verified.
-  if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  if(!V42._apiBridgePromise){
-    V42._apiBridgePromise=new Promise((resolve,reject)=>{
-      const frame=document.createElement('iframe');
-      frame.id='mdm-api-bridge-frame';
-      frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
-      const onReady=ev=>{if(ev.data?.type!=='mdm-api-bridge-ready')return;if(ev.source&&ev.source!==frame.contentWindow)return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
-      window.addEventListener('message',onReady);
-      document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
-    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
-  }
-  try{
-    const frame=await V42._apiBridgePromise;
-    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    return await new Promise((resolve,reject)=>{
-      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
-      const onMessage=ev=>{
-        if(ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;if(ev.source&&ev.source!==frame.contentWindow)return;
-        clearTimeout(timeout);window.removeEventListener('message',onMessage);
-        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
-        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
-      };
-      window.addEventListener('message',onMessage);
-      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
-    });
-  }catch(bridgeError){
-    // Last-resort direct fetch is retained for deployments where CORS is already
-    // configured. Never use no-cors because backup/sync require a readable ACK.
-    try{
-      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
-      if(!r.ok) throw new Error('API HTTP '+r.status);
-      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
-    }catch(fetchError){
-      const detail=(fetchError&&fetchError.message)||String(fetchError);
-      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
-    }
-  }
+  // GitHub/standalone mode: submit directly to the SAME Apps Script Web App
+  // in a hidden iframe. The Web App executes doPost() server-side and returns
+  // a tiny HTML response which posts the JSON ACK back to this page.
+  //
+  // The single canonical /exec URL is both the transport and API endpoint.
+  if(!V42.apiUrl || V42.apiUrl==='APPS_SCRIPT_BRIDGE') throw new Error("API endpoint not configured");
+  const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+  return await new Promise((resolve,reject)=>{
+    const frame=document.createElement('iframe');
+    const frameName='mdm-api-transport-'+requestId.replace(/[^a-zA-Z0-9_-]/g,'');
+    frame.name=frameName; frame.id='mdm-api-transport-frame';
+    frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+    const form=document.createElement('form');
+    form.method='POST'; form.action=V42.apiUrl; form.target=frameName; form.style.display='none';
+    const transport=document.createElement('input'); transport.type='hidden'; transport.name='transport'; transport.value='iframe';
+    const rid=document.createElement('input'); rid.type='hidden'; rid.name='requestId'; rid.value=requestId;
+    const payload=document.createElement('textarea'); payload.name='body'; payload.value=JSON.stringify(body); payload.style.display='none';
+    form.appendChild(transport); form.appendChild(rid); form.appendChild(payload);
+    let settled=false;
+    const cleanup=()=>{window.removeEventListener('message',onMessage);clearTimeout(timeout);form.remove();frame.remove();};
+    const finish=(fn,value)=>{if(settled)return;settled=true;cleanup();fn(value);};
+    const onMessage=ev=>{
+      const d=ev&&ev.data?ev.data:{};
+      if(d.type!=='mdm-api-iframe-response'||d.requestId!==requestId)return;
+      if(ev.source&&ev.source!==frame.contentWindow)return;
+      if(d.ok&&d.result?.ok) finish(resolve,d.result);
+      else finish(reject,new Error(d.error||d.result?.error||'API request failed'));
+    };
+    const timeout=setTimeout(()=>finish(reject,new Error('Master API transport timeout. The Apps Script Web App did not return an ACK.')) ,45000);
+    window.addEventListener('message',onMessage);
+    document.body.appendChild(frame); document.body.appendChild(form);
+    try{form.submit();}catch(e){finish(reject,new Error('Master API transport could not submit: '+(e?.message||e)));}
+  });
 };
 
 V42.ensureBackendAuth = async function(){
@@ -11249,6 +11239,7 @@ v2.8 — Definitive flat-light header + school category correction
 
   V42.afterGoogleLogin=async function(){
     CLOUD.ready=true;CLOUD.updateUI();
+    if(A.page==="backupsync") setTimeout(()=>gP("backupsync"),0);
     const email=CLOUD.user?.email||'';
     const marker='mdm_initial_cloud_backup_'+email;
     try{await V42.flushQueue();}catch(e){}
@@ -11314,10 +11305,10 @@ v2.8 — Definitive flat-light header + school category correction
     })();
     return V42.backupInFlight;
   };
-  window.cloudBackupNow=()=>V42.cloudBackupNow('manual_backup');
+  window.cloudBackupNow=()=>V42.cloudBackupNow('manual_backup',false);
   window.cloudSignIn=()=>V42.googleSignIn();
   window.cloudSignOut=async function(){
-    const was=CLOUD.user?.email||'';CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.clearSession().catch(()=>{});localStorage.removeItem('cloud_user');auditLog('LOGIN','cloud','google','Google account disconnected: '+was,null);CLOUD.updateUI();toast('Google account disconnected — local login remains available','ok');
+    const was=CLOUD.user?.email||'';CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.clearSession().catch(()=>{});localStorage.removeItem('cloud_user');auditLog('LOGIN','cloud','google','Google account disconnected: '+was,null);CLOUD.updateUI();if(A.page==="backupsync")gP("backupsync");toast('Google account disconnected — local login remains available','ok');
   };
   window.cloudAutoSyncToggle=function(enabled){CLOUD.autoSync=!!enabled;localStorage.setItem('cloud_auto_sync',enabled?'1':'0');toast('Auto sync '+(enabled?'enabled':'disabled'),'ok');if(enabled&&navigator.onLine)V42.flushQueue();};
 
@@ -11386,18 +11377,61 @@ v2.8 — Definitive flat-light header + school category correction
     const effectiveApi=V42.apiUrl||'';
     const effectiveClient=V42.googleClientId||'';
     let backend=null;
-    try{if(navigator.onLine&&V42.apiUrl)backend=await V42.backend('diagnostics',{});}catch(e){backend={ok:false,error:e.message};}
+    try{if(navigator.onLine&&effectiveApi)backend=await V42.backend('diagnostics',{});}catch(e){backend={ok:false,error:e.message};}
     const material=[effectiveApi,effectiveClient,backend?.deploymentId||'',backend?.scriptVersion||V42.version,backend?.schemaVersion||'2'].join('|');
     let fp='unavailable';try{if(window.crypto?.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(material));fp=Array.from(new Uint8Array(b)).slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();}}catch(e){}
     const endpointId=(effectiveApi.match(/\/macros\/s\/([^/]+)\/exec/)||[])[1]||'—';
     const backendClientMismatch=!!(backend&&backend.googleClientId&&effectiveClient&&backend.googleClientId!==effectiveClient);
-    const backendApi=backend?.webAppUrl||''; const backendApiMismatch=!!(backendApi&&effectiveApi&&backendApi!==effectiveApi); const backendClientConfigured=backend?.googleClientId||'';
-    const apiStatus=backendApi&&effectiveApi?(backendApi===effectiveApi?'MATCH':'MISMATCH'):(storedApi&&storedApi!==htmlApi?'OVERRIDE':'UNVERIFIED'); const clientStatus=backendClientConfigured&&effectiveClient?(backendClientConfigured===effectiveClient?'MATCH':'MISMATCH'):(storedClient&&storedClient!==htmlClient?'OVERRIDE':'UNVERIFIED'); return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,apiStatus,clientStatus,backend,fingerprint:fp};
+    const backendApi=backend?.webAppUrl||'';
+    const backendApiMismatch=!!(backendApi&&effectiveApi&&backendApi!==effectiveApi);
+    const backendClientConfigured=backend?.googleClientId||'';
+    const apiStatus=backendApi&&effectiveApi?(backendApi===effectiveApi?'MATCH':'MISMATCH'):(storedApi&&storedApi!==htmlApi?'OVERRIDE':'UNVERIFIED');
+    const clientStatus=backendClientConfigured&&effectiveClient?(backendClientConfigured===effectiveClient?'MATCH':'MISMATCH'):(storedClient&&storedClient!==htmlClient?'OVERRIDE':'UNVERIFIED');
+    const configMismatch=!!(storedApi&&storedApi!==htmlApi)||!!(storedClient&&storedClient!==htmlClient)||backendClientMismatch||backendApiMismatch;
+    const transportOk=!!(backend&&backend.ok);
+    return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,apiStatus,clientStatus,backend,transportOk,configMismatch,fingerprint:fp};
   };
+
+  V42.hideDiagnostics=function(){
+    try{localStorage.setItem('mdm_diag_hidden','1');}catch(e){}
+    V42.renderDiagnosticsWhenReady();
+  };
+  V42.showDiagnostics=function(){
+    try{localStorage.removeItem('mdm_diag_hidden');}catch(e){}
+    V42.renderDiagnosticsWhenReady();
+  };
+
   V42.diagnosticsHTML=async function(){
     const d=await V42.getConfigDiagnostics();
     const b=d.backend||{};
-    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">🧬 Integration Diagnostics</span><span class="bdg ${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'br':'bn'}">${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'CONFIG MISMATCH':'OK'}</span></div><div class="cbd" style="font-size:12px;line-height:1.55"><div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div><div><b>Bridge Endpoint:</b> <code>${esc((d.effectiveApi||'')+(d.effectiveApi?(d.effectiveApi.indexOf('?')>=0?'&':'?')+'bridge=1':'—'))}</code></div><div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div><div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div><div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div><div><b>Backend live Web App URL:</b> <code>${esc(d.backendApi||'—')}</code> ${d.backend?.webAppUrlSource?'<span style="color:var(--txl)">('+esc(d.backend.webAppUrlSource)+')</span>':''}</div><div><b>Backend → Effective API:</b> ${esc(d.apiStatus)}</div><div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div><div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div><div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div><div style="margin-top:6px"><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div><div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div><div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div></div></div>`;
+    const mismatch=d.configMismatch;
+    const transportFailed=!d.transportOk;
+    const hidden=!mismatch&&!d.transportOk&&localStorage.getItem('mdm_diag_hidden')==='1';
+    if(hidden){
+      return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="cbd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px"><div><b>Integration Diagnostics</b> <span class="bdg bn" style="margin-left:6px">OK</span><span style="margin-left:8px;color:var(--txl);font-size:11px">Direct Web App transport</span></div><button class="btn btn-g btn-sm" onclick="V42.showDiagnostics()">View</button></div></div>`;
+    }
+    const status=mismatch?'CONFIG MISMATCH':transportFailed?'BACKEND UNREACHABLE':'OK';
+    const badge=mismatch||transportFailed?'br':'bn';
+    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)">
+      <div class="chd"><span class="cht">🧬 Integration Diagnostics</span><div style="display:flex;align-items:center;gap:7px"><span class="bdg ${badge}">${status}</span><button class="btn btn-g btn-sm" onclick="V42.hideDiagnostics()">Hide</button></div></div>
+      <div class="cbd" style="font-size:12px;line-height:1.55">
+        <div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div>
+        <div><b>Transport:</b> <code>Direct Web App POST → iframe ACK</code></div>
+        <div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div>
+        <div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div>
+        <div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div>
+        <div><b>Backend live Web App URL:</b> <code>${esc(d.backendApi||'—')}</code> ${d.backend?.webAppUrlSource?'<span style="color:var(--txl)">('+esc(d.backend.webAppUrlSource)+')</span>':''}</div>
+        <div><b>Backend → Effective API:</b> ${esc(d.apiStatus)}</div>
+        <div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div>
+        <div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div>
+        <div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div>
+        <div><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div>
+        ${transportFailed?`<div style="margin-top:7px;padding:8px 10px;border:1px solid var(--rd);background:var(--rlt);border-radius:7px;color:var(--rd)"><b>Transport error:</b> ${esc(b.error||'The Web App did not return a diagnostics ACK.')}</div>`:''}
+        <div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button><button class="btn btn-g btn-sm" onclick="V42.hideDiagnostics()">Hide</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div>
+        <div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div>
+      </div>
+    </div>`;
   };
 
   V42.restoreLatestCloudBackup=async function(){
