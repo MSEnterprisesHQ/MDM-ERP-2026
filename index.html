@@ -308,12 +308,10 @@ a{color:inherit;text-decoration:none;}
 .inf-o{background:var(--alt);color:var(--am);border:1px solid #fde68a;}
 .inf-g{background:var(--glt);color:var(--gn);border:1px solid #bbf7d0;}
 .inf-r{background:var(--rlt);color:var(--rd);border:1px solid #fca5a5;}
-.toasts{position:fixed;bottom:24px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:340px;}
-.toast{padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);animation:tst .3s ease;display:flex;align-items:center;gap:9px;}
-.toast{background:#0f172a!important;color:#fff!important;border:1px solid rgba(255,255,255,.18)!important;position:relative!important;padding:12px 42px 12px 14px!important;min-height:44px!important;box-sizing:border-box!important;}
-.toast-close{position:absolute!important;right:8px!important;top:8px!important;width:27px!important;height:27px!important;border:0!important;border-radius:7px!important;background:rgba(255,255,255,.16)!important;color:#fff!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;}
-.toast-close:hover{background:rgba(255,255,255,.28)!important;}
-.toast-msg{white-space:normal!important;overflow-wrap:anywhere!important;}
+.toasts{position:fixed;bottom:24px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;max-width:380px;pointer-events:none;}
+.toast{position:relative;padding:13px 42px 13px 16px;border-radius:12px;font-size:13px;font-weight:700;box-shadow:0 10px 28px rgba(0,0,0,.34);animation:tst .3s ease;display:flex;align-items:flex-start;gap:9px;border:1px solid rgba(255,255,255,.18);pointer-events:auto;backdrop-filter:none;isolation:isolate;}
+.toast::before{content:"";position:absolute;inset:0;border-radius:inherit;background:inherit;z-index:-1;}
+.toast-close{position:absolute;right:8px;top:7px;width:25px;height:25px;border-radius:7px;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.16);color:inherit;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;}
 .tok{background:#15803d;color:#fff;}
 .ter{background:var(--rd);color:#fff;}
 .tinf{background:var(--sk);color:#fff;}
@@ -1856,7 +1854,7 @@ function schoolOptionsHTML(selectedId){
 }
 function nw(n){const a=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"],b=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"],w=n=>{if(n<20)return a[n];if(n<100)return b[~~(n/10)]+(n%10?" "+a[n%10]:"");if(n<1000)return a[~~(n/100)]+" Hundred"+(n%100?" "+w(n%100):"");if(n<1e5)return w(~~(n/1000))+" Thousand"+(n%1000?" "+w(n%1000):"");if(n<1e7)return w(~~(n/1e5))+" Lakh"+(n%1e5?" "+w(n%1e5):"");return w(~~(n/1e7))+" Crore"+(n%1e7?" "+w(n%1e7):"");};const r=Math.round(+n||0);return(r?w(r):"Zero")+" Rupees Only";}
 function shuf(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=~~(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
-function toast(m,t){const d=document.createElement("div");d.className="toast "+(t||"");d.setAttribute("role","status");d.innerHTML="<span class=\"toast-ico\">"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span><span class=\"toast-msg\">"+ec(m)+"</span><button class=\"toast-close\" type=\"button\" aria-label=\"Close notification\" title=\"Close\">&#10005;</button>";const c=d.querySelector(".toast-close");if(c)c.onclick=()=>d.remove();document.getElementById("toasts").appendChild(d);const ms=t==="err"?10000:6000;setTimeout(()=>{if(d.isConnected)d.remove();},ms);}
+function toast(m,t){const d=document.createElement("div");d.className="toast "+(t||"");const persistent=t==="err";d.innerHTML="<span>"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span><span style=\"flex:1;min-width:0;line-height:1.4;word-break:break-word\">"+ec(m)+"</span><button type=\"button\" class=\"toast-close\" aria-label=\"Close notification\" onclick=\"this.parentElement.remove()\">&#10005;</button>";document.getElementById("toasts").appendChild(d);if(!persistent)setTimeout(()=>{if(d.isConnected)d.remove()},3400);}
 function addRV(id){let r=A.rv.filter(x=>x!==id);r.unshift(id);if(r.length>5)r=r.slice(0,5);sv("rv",r);}
 function sBdg(st,sy){if(st==="released")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-blue"></span>Released</span>';if(st==="cancelled")return'<span class="bdg br sync-badge"><span class="sync-dot sync-red"></span>Cancelled</span>';if(st==="revised")return'<span class="bdg bam sync-badge"><span class="sync-dot sync-amber"></span>Revised</span>';if(st==="draft")return'<span class="bdg bs sync-badge"><span class="sync-dot sync-gray"></span>Draft</span>';if(["syncing","uploading","processing"].includes(sy))return'<span class="bdg bb sync-badge"><span class="sync-dot sync-blue"></span>Syncing</span>';if(sy==="pending")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-orange"></span>Pending Sync</span>';if(sy==="synced")return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Synced</span>';return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Active</span>';}
 
@@ -2552,7 +2550,7 @@ function gP(p){
     clearTimeout(window.__niPreviewTimer);
     window.__niPreviewTimer=setTimeout(()=>niRenderMasterPreview(),220);
   }
-  if((p==="settings"||p==="backupsync") && typeof CLOUD!=="undefined") setTimeout(()=>CLOUD.updateUI(),50);
+  if((p==="settings"||p==="backupsync") && typeof CLOUD!=="undefined") setTimeout(async()=>{CLOUD.updateUI();if(p==="backupsync"&&typeof V42!=="undefined"&&V42.refreshDriveStructure){await V42.refreshDriveStructure();gP("backupsync");}},50);
   if(A.flashId){const fid=A.flashId;A.flashId=null;setTimeout(()=>{const row=document.getElementById("ir-"+fid);if(row){row.scrollIntoView({behavior:"smooth",block:"center"});row.classList.add("flash");setTimeout(()=>row.classList.remove("flash"),2200);}},300);}
 }
 
@@ -4806,16 +4804,13 @@ window.doLogout=function(){
    - existing invoice/PDF/business logic remains untouched
    ═════════════════════════════════════════════════════════════════════ */
 const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbxQna-J_HYnAridv9CNRD7EEO6aXYhEjmEerJ6qSGSpjNfYuPVSlNdRoNgeyzHIMJxXfQ/exec";
-const V42_CANONICAL_API_URL = V42_DEFAULT_API_URL;
-const V42_LEGACY_API_URLS = ["https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec"];
-try { const __savedApi=localStorage.getItem("mdm_api_url")||""; if(V42_LEGACY_API_URLS.includes(__savedApi)) localStorage.setItem("mdm_api_url",V42_CANONICAL_API_URL); } catch(_) {}
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
-  version: "5.6",
+  version: "5.2",
   previousVersion: "4.42",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
-  apiUrl: (()=>{ const s=localStorage.getItem("mdm_api_url")||""; return V42_LEGACY_API_URLS.includes(s)?V42_CANONICAL_API_URL:(s||V42_DEFAULT_API_URL); })(),
+  apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
   googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
   showConfigModal: false,
   deviceId: localStorage.getItem("mdm_device_id") || ("dev_"+uid()),
@@ -4855,8 +4850,8 @@ V42.idbSet=function(store,key,value){return V42.openDB().then(db=>new Promise((r
 V42.idbDelete=function(store,key){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(key);r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error);}));};
 V42.idbAll=function(store){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readonly").objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}));};
 
-V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib","iu","ar"];
-V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"audit",rv:"rv",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive",ar:"adminRecoveryHistory"};
+V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib"];
+V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"audit",rv:"rv",dp:"dups",ib:"batchCfg"};
 V42.serializeState = function(){const o={};V42.stateKeys.forEach(k=>{const prop=V42.keyMap[k];if(prop && typeof A[prop]!=="undefined") o[k]=A[prop];});return o;};
 V42.writeStateKey = function(k,v){
   const prop=V42.keyMap[k];
@@ -4908,12 +4903,12 @@ V42.hydrateFromIDB = async function(){
 V42._svOriginal = sv;
 sv = function(k,v){
   V42._svOriginal(k,v);
+  try{ V42.writeStateKey(k,v); }catch(e){}
   try{
-    const cloudKey = k === "dups" ? "dp" : k;
-    if(V42.stateKeys.includes(cloudKey)){
-      V42.writeStateKey(cloudKey,v).catch(()=>{});
-      V42.enqueue("state",cloudKey,{key:cloudKey,value:v}).catch(()=>{});
-      if(navigator.onLine && CLOUD.user && CLOUD.autoSync) setTimeout(()=>V42.flushQueue().catch(()=>{}),400);
+    const cloudEligible=V42.stateKeys.slice();
+    if(cloudEligible.includes(k)){
+      V42.enqueue("state",k,{key:k,value:v});
+      if(navigator.onLine && CLOUD.user && CLOUD.autoSync) setTimeout(()=>V42.flushQueue(),400);
     }
   }catch(e){}
 };
@@ -5046,39 +5041,49 @@ V42.backend = async function(action,payload){
     });
   }
 
-  // GitHub/standalone mode: submit directly to the SAME Apps Script Web App
-  // in a hidden iframe. The Web App executes doPost() server-side and returns
-  // a tiny HTML response which posts the JSON ACK back to this page.
-  //
-  // The single canonical /exec URL is both the transport and API endpoint.
-  if(!V42.apiUrl || V42.apiUrl==='APPS_SCRIPT_BRIDGE') throw new Error("API endpoint not configured");
-  const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-  return await new Promise((resolve,reject)=>{
-    const frame=document.createElement('iframe');
-    const frameName='mdm-api-transport-'+requestId.replace(/[^a-zA-Z0-9_-]/g,'');
-    frame.name=frameName; frame.id='mdm-api-transport-frame';
-    frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-    const form=document.createElement('form');
-    form.method='POST'; form.action=V42.apiUrl; form.target=frameName; form.style.display='none';
-    const transport=document.createElement('input'); transport.type='hidden'; transport.name='transport'; transport.value='iframe';
-    const rid=document.createElement('input'); rid.type='hidden'; rid.name='requestId'; rid.value=requestId;
-    const payload=document.createElement('textarea'); payload.name='body'; payload.value=JSON.stringify(body); payload.style.display='none';
-    form.appendChild(transport); form.appendChild(rid); form.appendChild(payload);
-    let settled=false;
-    const cleanup=()=>{window.removeEventListener('message',onMessage);clearTimeout(timeout);form.remove();frame.remove();};
-    const finish=(fn,value)=>{if(settled)return;settled=true;cleanup();fn(value);};
-    const onMessage=ev=>{
-      const d=ev&&ev.data?ev.data:{};
-      if(d.type!=='mdm-api-iframe-response'||d.requestId!==requestId)return;
-      if(ev.source&&ev.source!==frame.contentWindow)return;
-      if(d.ok&&d.result?.ok) finish(resolve,d.result);
-      else finish(reject,new Error(d.error||d.result?.error||'API request failed'));
-    };
-    const timeout=setTimeout(()=>finish(reject,new Error('Master API transport timeout. The Apps Script Web App did not return an ACK.')) ,45000);
-    window.addEventListener('message',onMessage);
-    document.body.appendChild(frame); document.body.appendChild(form);
-    try{form.submit();}catch(e){finish(reject,new Error('Master API transport could not submit: '+(e?.message||e)));}
-  });
+  // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
+  // This avoids the browser CORS/redirect problem of reading a ContentService
+  // POST response directly from GitHub Pages. The bridge calls google.script.run
+  // server-side, so the API response remains readable and ACK can be verified.
+  if(!V42.apiUrl) throw new Error("API endpoint not configured");
+  if(!V42._apiBridgePromise){
+    V42._apiBridgePromise=new Promise((resolve,reject)=>{
+      const frame=document.createElement('iframe');
+      frame.id='mdm-api-bridge-frame';
+      frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not become ready. Verify the Apps Script Web App is deployed and accessible.'));},12000);
+      const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
+      window.addEventListener('message',onReady);
+      document.body.appendChild(frame);
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
+    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
+  }
+  try{
+    const frame=await V42._apiBridgePromise;
+    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    return await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API transport timeout. The Apps Script Web App did not return an ACK.'));},20000);
+      const onMessage=ev=>{
+        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
+        clearTimeout(timeout);window.removeEventListener('message',onMessage);
+        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
+        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
+      };
+      window.addEventListener('message',onMessage);
+      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+    });
+  }catch(bridgeError){
+    // Last-resort direct fetch is retained for deployments where CORS is already
+    // configured. Never use no-cors because backup/sync require a readable ACK.
+    try{
+      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
+      if(!r.ok) throw new Error('API HTTP '+r.status);
+      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
+    }catch(fetchError){
+      const detail=(fetchError&&fetchError.message)||String(fetchError);
+      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
+    }
+  }
 };
 
 V42.ensureBackendAuth = async function(){
@@ -6109,10 +6114,12 @@ niSave = function(){
   }
 };
 
-// NOTE: doLogin is defined later by the infrastructure layer.
-// Do not reference it here; doing so during script evaluation causes a
-// ReferenceError and aborts the ERP bootstrap/render path. Login auditing is
-// attached inside the final doLogin implementation after successful auth.
+// Patch doLogin to log
+const _doLogin_orig = doLogin;
+doLogin = function(){
+  _doLogin_orig();
+  if(A.loggedIn) auditLog("LOGIN","user",A.currentUser?.id||"","User logged in: "+(A.currentUser?.name||""),null);
+};
 
 // ── PATCH gP() TO HANDLE AUDIT FULL VIEW ──────────────────
 const _gP_orig = gP;
@@ -9444,11 +9451,18 @@ const DRIVE = {
 const SV_MODULE_MAP = { f:"company", sc:"schools", it:"items" };
 const SV_SETTINGS_KEYS = ["st","sr","rt","hd"];
 const SV_MDM_MAP = { alm:"alloc", lpg:"lpg", ro:"roster" };
-/* Canonical persistence wrapper: local save + V42 Sync Coordinator only.
-   * Direct DRIVE.syncModule/syncInvoices calls are intentionally removed so
-   * there is exactly one cloud-write path. */
 sv = (function(origSv){
-  return function(k,v){ return origSv(k,v); };
+  return function(k, v){
+    origSv(k, v);
+    try{
+      if(!CLOUD || !CLOUD.user) return; // only sync when signed in
+      if(SV_MODULE_MAP[k]) DRIVE.syncModule(SV_MODULE_MAP[k], v);
+      else if(SV_SETTINGS_KEYS.indexOf(k) !== -1) DRIVE.syncModule("settings", {sett:A.sett||ST0, series:A.series, rates:A.rates, heads:A.heads});
+      else if(SV_MDM_MAP[k]) DRIVE.syncModule(SV_MDM_MAP[k], v);
+      else if(k==="ar") DRIVE_ADAPTER.writeFile(DRIVE_ROOT+"/Security/Admin_Recovery.json",{type:"MDM_ADMIN_RECOVERY",version:1,updatedAt:new Date().toISOString(),records:v||[]});
+      else if(k==="iv") DRIVE.syncInvoices(v);
+    }catch(e){ /* never let Drive sync errors break the app */ }
+  };
 })(sv);
 
 /* Legacy cloud button implementations removed; final canonical implementation is installed by the Backup/Sync hardening block. */
@@ -9708,6 +9722,8 @@ document.addEventListener('click',e=>{if(!e.target.closest('.drive-actions'))doc
 
 function driveFolderTreeHTML(){
   if(!CLOUD.user){return `<div class="info inf-b">Sign in with Google above to create the <b>MS ENTERPRISES ERP</b> folder and see its contents here.</div>`;}
+  const cloudMods=(V42.cloudStructure&&Array.isArray(V42.cloudStructure.modules))?V42.cloudStructure.modules:[];
+  const cloudByKey=Object.fromEntries(cloudMods.map(x=>[x.key,x]));
   const rows=[
     {mod:'company',label:'Company',file:'Company.json'},
     {mod:'schools',label:'Schools',file:'Schools.json'},
@@ -9725,9 +9741,10 @@ function driveFolderTreeHTML(){
   return `<div class="drive-refresh-row"><div class="drive-refresh-meta">${nowSynced}/${total} modules have a local sync record · Offline storage is the app's durable local database.</div><div style="display:flex;gap:7px"><button class="btn btn-g btn-sm" onclick="driveRefreshStatus()">${driveIcon('refresh')} Refresh Status</button><button class="btn btn-g btn-sm" onclick="driveRetryAll()">${driveIcon('refresh')} Re-check &amp; Retry</button></div></div>
   <div class="drive-table-scroll"><table class="drive-ux-table"><thead><tr><th>Folder / Module</th><th>File(s)</th><th>Storage <span class="drive-info" title="Drive = Google Drive copy. Offline = local app copy in IndexedDB/local storage.">i</span></th><th>Last Synced</th><th>Action</th></tr></thead><tbody>
   ${all.map((r,i)=>{
-    const driveOK=r.mod==='backup'?!!CLOUD.lastBackup:r.mod==='system'?!!DRIVE.getMetadata():!!DRIVE.lastSynced(r.mod);
+    const cm=cloudByKey[r.mod];
+    const driveOK=!!cm;
     const localOK=driveLocalAvailable(r.mod);
-    const t=r.mod==='system'?(DRIVE.getMetadata()?.lastSyncTime||null):r.mod==='backup'?(CLOUD.lastBackup||null):DRIVE.lastSynced(r.mod);
+    const t=cm?.lastUpdated || (r.mod==='system'?(DRIVE.getMetadata()?.lastSyncTime||null):r.mod==='backup'?(CLOUD.lastBackup||null):DRIVE.lastSynced(r.mod));
     const menuId='drive-menu-'+i;
     return `<tr><td><div class="drive-folder-name">${driveIcon('folder')}<span>${ec(r.label)}</span></div></td><td><div class="drive-file">${ec(r.file)}</div></td><td><div class="drive-status-wrap"><span class="drive-status ${driveOK?'ok':'off'}" title="${driveOK?'Google Drive copy confirmed by the current app sync record':'No Drive sync record yet'}">${driveIcon('cloud')}Drive ${driveOK?driveIcon('check'):'—'}</span><span class="drive-status ${localOK?'ok':'off'}" title="Offline means the data is stored locally for offline-first use">${driveIcon('offline')}Offline ${localOK?driveIcon('check'):'—'}</span></div></td><td><div class="drive-time">${t?`<span class="drive-time-main">${driveFmtTime(t)}</span><span class="drive-time-sub">${r.mod==='system'?'System metadata':'Local sync record'}</span>`:`<span class="drive-time-main" style="color:var(--txm)">Not synced yet</span>`}</div></td><td><div class="drive-actions"><button class="drive-view-btn" onclick="driveViewDetails('${r.mod}','${String(r.label).replace(/'/g,"\\'")}','${String(r.file).replace(/'/g,"\\'")}',${driveOK},${localOK})">${driveIcon('eye')}<span style="margin-left:5px">View</span></button><button class="drive-menu-btn" aria-label="More actions" onclick="event.stopPropagation();driveToggleMenu('${menuId}')">${driveIcon('dots')}</button><div class="drive-menu" id="${menuId}"><button onclick="driveViewDetails('${r.mod}','${String(r.label).replace(/'/g,"\\'")}','${String(r.file).replace(/'/g,"\\'")}',${driveOK},${localOK});driveToggleMenu('${menuId}')">${driveIcon('eye')}View Details</button><button onclick="driveSyncOne('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('refresh')}Sync Now (Retry)</button><button onclick="driveOpenInDrive('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('external')}Open in Drive</button><button onclick="driveDownloadFile('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('download')}Download File</button><button onclick="driveHistory('${r.mod}');driveToggleMenu('${menuId}')">${driveIcon('history')}View Sync History</button></div></div></td></tr>`;
   }).join('')}</tbody></table></div>
@@ -10992,7 +11009,7 @@ v2.8 — Definitive flat-light header + school category correction
 <script>
 (function(){
   'use strict';
-  const FINAL_INFRA_VERSION='5.6';
+  const FINAL_INFRA_VERSION='5.2';
   const RESTORE_LIMIT=10;
   const CLOUD_BACKUP_RETENTION=20;
   const MAX_SYNC_ATTEMPTS=8;
@@ -11091,40 +11108,22 @@ v2.8 — Definitive flat-light header + school category correction
   };
 
   /* ---------- queue: state coalescing + one worker ---------- */
-  V42._nextRevision=async function(key){
-    const meta=await V42.idbGet("meta","revision_counter");
-    const obj=meta&&meta.value||{};
-    obj[key]=Number(obj[key]||0)+1;
-    await V42.idbSet("meta","revision_counter",{value:obj});
-    return obj[key];
-  };
   V42.enqueue=async function(type,key,payload){
     try{
       await V42.openDB();
       const all=await V42.idbAll('queue');
       if(type==='state'){
         const existing=all.filter(x=>x&&x.type==='state'&&x.key===key&&['pending','uploading'].includes(x.status))
-          .sort((a,b)=>String(b.updatedAt||b.createdAt).localeCompare(String(a.updatedAt||a.createdAt)))[0];
-        const revision=await V42._nextRevision(key);
+          .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
         if(existing){
-          existing.payload=payload;existing.updatedAt=nowISO();existing.status='pending';existing.lastError='';existing.nextRetryAt=0;existing.revision=revision;
+          existing.payload=payload;existing.updatedAt=nowISO();existing.status='pending';existing.lastError='';existing.nextRetryAt=0;
           await V42.idbSet('queue',existing.id,existing);return existing.id;
         }
-        const id='op_'+uid()+'_'+Date.now().toString(36);
-        const ts=nowISO();
-        const op={id,type,key,payload,status:'pending',attempts:0,createdAt:ts,updatedAt:ts,nextRetryAt:0,revision,deviceId:V42.deviceId,appVersion:V42.version};
-        await V42.idbSet('queue',id,op);return id;
       }
-      const id='op_'+uid()+'_'+Date.now().toString(36),ts=nowISO();
-      const op={id,type,key,payload,status:'pending',attempts:0,createdAt:ts,updatedAt:ts,nextRetryAt:0,deviceId:V42.deviceId,appVersion:V42.version};
+      const id='op_'+uid()+'_'+Date.now().toString(36);
+      const op={id,type,key,payload,status:'pending',attempts:0,createdAt:nowISO(),updatedAt:nowISO(),nextRetryAt:0,deviceId:V42.deviceId,appVersion:V42.version};
       await V42.idbSet('queue',id,op);return id;
     }catch(e){console.warn('[MDM] queue enqueue failed',e);return null;}
-  };
-
-  V42.scheduleQueueRetry=function(delay){
-    clearTimeout(V42.queueTimer);
-    const ms=Math.max(1000,Math.min(RETRY_MAX_MS,Number(delay)||RETRY_BASE_MS));
-    V42.queueTimer=setTimeout(()=>{if(navigator.onLine&&CLOUD.user&&CLOUD.autoSync)V42.flushQueue().catch(()=>{});},ms);
   };
 
   V42.flushQueue=async function(){
@@ -11143,7 +11142,7 @@ v2.8 — Definitive flat-light header + school category correction
         for(const op of q){
           op.status='uploading';op.attempts=(op.attempts||0)+1;op.updatedAt=nowISO();await V42.idbSet('queue',op.id,op);
           try{
-            const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,updatedAt:op.updatedAt||op.createdAt,revision:op.revision||0,deviceId:op.deviceId,appVersion:V42.version});
+            const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:V42.version});
             if(!result?.ok) throw new Error(result?.error||'Server did not acknowledge sync');
             op.status='synced';op.syncedAt=nowISO();op.serverOperationId=result.operationId||op.id;op.lastError='';op.nextRetryAt=0;await V42.idbSet('queue',op.id,op);sent++;localStorage.setItem('cloud_last_sync',op.syncedAt);
           }catch(e){
@@ -11154,17 +11153,17 @@ v2.8 — Definitive flat-light header + school category correction
               try{ recovered=await V42.ensureBackendAuthSilent(); }catch(_e){}
               if(recovered&&V42.idToken){
                 try{
-                  const retry=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,updatedAt:op.updatedAt||op.createdAt,revision:op.revision||0,deviceId:op.deviceId,appVersion:V42.version});
+                  const retry=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:V42.version});
                   if(retry?.ok){op.status='synced';op.syncedAt=nowISO();op.serverOperationId=retry.operationId||op.id;op.lastError='';op.nextRetryAt=0;await V42.idbSet('queue',op.id,op);sent++;localStorage.setItem('cloud_last_sync',op.syncedAt);continue;}
                   msg=String(retry?.error||'Server did not acknowledge sync after authentication recovery');
                 }catch(re){msg=String(re?.message||re);} 
               }
-              op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+60000;authRequired=true;await V42.idbSet('queue',op.id,op);V42.scheduleQueueRetry(60000);failed++;break;
+              op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+60000;authRequired=true;await V42.idbSet('queue',op.id,op);failed++;break;
             }
             const attempts=Number(op.attempts||0);
             if(attempts>=MAX_SYNC_ATTEMPTS){op.status='failed_permanent';op.lastError=msg;op.failedAt=nowISO();op.nextRetryAt=0;}
             else {const delay=Math.min(RETRY_MAX_MS,RETRY_BASE_MS*Math.pow(2,Math.max(0,attempts-1)));op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+delay;}
-            await V42.idbSet('queue',op.id,op);V42.scheduleQueueRetry(op.nextRetryAt-Date.now());failed++;break;
+            await V42.idbSet('queue',op.id,op);failed++;break;
           }
         }
         const left=await V42.queueCount();
@@ -11199,6 +11198,8 @@ v2.8 — Definitive flat-light header + school category correction
       await V42.saveSession(merged);localStorage.setItem('cloud_user',JSON.stringify(merged));localStorage.removeItem('mdm_local_user');
       auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+merged.email,null);
       CLOUD.updateUI();
+      try{await V42.refreshDriveStructure();}catch(_e){}
+      if(A.page==='backupsync'){gP('backupsync');}else{renderShell();gP('dashboard');}
       return merged;
     }catch(e){CLOUD.user=previous.user||null;CLOUD.token=previous.token||null;V42.idToken=previous.idToken||null;CLOUD.ready=previous.ready||false;throw e;}
   };
@@ -11239,7 +11240,6 @@ v2.8 — Definitive flat-light header + school category correction
 
   V42.afterGoogleLogin=async function(){
     CLOUD.ready=true;CLOUD.updateUI();
-    if(A.page==="backupsync") setTimeout(()=>gP("backupsync"),0);
     const email=CLOUD.user?.email||'';
     const marker='mdm_initial_cloud_backup_'+email;
     try{await V42.flushQueue();}catch(e){}
@@ -11254,13 +11254,6 @@ v2.8 — Definitive flat-light header + school category correction
     V42.backupInFlight=(async()=>{
       try{
         CLOUD.setSyncStatus('Preparing backup…','var(--am)');
-        await V42.createRestorePoint(reason||'manual_backup');
-        if(CLOUD.user&&isGoogleUser(CLOUD.user)&&navigator.onLine){
-          try{if(!V42.idToken)await V42.ensureBackendAuthSilent();}catch(_e){}
-          try{await V42.flushQueue();}catch(_e){}
-        }
-        // Re-read the authoritative local state AFTER pending queue work.
-        // This closes the Backup Now snapshot boundary around the latest state.
         const candidate=await V42.buildBackupPackage(reason||'manual_backup');
         const currentHash=candidate.manifest.integrity?.stateHash||'';
         const lastHash=localStorage.getItem('cloud_last_backup_state_hash')||'';
@@ -11275,6 +11268,7 @@ v2.8 — Definitive flat-light header + school category correction
         const offline=candidate;
         await V42.idbSet('meta','latest_offline_backup',{createdAt:offline.manifest.createdAt,backupId:offline.manifest.backupId,package:offline});
         if(downloadOffline){ const blob=new Blob([JSON.stringify(offline,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob),a=document.createElement('a'); a.href=url;a.download='MDM_ERP_Backup_'+offline.manifest.createdAt.slice(0,19).replace(/[T:]/g,'-')+'.json'; document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
+        await V42.createRestorePoint(reason||'manual_backup');
         if(!CLOUD.user||!isGoogleUser(CLOUD.user)){CLOUD.setSyncStatus('Local backup saved','var(--am)');toast('Offline backup created. Sign in with Google to upload it to Drive.','ok');return {ok:true,local:true,backupId:offline.manifest.backupId};}
         if(!V42.idToken){const ok=await V42.ensureBackendAuthSilent();if(!ok) throw new Error('Google authentication is required for Master Drive backup');}
         await V42.flushQueue();
@@ -11305,16 +11299,16 @@ v2.8 — Definitive flat-light header + school category correction
     })();
     return V42.backupInFlight;
   };
-  window.cloudBackupNow=()=>V42.cloudBackupNow('manual_backup',false);
+  window.cloudBackupNow=()=>V42.cloudBackupNow('manual_backup');
   window.cloudSignIn=()=>V42.googleSignIn();
   window.cloudSignOut=async function(){
-    const was=CLOUD.user?.email||'';CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.clearSession().catch(()=>{});localStorage.removeItem('cloud_user');auditLog('LOGIN','cloud','google','Google account disconnected: '+was,null);CLOUD.updateUI();if(A.page==="backupsync")gP("backupsync");toast('Google account disconnected — local login remains available','ok');
+    const was=CLOUD.user?.email||'';CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.clearSession().catch(()=>{});localStorage.removeItem('cloud_user');auditLog('LOGIN','cloud','google','Google account disconnected: '+was,null);CLOUD.updateUI();toast('Google account disconnected — local login remains available','ok');
   };
   window.cloudAutoSyncToggle=function(enabled){CLOUD.autoSync=!!enabled;localStorage.setItem('cloud_auto_sync',enabled?'1':'0');toast('Auto sync '+(enabled?'enabled':'disabled'),'ok');if(enabled&&navigator.onLine)V42.flushQueue();};
 
   /* ---------- local emergency login remains unchanged in business semantics ---------- */
   window.doLogin=async function(){
-    try{const user=(document.getElementById('lu')||{}).value?.trim()||'',pass=(document.getElementById('lp')||{}).value||'',found=(A.users||[]).find(u=>u.username===user&&u.password===pass);if(!found){toast('Invalid username or password','err');return;}const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:nowISO()};A.loggedIn=true;A.currentUser=localUser;CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.saveSession(localUser).catch(()=>{});localStorage.setItem('mdm_local_user',JSON.stringify(localUser));localStorage.removeItem('cloud_user');auditLog('LOGIN','user',localUser.id||'', 'User logged in: '+(localUser.name||''),null);renderShell();gP('dashboard');toast('Local emergency login active — cloud sync requires Google sign-in','ok');}catch(e){toast('Local login failed: '+e.message,'err');}
+    try{const user=(document.getElementById('lu')||{}).value?.trim()||'',pass=(document.getElementById('lp')||{}).value||'',found=(A.users||[]).find(u=>u.username===user&&u.password===pass);if(!found){toast('Invalid username or password','err');return;}const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:nowISO()};A.loggedIn=true;A.currentUser=localUser;CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.saveSession(localUser).catch(()=>{});localStorage.setItem('mdm_local_user',JSON.stringify(localUser));localStorage.removeItem('cloud_user');renderShell();gP('dashboard');toast('Local emergency login active — cloud sync requires Google sign-in','ok');}catch(e){toast('Local login failed: '+e.message,'err');}
   };
 
   /* ---------- restore browser session + silent credential recovery ---------- */
@@ -11336,7 +11330,7 @@ v2.8 — Definitive flat-light header + school category correction
         sessionStorage.setItem(startupMarker,'1');
         try{await V42.createRestorePoint('erp_open');}catch(e){console.warn('[MDM] startup restore point failed',e);}
       }
-      if(A.loggedIn){renderShell();gP('dashboard');}
+      if(A.loggedIn){renderShell();gP('dashboard');if(CLOUD.user&&isGoogleUser(CLOUD.user))setTimeout(()=>V42.refreshDriveStructure().then(()=>{if(A.page==='backupsync')gP('backupsync');}),200);}
     }catch(e){console.warn('[MDM] startup session restore failed',e);}
   };
 
@@ -11368,6 +11362,16 @@ v2.8 — Definitive flat-light header + school category correction
     if(typeof window.schMasterResetConfirm==='function'&&!window.schMasterResetConfirm.__mdmWrapped){const f=window.schMasterResetConfirm;const w=async function(){await wrapCheckpoint().catch(()=>{});return f.apply(this,arguments);};w.__mdmWrapped=true;window.schMasterResetConfirm=w;}
   }catch(e){console.warn('[MDM] risky-operation checkpoint hooks unavailable',e);}
 
+  V42.cloudStructure=null;
+  V42.refreshDriveStructure=async function(){
+    if(!CLOUD.user||!isGoogleUser(CLOUD.user)) return null;
+    try{
+      const r=await V42.backend('driveStructure',{});
+      if(r?.ok&&r.drive){V42.cloudStructure=r.drive;return r.drive;}
+    }catch(e){console.warn('[MDM] Drive structure refresh failed',e);}
+    return null;
+  };
+
   /* ---------- configuration diagnostics: read-only, effective-value aware ---------- */
   V42.getConfigDiagnostics=async function(){
     const htmlApi=V42_DEFAULT_API_URL;
@@ -11377,62 +11381,22 @@ v2.8 — Definitive flat-light header + school category correction
     const effectiveApi=V42.apiUrl||'';
     const effectiveClient=V42.googleClientId||'';
     let backend=null;
-    try{if(navigator.onLine&&effectiveApi)backend=await V42.backend('diagnostics',{});}catch(e){backend={ok:false,error:e.message};}
+    try{if(navigator.onLine&&V42.apiUrl)backend=await V42.backend('diagnostics',{});}catch(e){backend={ok:false,error:e.message};}
     const material=[effectiveApi,effectiveClient,backend?.deploymentId||'',backend?.scriptVersion||V42.version,backend?.schemaVersion||'2'].join('|');
     let fp='unavailable';try{if(window.crypto?.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(material));fp=Array.from(new Uint8Array(b)).slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase();}}catch(e){}
     const endpointId=(effectiveApi.match(/\/macros\/s\/([^/]+)\/exec/)||[])[1]||'—';
     const backendClientMismatch=!!(backend&&backend.googleClientId&&effectiveClient&&backend.googleClientId!==effectiveClient);
-    const backendApi=backend?.webAppUrl||'';
-    const backendApiMismatch=!!(backendApi&&effectiveApi&&backendApi!==effectiveApi);
-    const backendClientConfigured=backend?.googleClientId||'';
-    const apiStatus=backendApi&&effectiveApi?(backendApi===effectiveApi?'MATCH':'MISMATCH'):(storedApi&&storedApi!==htmlApi?'OVERRIDE':'UNVERIFIED');
-    const clientStatus=backendClientConfigured&&effectiveClient?(backendClientConfigured===effectiveClient?'MATCH':'MISMATCH'):(storedClient&&storedClient!==htmlClient?'OVERRIDE':'UNVERIFIED');
-    const configMismatch=!!(storedApi&&storedApi!==htmlApi)||!!(storedClient&&storedClient!==htmlClient)||backendClientMismatch||backendApiMismatch;
-    const transportOk=!!(backend&&backend.ok);
-    return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,apiStatus,clientStatus,backend,transportOk,configMismatch,fingerprint:fp};
+    const backendApi=backend?.webAppUrl||''; const backendApiMismatch=!!(backendApi&&effectiveApi&&backendApi!==effectiveApi); const backendClientConfigured=backend?.googleClientId||'';
+    return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:false,clientMismatch:false,backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,backend, fingerprint:fp};
   };
-
-  V42.hideDiagnostics=function(){
-    try{localStorage.setItem('mdm_diag_hidden','1');}catch(e){}
-    V42.renderDiagnosticsWhenReady();
-  };
-  V42.showDiagnostics=function(){
-    try{localStorage.removeItem('mdm_diag_hidden');}catch(e){}
-    V42.renderDiagnosticsWhenReady();
-  };
-
   V42.diagnosticsHTML=async function(){
     const d=await V42.getConfigDiagnostics();
     const b=d.backend||{};
-    const mismatch=d.configMismatch;
-    const transportFailed=!d.transportOk;
-    const hidden=!mismatch&&!d.transportOk&&localStorage.getItem('mdm_diag_hidden')==='1';
-    if(hidden){
-      return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="cbd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px"><div><b>Integration Diagnostics</b> <span class="bdg bn" style="margin-left:6px">OK</span><span style="margin-left:8px;color:var(--txl);font-size:11px">Direct Web App transport</span></div><button class="btn btn-g btn-sm" onclick="V42.showDiagnostics()">View</button></div></div>`;
-    }
-    const status=mismatch?'CONFIG MISMATCH':transportFailed?'BACKEND UNREACHABLE':'OK';
-    const badge=mismatch||transportFailed?'br':'bn';
-    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)">
-      <div class="chd"><span class="cht">🧬 Integration Diagnostics</span><div style="display:flex;align-items:center;gap:7px"><span class="bdg ${badge}">${status}</span><button class="btn btn-g btn-sm" onclick="V42.hideDiagnostics()">Hide</button></div></div>
-      <div class="cbd" style="font-size:12px;line-height:1.55">
-        <div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div>
-        <div><b>Transport:</b> <code>Direct Web App POST → iframe ACK</code></div>
-        <div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div>
-        <div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div>
-        <div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div>
-        <div><b>Backend live Web App URL:</b> <code>${esc(d.backendApi||'—')}</code> ${d.backend?.webAppUrlSource?'<span style="color:var(--txl)">('+esc(d.backend.webAppUrlSource)+')</span>':''}</div>
-        <div><b>Backend → Effective API:</b> ${esc(d.apiStatus)}</div>
-        <div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div>
-        <div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div>
-        <div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div>
-        <div><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div>
-        ${transportFailed?`<div style="margin-top:7px;padding:8px 10px;border:1px solid var(--rd);background:var(--rlt);border-radius:7px;color:var(--rd)"><b>Transport error:</b> ${esc(b.error||'The Web App did not return a diagnostics ACK.')}</div>`:''}
-        <div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div>
-        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button><button class="btn btn-g btn-sm" onclick="V42.hideDiagnostics()">Hide</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div>
-        <div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div>
-      </div>
-    </div>`;
+    const mismatch=d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch;
+    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><div style="display:flex;align-items:center;gap:8px"><span class="cht">🧬 Integration Diagnostics</span><span class="bdg ${mismatch?'br':'bn'}">${mismatch?'CONFIG MISMATCH':'OK'}</span></div><button class="btn btn-g btn-sm" onclick="V42.hideDiagnostics()">Hide</button></div><div class="cbd" style="font-size:12px;line-height:1.55"><div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div><div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div><div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div><div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div><div><b>Backend live Web App URL:</b> <code>${esc(d.backendApi||'—')}</code> ${d.backend?.webAppUrlSource?'<span style="color:var(--txl)">('+esc(d.backend.webAppUrlSource)+')</span>':''}</div><div><b>Backend → Effective API:</b> ${d.backendApiMismatch?'MISMATCH':'MATCH / not configured'}</div><div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div><div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div><div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div><div style="margin-top:6px"><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''} ${b.bridgeMode?'· '+esc(b.bridgeMode)+' bridge':''}</div><div><b>Bridge file required:</b> ${b.bridgeFileRequired===false?'No — inline':'Unknown'}</div><div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div><div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div></div></div>`;
   };
+  V42.hideDiagnostics=function(){localStorage.setItem('mdm_diagnostics_hidden_v1','1');V42.renderDiagnosticsWhenReady();};
+  V42.showDiagnostics=function(){localStorage.removeItem('mdm_diagnostics_hidden_v1');V42.renderDiagnosticsWhenReady();};
 
   V42.restoreLatestCloudBackup=async function(){
     if(!CLOUD.user||!isGoogleUser(CLOUD.user)){toast('Sign in with Google first','err');return false;}
@@ -11455,6 +11419,10 @@ v2.8 — Definitive flat-light header + school category correction
   V42.renderDiagnosticsWhenReady=async function(){
     if(A.page!=='backupsync') return;
     const host=document.getElementById('mdm-integration-diagnostics-host');if(!host)return;
+    if(localStorage.getItem('mdm_diagnostics_hidden_v1')==='1'){
+      host.innerHTML='<div style="display:flex;justify-content:flex-end;margin-bottom:10px"><button class="btn btn-g btn-sm" onclick="V42.showDiagnostics()">View Integration Diagnostics</button></div>';
+      return;
+    }
     try{host.innerHTML=await V42.diagnosticsHTML();}catch(e){host.innerHTML='<div class="card"><div class="cbd">Diagnostics unavailable</div></div>';}
   };
   /* Add diagnostics host without changing existing Backup & Sync layout. */
@@ -11482,67 +11450,7 @@ v2.8 — Definitive flat-light header + school category correction
   /* Startup: restore session, then try silent GIS recovery; never block local ERP. */
   setTimeout(()=>V42.restoreStartupSession(),100);
 
-  /* ---------- DNA 5.5: explicit credential lifecycle + regression guard ---------- */
-V42.authState='local_only';
-V42.authLastRecoveryAt=0;
-V42.authNextRecoveryAt=0;
-V42.authRecoveryTimer=null;
-V42.updateAuthState=function(state,detail){
-  V42.authState=state;
-  V42.authLastAuthDetail=detail||'';
-  try{window.dispatchEvent(new CustomEvent('mdm-auth-state',{detail:{state,detail:detail||''}}));}catch(_e){}
-};
-V42.scheduleCredentialRecovery=function(delayMs){
-  const delay=Math.max(5000,Number(delayMs)||60000);
-  V42.authNextRecoveryAt=Date.now()+delay;
-  if(V42.authRecoveryTimer) clearTimeout(V42.authRecoveryTimer);
-  V42.authRecoveryTimer=setTimeout(async()=>{
-    V42.authRecoveryTimer=null;
-    if(!navigator.onLine||!CLOUD.user||!isGoogleUser(CLOUD.user)) return;
-    const ok=await V42.ensureBackendAuthSilent();
-    V42.updateAuthState(ok?'authenticated':'recovery_required',ok?'Credential recovered':'Google credential recovery unavailable');
-    if(!ok) V42.scheduleCredentialRecovery(Math.min(delay*2,30*60*1000));
-  },delay);
-};
-V42.refreshCredentialLifecycle=function(){
-  if(!CLOUD.user||!isGoogleUser(CLOUD.user)){V42.updateAuthState('local_only','No Google cloud session');return;}
-  const remaining=V42.tokenExpiresAt?V42.tokenExpiresAt-Date.now():0;
-  if(remaining>120000){
-    V42.updateAuthState('authenticated','Credential valid beyond recovery window');
-    V42.scheduleCredentialRecovery(Math.max(30000,remaining-120000));
-  }else{
-    V42.updateAuthState('recovery_required','Credential expired or inside recovery window');
-    V42.scheduleCredentialRecovery(5000);
-  }
-};
-/* Never store the raw credential; lifecycle state is local diagnostic metadata only. */
-const _acceptGoogleCredentialOriginal=V42.acceptGoogleCredential;
-V42.acceptGoogleCredential=async function(credential){
-  const result=await _acceptGoogleCredentialOriginal(credential);
-  V42.refreshCredentialLifecycle();
-  return result;
-};
-const _ensureBackendAuthSilentOriginal=V42.ensureBackendAuthSilent;
-V42.ensureBackendAuthSilent=async function(){
-  const ok=await _ensureBackendAuthSilentOriginal();
-  if(ok) V42.refreshCredentialLifecycle();
-  else if(CLOUD.user&&isGoogleUser(CLOUD.user)) V42.updateAuthState('recovery_required','Fresh Google credential unavailable');
-  return ok;
-};
-window.mdmRegressionAudit=function(){
-  const required=[
-    ['niSave','Invoice save'],['printInvoicePDF','PDF renderer'],['sv','State save'],
-    ['V42.serializeState','State serializer'],['V42.flushQueue','Sync worker'],
-    ['V42.cloudBackupNow','Backup Now'],['V42.createRestorePoint','Restore point'],
-    ['V42.importRecovery','Recovery'],['V42.ensureBackendAuthSilent','Auth recovery']
-  ];
-  const results=required.map(([name,label])=>({name,label,ok:typeof (name.startsWith('V42.')?name.split('.').reduce((o,k)=>o?.[k],window):window[name])==='function'}));
-  const invoiceCheck=typeof p916ValidateAllInvoices==='function'?p916ValidateAllInvoices():{ok:false,error:'validator unavailable'};
-  return {version:V42.version,infraVersion:V42.finalVersion,coreFunctions:results,invoiceIntegrity:invoiceCheck,erpStateKeys:[...V42.stateKeys],authState:V42.authState,productionLiveTestRequired:true,ok:results.every(x=>x.ok)&&invoiceCheck.ok};
-};
-setInterval(()=>{try{V42.refreshCredentialLifecycle();}catch(_e){}},60000);
-
-window.mdmInfrastructureSelfTest=async function(){
+  window.mdmInfrastructureSelfTest=async function(){
     const out=[],add=(name,ok,detail)=>out.push({name,ok:!!ok,detail:detail||''});
     add('IndexedDB',!!window.indexedDB,'Persistent local storage');
     add('Canonical API',!!V42.apiUrl,'Effective backend configured');
@@ -11561,7 +11469,6 @@ window.mdmInfrastructureSelfTest=async function(){
     add('Multi-device revision guard',true,'Backend rejects stale state revisions');
     add('Startup restore point',true,'One automatic checkpoint per browser session');
     add('Invoice pre-save checkpoint',true,'Checkpoint is awaited before invoice mutation');
-    add('Complete state inventory',V42.stateKeys.includes('iu')&&V42.stateKeys.includes('ar')&&V42.keyMap.dp==='dups','All persistent ERP state channels mapped');
     add('Schema guard',typeof V42.validateRecoveryPackage==='function','Version/integrity-aware restore');
     add('Invoice renderer',typeof window.renderInvoicePDF==='function'||typeof window.prepareInvoicePDF==='function','Existing renderer preserved');
     return out;
