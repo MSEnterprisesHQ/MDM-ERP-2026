@@ -5056,26 +5056,31 @@ V42.backend = async function(action,payload){
       const frame=document.createElement('iframe');
       frame.id='mdm-api-bridge-frame';
       frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+      const bridgeToken='bt_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);
       const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
-      const onReady=ev=>{if(ev.data?.type!=='mdm-api-bridge-ready')return;if(ev.source&&ev.source!==frame.contentWindow)return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
+      const onReady=ev=>{
+        if(ev.data?.type!=='mdm-api-bridge-ready' || ev.data?.token!==bridgeToken)return;
+        clearTimeout(timer);window.removeEventListener('message',onReady);resolve({frame,bridgeToken});
+      };
       window.addEventListener('message',onReady);
       document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51')+'&bridgeToken='+encodeURIComponent(bridgeToken);
     }).catch(e=>{V42._apiBridgePromise=null;throw e;});
   }
   try{
-    const frame=await V42._apiBridgePromise;
+    const bridge=await V42._apiBridgePromise;
+    const frame=bridge.frame, bridgeToken=bridge.bridgeToken;
     const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
     return await new Promise((resolve,reject)=>{
-      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
+      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout. No ACK was received from the Apps Script bridge.'));},30000);
       const onMessage=ev=>{
-        if(ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;if(ev.source&&ev.source!==frame.contentWindow)return;
+        if(ev.data?.type!=='mdm-api-response' || ev.data?.token!==bridgeToken || ev.data.requestId!==requestId)return;
         clearTimeout(timeout);window.removeEventListener('message',onMessage);
         if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
         else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
       };
       window.addEventListener('message',onMessage);
-      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+      frame.contentWindow.postMessage({type:'mdm-api-request',token:bridgeToken,requestId,body},'*');
     });
   }catch(bridgeError){
     // Last-resort direct fetch is retained for deployments where CORS is already
@@ -11401,8 +11406,10 @@ v2.8 — Definitive flat-light header + school category correction
     const b=d.backend||{};
     const mismatch=!!(d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch);
     const transportFailed=!b.ok;
-    if(!mismatch && !transportFailed && localStorage.getItem('mdm_diag_hidden')==='1'){
-      return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="cbd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px"><div><b>Integration Diagnostics</b> <span class="bdg bn" style="margin-left:6px">OK</span></div><button class="btn btn-g btn-sm" onclick="V42.showDiagnostics()">View</button></div></div>`;
+    if(localStorage.getItem('mdm_diag_hidden')==='1'){
+      const hiddenStatus=mismatch?'CONFIG MISMATCH':transportFailed?'BACKEND UNREACHABLE':'OK';
+      const hiddenBadge=mismatch||transportFailed?'br':'bn';
+      return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="cbd" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px"><div><b>Integration Diagnostics</b> <span class="bdg ${hiddenBadge}" style="margin-left:6px">${hiddenStatus}</span></div><button class="btn btn-g btn-sm" onclick="V42.showDiagnostics()">View</button></div></div>`;
     }
     const status=mismatch?'CONFIG MISMATCH':transportFailed?'BACKEND UNREACHABLE':'OK';
     const badge=mismatch||transportFailed?'br':'bn';
