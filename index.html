@@ -1536,7 +1536,7 @@ Invoice/PDF/business logic intentionally preserved.
 })();
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- XLSX is lazy-loaded only when Excel import is requested. This must not block ERP startup. -->
 
 
 
@@ -9762,6 +9762,30 @@ function extRefPrint(){
   w.document.open();w.document.write(html);w.document.close();w.focus();
   setTimeout(()=>w.print(),250);
 }
+
+// v5.3 — non-blocking XLSX loader. The ERP must boot even if the CDN is slow/unavailable.
+let __xlsxLoadPromise=null;
+function loadXLSX(){
+  if(typeof XLSX!=="undefined") return Promise.resolve(XLSX);
+  if(__xlsxLoadPromise) return __xlsxLoadPromise;
+  __xlsxLoadPromise=new Promise((resolve,reject)=>{
+    const existing=document.querySelector('script[data-mdm-xlsx="1"]');
+    if(existing){
+      existing.addEventListener("load",()=>resolve(window.XLSX),{once:true});
+      existing.addEventListener("error",()=>reject(new Error("XLSX parser failed to load")),{once:true});
+      return;
+    }
+    const sc=document.createElement("script");
+    sc.dataset.mdmXlsx="1";
+    sc.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+    sc.async=true;
+    sc.onload=()=>{ if(window.XLSX) resolve(window.XLSX); else reject(new Error("XLSX parser loaded without API")); };
+    sc.onerror=()=>reject(new Error("XLSX parser failed to load"));
+    document.head.appendChild(sc);
+  });
+  return __xlsxLoadPromise;
+}
+
 function extRefDownloadPDF(){const rows=extRefRowsForExport(),w=window.open("","_blank");if(!w){toast("Allow pop-ups to print PDF","err");return}w.document.write(`<html><head><title>External Invoice Register</title><style>body{font:12px Arial;padding:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left}th{background:#eee}</style></head><body><h1>External Invoice Register — Reference Only</h1><table><tr><th>Invoice No.</th><th>FY</th><th>School</th><th>Billing Month</th><th>Students</th><th>Amount</th></tr>${rows.map(r=>`<tr>${Object.values(r).map(v=>`<td>${extRefEsc(v)}</td>`).join("")}</tr>`).join("")}</table><\\/body></html>`);w.document.close();setTimeout(()=>w.print(),300)}
 
 function extRefEsc(v){return String(v==null?"":v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
@@ -9798,13 +9822,11 @@ function extRefImport(input){
   const isJson=/\.json$/.test(name);
   const reader=new FileReader();
 
-  reader.onload=e=>{
+  reader.onload=async e=>{
     try{
       let rows=[];
       if(isExcel){
-        if(typeof XLSX==="undefined"){
-          throw new Error("XLSX parser unavailable");
-        }
+        await loadXLSX();
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
         const ws=wb.Sheets[wb.SheetNames[0]];
         if(!ws)throw new Error("No worksheet found");
@@ -10716,7 +10738,7 @@ try{
 /* v4.50 RELEASE NOTE: phases 9–16 are additive completion layers only.
    Existing invoice/PDF/business logic remains untouched. */
 
-bootstrapV42();
+/* bootstrapV42() is intentionally started after the final infrastructure layer below. */
 
 </script>
 
@@ -11336,6 +11358,17 @@ v2.8 — Definitive flat-light header + school category correction
 
   /* Keep the existing settings controls working while routing them to the canonical functions. */
   try{window.cloudSignIn=()=>V42.googleSignIn();}catch(e){}
+
+  // v5.3 startup ordering fix: the final infrastructure layer must be fully
+  // installed before the ERP hydrates state, renders UI, or installs cloud hooks.
+  // This is startup orchestration only; invoice/business calculations are untouched.
+  setTimeout(()=>{
+    try{ bootstrapV42(); }catch(e){
+      console.error("MDM ERP bootstrap failed",e);
+      const app=document.getElementById("app");
+      if(app) app.innerHTML='<div style="padding:32px;font:600 16px system-ui;color:#172033;background:#fff;min-height:100vh">MDM ERP startup failed. Open browser console for diagnostics.</div>';
+    }
+  },0);
 })();
 </script>
 
