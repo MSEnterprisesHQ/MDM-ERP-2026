@@ -310,6 +310,10 @@ a{color:inherit;text-decoration:none;}
 .inf-r{background:var(--rlt);color:var(--rd);border:1px solid #fca5a5;}
 .toasts{position:fixed;bottom:24px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:340px;}
 .toast{padding:12px 16px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);animation:tst .3s ease;display:flex;align-items:center;gap:9px;}
+.toast{background:#0f172a!important;color:#fff!important;border:1px solid rgba(255,255,255,.18)!important;position:relative!important;padding:12px 42px 12px 14px!important;min-height:44px!important;box-sizing:border-box!important;}
+.toast-close{position:absolute!important;right:8px!important;top:8px!important;width:27px!important;height:27px!important;border:0!important;border-radius:7px!important;background:rgba(255,255,255,.16)!important;color:#fff!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;}
+.toast-close:hover{background:rgba(255,255,255,.28)!important;}
+.toast-msg{white-space:normal!important;overflow-wrap:anywhere!important;}
 .tok{background:#15803d;color:#fff;}
 .ter{background:var(--rd);color:#fff;}
 .tinf{background:var(--sk);color:#fff;}
@@ -1536,7 +1540,7 @@ Invoice/PDF/business logic intentionally preserved.
 })();
 </script>
 
-<!-- XLSX is lazy-loaded only when Excel import is requested. This must not block ERP startup. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 
 
@@ -1852,7 +1856,7 @@ function schoolOptionsHTML(selectedId){
 }
 function nw(n){const a=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"],b=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"],w=n=>{if(n<20)return a[n];if(n<100)return b[~~(n/10)]+(n%10?" "+a[n%10]:"");if(n<1000)return a[~~(n/100)]+" Hundred"+(n%100?" "+w(n%100):"");if(n<1e5)return w(~~(n/1000))+" Thousand"+(n%1000?" "+w(n%1000):"");if(n<1e7)return w(~~(n/1e5))+" Lakh"+(n%1e5?" "+w(n%1e5):"");return w(~~(n/1e7))+" Crore"+(n%1e7?" "+w(n%1e7):"");};const r=Math.round(+n||0);return(r?w(r):"Zero")+" Rupees Only";}
 function shuf(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=~~(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
-function toast(m,t){const d=document.createElement("div");d.className="toast "+(t||"");d.innerHTML="<span>"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span>"+ec(m);document.getElementById("toasts").appendChild(d);setTimeout(()=>d.remove(),3400);}
+function toast(m,t){const d=document.createElement("div");d.className="toast "+(t||"");d.setAttribute("role","status");d.innerHTML="<span class=\"toast-ico\">"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span><span class=\"toast-msg\">"+ec(m)+"</span><button class=\"toast-close\" type=\"button\" aria-label=\"Close notification\" title=\"Close\">&#10005;</button>";const c=d.querySelector(".toast-close");if(c)c.onclick=()=>d.remove();document.getElementById("toasts").appendChild(d);const ms=t==="err"?10000:6000;setTimeout(()=>{if(d.isConnected)d.remove();},ms);}
 function addRV(id){let r=A.rv.filter(x=>x!==id);r.unshift(id);if(r.length>5)r=r.slice(0,5);sv("rv",r);}
 function sBdg(st,sy){if(st==="released")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-blue"></span>Released</span>';if(st==="cancelled")return'<span class="bdg br sync-badge"><span class="sync-dot sync-red"></span>Cancelled</span>';if(st==="revised")return'<span class="bdg bam sync-badge"><span class="sync-dot sync-amber"></span>Revised</span>';if(st==="draft")return'<span class="bdg bs sync-badge"><span class="sync-dot sync-gray"></span>Draft</span>';if(["syncing","uploading","processing"].includes(sy))return'<span class="bdg bb sync-badge"><span class="sync-dot sync-blue"></span>Syncing</span>';if(sy==="pending")return'<span class="bdg bp sync-badge"><span class="sync-dot sync-orange"></span>Pending Sync</span>';if(sy==="synced")return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Synced</span>';return'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Active</span>';}
 
@@ -3474,6 +3478,128 @@ function niSaveEdited(){
   sv("iv",A.invoices.map((i,j)=>j===idx?updated:i)); NI.saved=true; const id=updated.id; NI.editId=null; A.flashId=id; toast("Invoice "+updated.invNo+" updated — revision saved","ok"); auditLog("UPDATE","invoice",id,"Edited invoice: "+updated.invNo,null); setTimeout(()=>showInvSuccess(updated),250); gP("new");
 }
 
+async function niPr(tab){
+  if(tab==="merged"){
+    if(!NI.calc||!NI.saved){toast("Save the invoice before exporting the Master Invoice PDF","warn");return;}
+    const inv=A.invoices.find(i=>i.id===A.flashId);
+    if(!inv){toast("Saved invoice not found","err");return;}
+    try{
+      const file=await prepareInvoicePdf(inv.id,{force:true});
+      const title=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net}).replace(/\.pdf$/i,"");
+      const orig=document.title;document.title=title;
+      toast("Opening print dialog — choose 'Save as PDF' to save the locked invoice","ok");
+      await printMasterInvoiceFile(file,title,()=>{document.title=orig;});
+    }catch(e){toast("Invoice PDF failed: "+(e.message||"Unknown error"),"err");}
+    return;
+  }
+  NI.tab=tab;gP("new");setTimeout(()=>window.print(),150);
+}
+function niPrAll(){
+  const nxt=niResolvedInvNo(true);
+  const sch=A.schools.find(s=>s.id===NI.schoolId);const c=NI.calc;if(!c)return;
+  const pw=window.open("","_blank","width=900,height=700");if(!pw){toast("Allow popups","warn");return;}
+  pw.document.write(`<!DOCTYPE html><html><head><title>${nxt} Full Pack</title><style>${document.querySelector("style").textContent}</style></head><body style="padding:16px"><div style="margin-bottom:20px">${invDoc(c,NI,sch,nxt)}</div><div style="page-break-before:always;margin-bottom:20px">${axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,NI,nxt)}</div><div style="page-break-before:always;margin-bottom:20px">${axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,NI,nxt)}</div>${c.annexA.length&&c.annexB.length?`<div style="page-break-before:always">${axCDoc(c,sch,NI,nxt)}</div>`:""}
+
+
+<!-- v4.19 CLEAN: mobile dashboard welcome, 2x2 summary, compact invoice tools. Desktop selectors untouched. -->
+<style id="mobile-history-filter-export-ux-v41">
+/* v4.41 — MOBILE-ONLY Invoice History filter/export organization.
+   Presentation-only: no data, state, handlers, business logic or desktop layout changes. */
+@media (max-width:760px) and (hover:none) and (pointer:coarse){
+  .hist-filter-card{border-radius:12px!important;box-shadow:0 5px 18px rgba(15,23,42,.08)!important;}
+  .hist-filter-body{padding:12px!important;}
+  .hist-filter-title{
+    display:flex!important;align-items:center!important;gap:6px!important;
+    min-height:18px!important;margin:0 0 9px!important;
+    color:var(--txl)!important;font-size:11px!important;font-weight:800!important;
+    letter-spacing:.1px!important;
+  }
+  .hist-filter-primary{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    gap:7px!important;margin:0!important;
+    align-items:center!important;
+  }
+  .hist-filter-primary .fi{
+    width:100%!important;max-width:none!important;min-width:0!important;
+    height:38px!important;min-height:38px!important;
+    padding:0 10px!important;border-radius:9px!important;
+    font-size:11.5px!important;box-sizing:border-box!important;
+  }
+  .hist-filter-search{grid-column:1 / -1!important;}
+  .hist-filter-month,.hist-filter-fy,.hist-filter-status{grid-column:auto!important;}
+  .hist-filter-school{grid-column:1 / -1!important;}
+  .hist-filter-date{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr)!important;
+    gap:6px!important;align-items:center!important;
+    margin-top:7px!important;
+  }
+  .hist-filter-date .fi{
+    width:100%!important;max-width:none!important;min-width:0!important;
+    height:36px!important;min-height:36px!important;
+    padding:0 7px!important;border-radius:9px!important;font-size:10.5px!important;
+  }
+  .hist-filter-date-label,.hist-filter-to{
+    color:var(--txl)!important;font-size:10px!important;font-weight:700!important;
+    white-space:nowrap!important;
+  }
+  .hist-filter-clear{
+    grid-column:1 / -1!important;width:100%!important;
+    min-height:34px!important;margin-top:1px!important;
+  }
+
+  .hist-history-toolbar{
+    display:flex!important;flex-direction:column!important;
+    align-items:stretch!important;gap:8px!important;
+    width:100%!important;margin-bottom:10px!important;
+  }
+  .hist-toolbar-views{
+    width:100%!important;display:flex!important;align-items:center!important;
+    gap:5px!important;position:relative!important;
+  }
+  .hist-toolbar-views>button{
+    flex:1 1 0!important;min-width:0!important;
+    height:34px!important;padding:0 7px!important;
+    font-size:10.5px!important;white-space:nowrap!important;
+  }
+  .hist-toolbar-views .hist-timeline-options-btn{
+    flex:0 0 34px!important;width:34px!important;
+  }
+  .hist-history-tools{
+    display:flex!important;flex-direction:column!important;
+    align-items:stretch!important;gap:7px!important;
+    width:100%!important;
+    padding-top:2px!important;
+  }
+  .hist-created-toggle{
+    width:max-content!important;max-width:100%!important;
+    min-height:28px!important;padding:0 2px!important;
+    font-size:10px!important;
+  }
+  .hist-export-row{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:6px!important;width:100%!important;
+  }
+  .hist-export-btn{
+    width:100%!important;min-width:0!important;
+    height:36px!important;min-height:36px!important;
+    padding:0 4px!important;border-radius:8px!important;
+    font-size:9.5px!important;font-weight:800!important;
+    white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;
+    box-sizing:border-box!important;
+    transition:transform .12s ease,box-shadow .12s ease!important;
+  }
+  .hist-export-btn:active{transform:translateY(1px)!important;}
+  .hist-print-btn{box-shadow:0 2px 8px rgba(15,23,42,.10)!important;}
+  .hist-pdf-btn{box-shadow:0 2px 8px rgba(20,184,166,.12)!important;}
+  .hist-excel-btn{box-shadow:0 2px 8px rgba(15,23,42,.10)!important;}
+}
+</style></body></html>`);
+  pw.document.close();setTimeout(()=>pw.print(),500);
+}
+
 // ── Shared student/date display helpers (Phase 1 surgical consistency) ──
 function studentBreakdownHTML(inv, compact){
   const a=Number(inv?.s15)||0,b=Number(inv?.s68)||0,t=a+b;
@@ -4601,6 +4727,9 @@ function pgAud(){
 function admR(){const before={...(A.rates||{})};const r15=parseFloat(document.getElementById("r15")?.value)||6.78,r68=parseFloat(document.getElementById("r68")?.value)||10.17;sv("rt",{r15,r68});auditLog("UPDATE","rates","rates","Per-meal rates updated: Class 1-5 ₹"+r15+", Class 6-8 ₹"+r68,{before,after:{r15,r68}});toast("Rates saved","ok");gP("admin");}
 function admH(){const before=(A.heads||[]).map(h=>({...h}));const u=A.heads.map((h,i)=>({...h,v15:parseFloat(document.getElementById(`hv15-${i}`)?.value)||0,v68:parseFloat(document.getElementById(`hv68-${i}`)?.value)||0}));sv("hd",u);auditLog("UPDATE","budgetHeads","hd","Budget heads updated",{before,after:u});toast("Budget heads saved","ok");gP("admin");}
 function admS(){sv("sr",{prefix:document.getElementById("sp")?.value||"MSE",fy:document.getElementById("sf2")?.value||"2526",sep:document.getElementById("ss")?.value||"-",counter:parseInt(document.getElementById("sc")?.value)||460,digits:parseInt(document.getElementById("sd")?.value)||3});toast("Numbering saved","ok");gP("admin");}
+function doExp(){const data={version:"2.0",exportedAt:new Date().toISOString(),firm:A.firm,series:A.series,rates:A.rates,heads:A.heads,items:A.items,schools:A.schools,invoices:A.invoices,users:A.users};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="MDM_Backup_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);toast("Backup downloaded","ok");}
+function doImp(){const inp=document.createElement("input");inp.type="file";inp.accept=".json";inp.onchange=ev=>{const file=ev.target.files[0];if(!file)return;const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(!d.invoices||!d.firm){toast("Invalid backup file","err");return;}if(!confirm(`Restore backup from ${d.exportedAt}?\n\nThis replaces ALL current data (${d.invoices.length} invoices, ${d.schools.length} schools).\n\nThis cannot be undone!`))return;sv("f",d.firm);sv("sr",d.series);sv("rt",d.rates);sv("hd",d.heads);sv("it",d.items);sv("sc",d.schools);sv("iv",d.invoices);if(d.users)sv("us",d.users);toast(`Restored! ${d.invoices.length} invoices loaded.`,"ok");setTimeout(()=>gP("dashboard"),600);}catch(err){toast("Failed: "+err.message,"err");}};r.readAsText(file);};document.body.appendChild(inp);inp.click();document.body.removeChild(inp);}
+
 // ═══ PROFILE ═══
 function pgPro(){const f=A.firm,u=A.currentUser||{};return `<div class="shd"><div><div class="stl">Profile &amp; Firm Details</div><div class="sst">Printed on every invoice and PDF</div></div><button class="btn btn-p" onclick="svPro()">Save Profile</button></div><div style="display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start"><div class="card"><div class="cbd" style="text-align:center"><div style="width:76px;height:76px;background:var(--slt);border:2px dashed var(--sf);border-radius:11px;display:flex;align-items:center;justify-content:center;margin:0 auto 11px;font-size:28px">&#127970;</div><div style="font-weight:800;font-size:13px;color:var(--nv);margin-bottom:2px">${ec(f.name)}</div><div style="font-size:10px;color:var(--txl)">${ec(f.gstin)}</div></div></div><div style="display:flex;flex-direction:column;gap:13px"><div class="card"><div class="chd"><span class="cht">Business Details</span></div><div class="cbd"><div class="fg fg2">${[["name","Business Name",true],["gstin","GSTIN",true],["pan","PAN"],["stateCode","State Code"],["phone","Phone"],["email","Email"]].map(([k,l,req])=>`<div><label class="flbl">${l}${req?`<span style="color:var(--rd)">*</span>`:""}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Full Address</label><textarea class="fi" id="pr-address" rows="2">${ec(f.address||"")}</textarea></div></div></div></div><div class="card"><div class="chd"><span class="cht">Bank Details</span></div><div class="cbd"><div class="fg fg2">${[["accountName","Account Name"],["accountNo","Account Number"],["bankName","Bank Name"],["ifsc","IFSC Code"],["signatory","Authorised Signatory"]].map(([k,l])=>`<div><label class="flbl">${l}</label><input class="fi" id="pr-${k}" value="${ec(f[k]||"")}"/></div>`).join("")}<div class="fc"><label class="flbl">Branch Address</label><input class="fi" id="pr-branch" value="${ec(f.branch||"")}/></div></div></div></div><div class="card"><div class="chd"><span class="cht">Terms &amp; Conditions</span></div><div class="cbd"><textarea class="fi" id="pr-terms" rows="2">${ec(f.terms||"")}</textarea></div></div><div class="card"><div class="chd"><span class="cht">Account &amp; Security</span></div><div class="cbd"><div class="fg fg2"><div><label class="flbl">Full Name</label><input class="fi" id="sec-name" value="${ec(u.name||"")}"/></div><div><label class="flbl">Username</label><input class="fi" id="sec-uname" value="${ec(u.username||"")}"/></div><div><label class="flbl">Current Password</label><input class="fi" type="password" id="sec-current" placeholder="Required to change credentials"/></div><div><label class="flbl">New Password</label><input class="fi" type="password" id="sec-new" placeholder="Minimum 6 characters"/></div><div><label class="flbl">Confirm New Password</label><input class="fi" type="password" id="sec-confirm" placeholder="Repeat new password"/></div></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-p btn-sm" onclick="saveOwnCredentials()">Save Account &amp; Password</button><button class="btn btn-g btn-sm" onclick="downloadAdminRecovery()">Export Recovery Record</button></div><div style="font-size:10px;color:var(--txl);margin-top:8px">Credential recovery metadata is retained locally and mirrored through the existing Drive adapter when cloud access is active. Plaintext passwords are not written to the recovery export.</div></div></div></div></div>`;}
 function adminRecoveryHistory(){return Array.isArray(A.adminRecoveryHistory)?A.adminRecoveryHistory.slice(-3):[];}
@@ -4677,26 +4806,16 @@ window.doLogout=function(){
    - existing invoice/PDF/business logic remains untouched
    ═════════════════════════════════════════════════════════════════════ */
 const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbxQna-J_HYnAridv9CNRD7EEO6aXYhEjmEerJ6qSGSpjNfYuPVSlNdRoNgeyzHIMJxXfQ/exec";
-const V42_LEGACY_API_URLS = [
-  "https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec"
-];
-function v42NormalizeApiUrl(){
-  try{
-    const stored=localStorage.getItem("mdm_api_url")||"";
-    if(!stored || stored==="APPS_SCRIPT_BRIDGE" || V42_LEGACY_API_URLS.includes(stored) || !/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(stored)){
-      localStorage.setItem("mdm_api_url",V42_DEFAULT_API_URL);
-      return V42_DEFAULT_API_URL;
-    }
-    return stored;
-  }catch(e){ return V42_DEFAULT_API_URL; }
-}
+const V42_CANONICAL_API_URL = V42_DEFAULT_API_URL;
+const V42_LEGACY_API_URLS = ["https://script.google.com/macros/s/AKfycbz7sA5B8LHgrYAGLSLP_4h0nkMBRNHkVeoTS8Malfoh9K5D27prTTNI-_V8ucn8fC20/exec"];
+try { const __savedApi=localStorage.getItem("mdm_api_url")||""; if(V42_LEGACY_API_URLS.includes(__savedApi)) localStorage.setItem("mdm_api_url",V42_CANONICAL_API_URL); } catch(_) {}
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
-  version: "5.5",
+  version: "5.4",
   previousVersion: "4.42",
   dbName: "MDM_INVOICE_SYSTEM",
   dbVersion: 1,
-  apiUrl: ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : v42NormalizeApiUrl()),
+  apiUrl: (()=>{ const s=localStorage.getItem("mdm_api_url")||""; return V42_LEGACY_API_URLS.includes(s)?V42_CANONICAL_API_URL:(s||V42_DEFAULT_API_URL); })(),
   googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
   showConfigModal: false,
   deviceId: localStorage.getItem("mdm_device_id") || ("dev_"+uid()),
@@ -4736,8 +4855,8 @@ V42.idbSet=function(store,key,value){return V42.openDB().then(db=>new Promise((r
 V42.idbDelete=function(store,key){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(key);r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error);}));};
 V42.idbAll=function(store){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readonly").objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}));};
 
-V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib"];
-V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"audit",rv:"rv",dp:"dups",ib:"batchCfg"};
+V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib","iu","ar"];
+V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"audit",rv:"rv",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive",ar:"adminRecoveryHistory"};
 V42.serializeState = function(){const o={};V42.stateKeys.forEach(k=>{const prop=V42.keyMap[k];if(prop && typeof A[prop]!=="undefined") o[k]=A[prop];});return o;};
 V42.writeStateKey = function(k,v){
   const prop=V42.keyMap[k];
@@ -4789,12 +4908,12 @@ V42.hydrateFromIDB = async function(){
 V42._svOriginal = sv;
 sv = function(k,v){
   V42._svOriginal(k,v);
-  try{ V42.writeStateKey(k,v); }catch(e){}
   try{
-    const cloudEligible=V42.stateKeys.slice();
-    if(cloudEligible.includes(k)){
-      V42.enqueue("state",k,{key:k,value:v});
-      if(navigator.onLine && CLOUD.user && CLOUD.autoSync) setTimeout(()=>V42.flushQueue(),400);
+    const cloudKey = k === "dups" ? "dp" : k;
+    if(V42.stateKeys.includes(cloudKey)){
+      V42.writeStateKey(cloudKey,v).catch(()=>{});
+      V42.enqueue("state",cloudKey,{key:cloudKey,value:v}).catch(()=>{});
+      if(navigator.onLine && CLOUD.user && CLOUD.autoSync) setTimeout(()=>V42.flushQueue().catch(()=>{}),400);
     }
   }catch(e){}
 };
@@ -4928,66 +5047,48 @@ V42.backend = async function(action,payload){
   }
 
   // GitHub/standalone mode: use a tiny Apps Script-hosted bridge first.
-  // The bridge is self-contained in Code.gs, so no Apps Script HTML file is
-  // required. A failed/expired iframe is discarded so later requests can
-  // recreate a clean bridge instead of reusing a poisoned transport.
+  // This avoids the browser CORS/redirect problem of reading a ContentService
+  // POST response directly from GitHub Pages. The bridge calls google.script.run
+  // server-side, so the API response remains readable and ACK can be verified.
   if(!V42.apiUrl) throw new Error("API endpoint not configured");
-  const bridgeRequest=async()=>{
-    let frame=null;
-    try{
-      frame=await new Promise((resolve,reject)=>{
-        const f=document.createElement('iframe');
-        f.id='mdm-api-bridge-frame';
-        f.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
-        let settled=false;
-        let pingTimer=null;
-        const cleanup=()=>{window.removeEventListener('message',onReady);if(pingTimer)clearInterval(pingTimer);};
-        const fail=err=>{if(settled)return;settled=true;clearTimeout(timer);cleanup();try{f.remove();}catch(_){};reject(err);};
-        const timer=setTimeout(()=>fail(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.')),15000);
-        const onReady=ev=>{
-          if(ev.data?.type!=='mdm-api-bridge-ready') return;
-          if(settled)return; settled=true; clearTimeout(timer); cleanup(); resolve(f);
-        };
-        window.addEventListener('message',onReady);
-        document.body.appendChild(f);
-        let loaded=false;
-        f.onload=()=>{
-          loaded=true;
-          try{f.contentWindow.postMessage({type:'mdm-api-bridge-ping'},'*')}catch(_){ }
-          // HtmlService can load successfully while the custom READY message is
-          // lost during Google's sandbox/redirect. Treat load as a fallback.
-          setTimeout(()=>{
-            if(!settled && loaded){ settled=true; clearTimeout(timer); cleanup(); resolve(f); }
-          },800);
-        };
-        f.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'5.2')+'&_='+Date.now();
-        pingTimer=setInterval(()=>{if(settled)return;try{f.contentWindow.postMessage({type:'mdm-api-bridge-ping'},'*')}catch(_){}},500);
-      });
-
-      const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-      return await new Promise((resolve,reject)=>{
-        let done=false;
-        const finish=(fn,v)=>{if(done)return;done=true;window.removeEventListener('message',onMessage);clearTimeout(timeout);fn(v);};
-        const timeout=setTimeout(()=>finish(reject,new Error('Master API bridge timeout')),30000);
-        const onMessage=ev=>{
-          if(ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
-          if(ev.data.ok && ev.data.result?.ok) finish(resolve,ev.data.result);
-          else finish(reject,new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
-        };
-        window.addEventListener('message',onMessage);
-        frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
-      });
-    } finally {
-      try{if(frame)frame.remove();}catch(_){}
-    }
-  };
-
-  let lastErr=null;
-  for(let attempt=1;attempt<=2;attempt++){
-    try{return await bridgeRequest();}
-    catch(e){lastErr=e;await new Promise(r=>setTimeout(r,attempt===1?350:0));}
+  if(!V42._apiBridgePromise){
+    V42._apiBridgePromise=new Promise((resolve,reject)=>{
+      const frame=document.createElement('iframe');
+      frame.id='mdm-api-bridge-frame';
+      frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
+      const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not load. Check Apps Script Web App deployment access.'));},10000);
+      const onReady=ev=>{if(ev.data?.type!=='mdm-api-bridge-ready')return;if(ev.source&&ev.source!==frame.contentWindow)return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
+      window.addEventListener('message',onReady);
+      document.body.appendChild(frame);
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
+    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
   }
-  throw new Error('Master API transport failed: '+((lastErr&&lastErr.message)||String(lastErr)));
+  try{
+    const frame=await V42._apiBridgePromise;
+    const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    return await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API bridge timeout'));},30000);
+      const onMessage=ev=>{
+        if(ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;if(ev.source&&ev.source!==frame.contentWindow)return;
+        clearTimeout(timeout);window.removeEventListener('message',onMessage);
+        if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
+        else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
+      };
+      window.addEventListener('message',onMessage);
+      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+    });
+  }catch(bridgeError){
+    // Last-resort direct fetch is retained for deployments where CORS is already
+    // configured. Never use no-cors because backup/sync require a readable ACK.
+    try{
+      const r=await fetch(V42.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit'});
+      if(!r.ok) throw new Error('API HTTP '+r.status);
+      const d=await r.json(); if(!d.ok) throw new Error(d.error||'API request failed'); return d;
+    }catch(fetchError){
+      const detail=(fetchError&&fetchError.message)||String(fetchError);
+      throw new Error('Master API transport failed: '+detail+' (bridge: '+(bridgeError&&bridgeError.message||bridgeError)+')');
+    }
+  }
 };
 
 V42.ensureBackendAuth = async function(){
@@ -6018,12 +6119,10 @@ niSave = function(){
   }
 };
 
-// Patch doLogin to log
-const _doLogin_orig = doLogin;
-doLogin = function(){
-  _doLogin_orig();
-  if(A.loggedIn) auditLog("LOGIN","user",A.currentUser?.id||"","User logged in: "+(A.currentUser?.name||""),null);
-};
+// NOTE: doLogin is defined later by the infrastructure layer.
+// Do not reference it here; doing so during script evaluation causes a
+// ReferenceError and aborts the ERP bootstrap/render path. Login auditing is
+// attached inside the final doLogin implementation after successful auth.
 
 // ── PATCH gP() TO HANDLE AUDIT FULL VIEW ──────────────────
 const _gP_orig = gP;
@@ -6077,6 +6176,16 @@ function goForward(){
   const p=A._navHistory[A._navIndex];
   A._navNav=true;try{gP(p)}finally{A._navNav=false;}
 }
+function toggleSidebar(){toggleSidebarCollapse()}
+function closeSidebar(){
+  if(isMobileViewport())closeMobileSidebar();
+  else{
+    const sb=document.getElementById("main-sidebar");
+    if(sb)sb.classList.remove("collapsed");
+    A._sbCollapsed=false;
+  }
+}
+
 // ── NEW INVOICE RESET ─────────────────────────────────────
 function niReset() {
   NI = {
@@ -9345,18 +9454,11 @@ const DRIVE = {
 const SV_MODULE_MAP = { f:"company", sc:"schools", it:"items" };
 const SV_SETTINGS_KEYS = ["st","sr","rt","hd"];
 const SV_MDM_MAP = { alm:"alloc", lpg:"lpg", ro:"roster" };
+/* Canonical persistence wrapper: local save + V42 Sync Coordinator only.
+   * Direct DRIVE.syncModule/syncInvoices calls are intentionally removed so
+   * there is exactly one cloud-write path. */
 sv = (function(origSv){
-  return function(k, v){
-    origSv(k, v);
-    try{
-      if(!CLOUD || !CLOUD.user) return; // only sync when signed in
-      if(SV_MODULE_MAP[k]) DRIVE.syncModule(SV_MODULE_MAP[k], v);
-      else if(SV_SETTINGS_KEYS.indexOf(k) !== -1) DRIVE.syncModule("settings", {sett:A.sett||ST0, series:A.series, rates:A.rates, heads:A.heads});
-      else if(SV_MDM_MAP[k]) DRIVE.syncModule(SV_MDM_MAP[k], v);
-      else if(k==="ar") DRIVE_ADAPTER.writeFile(DRIVE_ROOT+"/Security/Admin_Recovery.json",{type:"MDM_ADMIN_RECOVERY",version:1,updatedAt:new Date().toISOString(),records:v||[]});
-      else if(k==="iv") DRIVE.syncInvoices(v);
-    }catch(e){ /* never let Drive sync errors break the app */ }
-  };
+  return function(k,v){ return origSv(k,v); };
 })(sv);
 
 /* Legacy cloud button implementations removed; final canonical implementation is installed by the Backup/Sync hardening block. */
@@ -9774,30 +9876,6 @@ function extRefPrint(){
   w.document.open();w.document.write(html);w.document.close();w.focus();
   setTimeout(()=>w.print(),250);
 }
-
-// v5.3 — non-blocking XLSX loader. The ERP must boot even if the CDN is slow/unavailable.
-let __xlsxLoadPromise=null;
-function loadXLSX(){
-  if(typeof XLSX!=="undefined") return Promise.resolve(XLSX);
-  if(__xlsxLoadPromise) return __xlsxLoadPromise;
-  __xlsxLoadPromise=new Promise((resolve,reject)=>{
-    const existing=document.querySelector('script[data-mdm-xlsx="1"]');
-    if(existing){
-      existing.addEventListener("load",()=>resolve(window.XLSX),{once:true});
-      existing.addEventListener("error",()=>reject(new Error("XLSX parser failed to load")),{once:true});
-      return;
-    }
-    const sc=document.createElement("script");
-    sc.dataset.mdmXlsx="1";
-    sc.src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
-    sc.async=true;
-    sc.onload=()=>{ if(window.XLSX) resolve(window.XLSX); else reject(new Error("XLSX parser loaded without API")); };
-    sc.onerror=()=>reject(new Error("XLSX parser failed to load"));
-    document.head.appendChild(sc);
-  });
-  return __xlsxLoadPromise;
-}
-
 function extRefDownloadPDF(){const rows=extRefRowsForExport(),w=window.open("","_blank");if(!w){toast("Allow pop-ups to print PDF","err");return}w.document.write(`<html><head><title>External Invoice Register</title><style>body{font:12px Arial;padding:24px}h1{font-size:20px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #bbb;padding:6px;text-align:left}th{background:#eee}</style></head><body><h1>External Invoice Register — Reference Only</h1><table><tr><th>Invoice No.</th><th>FY</th><th>School</th><th>Billing Month</th><th>Students</th><th>Amount</th></tr>${rows.map(r=>`<tr>${Object.values(r).map(v=>`<td>${extRefEsc(v)}</td>`).join("")}</tr>`).join("")}</table><\\/body></html>`);w.document.close();setTimeout(()=>w.print(),300)}
 
 function extRefEsc(v){return String(v==null?"":v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
@@ -9834,11 +9912,13 @@ function extRefImport(input){
   const isJson=/\.json$/.test(name);
   const reader=new FileReader();
 
-  reader.onload=async e=>{
+  reader.onload=e=>{
     try{
       let rows=[];
       if(isExcel){
-        await loadXLSX();
+        if(typeof XLSX==="undefined"){
+          throw new Error("XLSX parser unavailable");
+        }
         const wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
         const ws=wb.Sheets[wb.SheetNames[0]];
         if(!ws)throw new Error("No worksheet found");
@@ -10540,7 +10620,7 @@ function toggleSidebarCollapse(){
   const sb=document.getElementById("main-sidebar");
   if(sb)sb.classList.toggle("collapsed",A._sbCollapsed);
 }
-function toggleSidebar(){toggleSidebarCollapse()} function closeSidebar(){if(isMobileViewport())closeMobileSidebar();else{const sb=document.getElementById("main-sidebar");if(sb)sb.classList.remove("collapsed");A._sbCollapsed=false;}}
+function toggleSidebar(){toggleSidebarCollapse()} function closeSidebar(){if(isMobileViewport())closeMobileSidebar()}
 let MDASH_PAGE=0,MDASH_TOUCH=null,MDASH_READY=false;
 function syncMobileDashboardHeight(){const vp=document.getElementById("m-dash-viewport"),tr=document.getElementById("m-dash-track");if(!vp||!tr)return;const pages=tr.querySelectorAll(".m-dash-page"),active=pages[MDASH_PAGE];if(!active)return;requestAnimationFrame(()=>{const h=Math.ceil(active.getBoundingClientRect().height);if(h>0)vp.style.height=h+"px"})}
 function mobileDashRender(){const tr=document.getElementById("m-dash-track");if(!tr)return;MDASH_PAGE=Math.max(0,Math.min(2,MDASH_PAGE));tr.style.transform=`translate3d(${-MDASH_PAGE*33.333333}%,0,0)`;document.querySelectorAll(".m-controls i").forEach((b,i)=>b.classList.toggle("active",i===MDASH_PAGE));const c=document.getElementById("m-page-caption-text");if(c)c.textContent=`Page ${MDASH_PAGE+1} of 3`;syncMobileDashboardHeight()}
@@ -10750,7 +10830,7 @@ try{
 /* v4.50 RELEASE NOTE: phases 9–16 are additive completion layers only.
    Existing invoice/PDF/business logic remains untouched. */
 
-/* bootstrapV42() is intentionally started after the final infrastructure layer below. */
+bootstrapV42();
 
 </script>
 
@@ -10922,7 +11002,7 @@ v2.8 — Definitive flat-light header + school category correction
 <script>
 (function(){
   'use strict';
-  const FINAL_INFRA_VERSION='5.2';
+  const FINAL_INFRA_VERSION='5.6';
   const RESTORE_LIMIT=10;
   const CLOUD_BACKUP_RETENTION=20;
   const MAX_SYNC_ATTEMPTS=8;
@@ -11021,22 +11101,40 @@ v2.8 — Definitive flat-light header + school category correction
   };
 
   /* ---------- queue: state coalescing + one worker ---------- */
+  V42._nextRevision=async function(key){
+    const meta=await V42.idbGet("meta","revision_counter");
+    const obj=meta&&meta.value||{};
+    obj[key]=Number(obj[key]||0)+1;
+    await V42.idbSet("meta","revision_counter",{value:obj});
+    return obj[key];
+  };
   V42.enqueue=async function(type,key,payload){
     try{
       await V42.openDB();
       const all=await V42.idbAll('queue');
       if(type==='state'){
         const existing=all.filter(x=>x&&x.type==='state'&&x.key===key&&['pending','uploading'].includes(x.status))
-          .sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+          .sort((a,b)=>String(b.updatedAt||b.createdAt).localeCompare(String(a.updatedAt||a.createdAt)))[0];
+        const revision=await V42._nextRevision(key);
         if(existing){
-          existing.payload=payload;existing.updatedAt=nowISO();existing.status='pending';existing.lastError='';existing.nextRetryAt=0;
+          existing.payload=payload;existing.updatedAt=nowISO();existing.status='pending';existing.lastError='';existing.nextRetryAt=0;existing.revision=revision;
           await V42.idbSet('queue',existing.id,existing);return existing.id;
         }
+        const id='op_'+uid()+'_'+Date.now().toString(36);
+        const ts=nowISO();
+        const op={id,type,key,payload,status:'pending',attempts:0,createdAt:ts,updatedAt:ts,nextRetryAt:0,revision,deviceId:V42.deviceId,appVersion:V42.version};
+        await V42.idbSet('queue',id,op);return id;
       }
-      const id='op_'+uid()+'_'+Date.now().toString(36);
-      const op={id,type,key,payload,status:'pending',attempts:0,createdAt:nowISO(),updatedAt:nowISO(),nextRetryAt:0,deviceId:V42.deviceId,appVersion:V42.version};
+      const id='op_'+uid()+'_'+Date.now().toString(36),ts=nowISO();
+      const op={id,type,key,payload,status:'pending',attempts:0,createdAt:ts,updatedAt:ts,nextRetryAt:0,deviceId:V42.deviceId,appVersion:V42.version};
       await V42.idbSet('queue',id,op);return id;
     }catch(e){console.warn('[MDM] queue enqueue failed',e);return null;}
+  };
+
+  V42.scheduleQueueRetry=function(delay){
+    clearTimeout(V42.queueTimer);
+    const ms=Math.max(1000,Math.min(RETRY_MAX_MS,Number(delay)||RETRY_BASE_MS));
+    V42.queueTimer=setTimeout(()=>{if(navigator.onLine&&CLOUD.user&&CLOUD.autoSync)V42.flushQueue().catch(()=>{});},ms);
   };
 
   V42.flushQueue=async function(){
@@ -11055,7 +11153,7 @@ v2.8 — Definitive flat-light header + school category correction
         for(const op of q){
           op.status='uploading';op.attempts=(op.attempts||0)+1;op.updatedAt=nowISO();await V42.idbSet('queue',op.id,op);
           try{
-            const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:V42.version});
+            const result=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,updatedAt:op.updatedAt||op.createdAt,revision:op.revision||0,deviceId:op.deviceId,appVersion:V42.version});
             if(!result?.ok) throw new Error(result?.error||'Server did not acknowledge sync');
             op.status='synced';op.syncedAt=nowISO();op.serverOperationId=result.operationId||op.id;op.lastError='';op.nextRetryAt=0;await V42.idbSet('queue',op.id,op);sent++;localStorage.setItem('cloud_last_sync',op.syncedAt);
           }catch(e){
@@ -11066,17 +11164,17 @@ v2.8 — Definitive flat-light header + school category correction
               try{ recovered=await V42.ensureBackendAuthSilent(); }catch(_e){}
               if(recovered&&V42.idToken){
                 try{
-                  const retry=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,deviceId:op.deviceId,appVersion:V42.version});
+                  const retry=await V42.backend('sync',{operationId:op.id,type:op.type,key:op.key,payload:op.payload,createdAt:op.createdAt,updatedAt:op.updatedAt||op.createdAt,revision:op.revision||0,deviceId:op.deviceId,appVersion:V42.version});
                   if(retry?.ok){op.status='synced';op.syncedAt=nowISO();op.serverOperationId=retry.operationId||op.id;op.lastError='';op.nextRetryAt=0;await V42.idbSet('queue',op.id,op);sent++;localStorage.setItem('cloud_last_sync',op.syncedAt);continue;}
                   msg=String(retry?.error||'Server did not acknowledge sync after authentication recovery');
                 }catch(re){msg=String(re?.message||re);} 
               }
-              op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+60000;authRequired=true;await V42.idbSet('queue',op.id,op);failed++;break;
+              op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+60000;authRequired=true;await V42.idbSet('queue',op.id,op);V42.scheduleQueueRetry(60000);failed++;break;
             }
             const attempts=Number(op.attempts||0);
             if(attempts>=MAX_SYNC_ATTEMPTS){op.status='failed_permanent';op.lastError=msg;op.failedAt=nowISO();op.nextRetryAt=0;}
             else {const delay=Math.min(RETRY_MAX_MS,RETRY_BASE_MS*Math.pow(2,Math.max(0,attempts-1)));op.status='pending';op.lastError=msg;op.nextRetryAt=Date.now()+delay;}
-            await V42.idbSet('queue',op.id,op);failed++;break;
+            await V42.idbSet('queue',op.id,op);V42.scheduleQueueRetry(op.nextRetryAt-Date.now());failed++;break;
           }
         }
         const left=await V42.queueCount();
@@ -11165,6 +11263,13 @@ v2.8 — Definitive flat-light header + school category correction
     V42.backupInFlight=(async()=>{
       try{
         CLOUD.setSyncStatus('Preparing backup…','var(--am)');
+        await V42.createRestorePoint(reason||'manual_backup');
+        if(CLOUD.user&&isGoogleUser(CLOUD.user)&&navigator.onLine){
+          try{if(!V42.idToken)await V42.ensureBackendAuthSilent();}catch(_e){}
+          try{await V42.flushQueue();}catch(_e){}
+        }
+        // Re-read the authoritative local state AFTER pending queue work.
+        // This closes the Backup Now snapshot boundary around the latest state.
         const candidate=await V42.buildBackupPackage(reason||'manual_backup');
         const currentHash=candidate.manifest.integrity?.stateHash||'';
         const lastHash=localStorage.getItem('cloud_last_backup_state_hash')||'';
@@ -11179,7 +11284,6 @@ v2.8 — Definitive flat-light header + school category correction
         const offline=candidate;
         await V42.idbSet('meta','latest_offline_backup',{createdAt:offline.manifest.createdAt,backupId:offline.manifest.backupId,package:offline});
         if(downloadOffline){ const blob=new Blob([JSON.stringify(offline,null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob),a=document.createElement('a'); a.href=url;a.download='MDM_ERP_Backup_'+offline.manifest.createdAt.slice(0,19).replace(/[T:]/g,'-')+'.json'; document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500); }
-        await V42.createRestorePoint(reason||'manual_backup');
         if(!CLOUD.user||!isGoogleUser(CLOUD.user)){CLOUD.setSyncStatus('Local backup saved','var(--am)');toast('Offline backup created. Sign in with Google to upload it to Drive.','ok');return {ok:true,local:true,backupId:offline.manifest.backupId};}
         if(!V42.idToken){const ok=await V42.ensureBackendAuthSilent();if(!ok) throw new Error('Google authentication is required for Master Drive backup');}
         await V42.flushQueue();
@@ -11219,7 +11323,7 @@ v2.8 — Definitive flat-light header + school category correction
 
   /* ---------- local emergency login remains unchanged in business semantics ---------- */
   window.doLogin=async function(){
-    try{const user=(document.getElementById('lu')||{}).value?.trim()||'',pass=(document.getElementById('lp')||{}).value||'',found=(A.users||[]).find(u=>u.username===user&&u.password===pass);if(!found){toast('Invalid username or password','err');return;}const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:nowISO()};A.loggedIn=true;A.currentUser=localUser;CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.saveSession(localUser).catch(()=>{});localStorage.setItem('mdm_local_user',JSON.stringify(localUser));localStorage.removeItem('cloud_user');renderShell();gP('dashboard');toast('Local emergency login active — cloud sync requires Google sign-in','ok');}catch(e){toast('Local login failed: '+e.message,'err');}
+    try{const user=(document.getElementById('lu')||{}).value?.trim()||'',pass=(document.getElementById('lp')||{}).value||'',found=(A.users||[]).find(u=>u.username===user&&u.password===pass);if(!found){toast('Invalid username or password','err');return;}const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:nowISO()};A.loggedIn=true;A.currentUser=localUser;CLOUD.user=null;CLOUD.ready=false;CLOUD.token=null;V42.idToken=null;await V42.saveSession(localUser).catch(()=>{});localStorage.setItem('mdm_local_user',JSON.stringify(localUser));localStorage.removeItem('cloud_user');auditLog('LOGIN','user',localUser.id||'', 'User logged in: '+(localUser.name||''),null);renderShell();gP('dashboard');toast('Local emergency login active — cloud sync requires Google sign-in','ok');}catch(e){toast('Local login failed: '+e.message,'err');}
   };
 
   /* ---------- restore browser session + silent credential recovery ---------- */
@@ -11288,12 +11392,12 @@ v2.8 — Definitive flat-light header + school category correction
     const endpointId=(effectiveApi.match(/\/macros\/s\/([^/]+)\/exec/)||[])[1]||'—';
     const backendClientMismatch=!!(backend&&backend.googleClientId&&effectiveClient&&backend.googleClientId!==effectiveClient);
     const backendApi=backend?.webAppUrl||''; const backendApiMismatch=!!(backendApi&&effectiveApi&&backendApi!==effectiveApi); const backendClientConfigured=backend?.googleClientId||'';
-    return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,backend, fingerprint:fp};
+    const apiStatus=backendApi&&effectiveApi?(backendApi===effectiveApi?'MATCH':'MISMATCH'):(storedApi&&storedApi!==htmlApi?'OVERRIDE':'UNVERIFIED'); const clientStatus=backendClientConfigured&&effectiveClient?(backendClientConfigured===effectiveClient?'MATCH':'MISMATCH'):(storedClient&&storedClient!==htmlClient?'OVERRIDE':'UNVERIFIED'); return {appVersion:V42.version,infraVersion:FINAL_INFRA_VERSION,htmlApi,storedApi,effectiveApi,endpointId,htmlClientId:htmlClient,storedClientId:storedClient,effectiveClientId:effectiveClient,apiSource:storedApi?'localStorage':'HTML default',clientSource:storedClient?'localStorage':'HTML default',apiMismatch:!!(storedApi&&storedApi!==htmlApi),clientMismatch:!!(storedClient&&storedClient!==htmlClient),backendClientMismatch,backendApi,backendApiMismatch,backendClientConfigured,apiStatus,clientStatus,backend,fingerprint:fp};
   };
   V42.diagnosticsHTML=async function(){
     const d=await V42.getConfigDiagnostics();
     const b=d.backend||{};
-    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">🧬 Integration Diagnostics</span><span class="bdg ${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'br':'bn'}">${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'CONFIG MISMATCH':'OK'}</span></div><div class="cbd" style="font-size:12px;line-height:1.55"><div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div><div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div><div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div><div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div><div><b>Backend live Web App URL:</b> <code>${esc(d.backendApi||'—')}</code> ${d.backend?.webAppUrlSource?'<span style="color:var(--txl)">('+esc(d.backend.webAppUrlSource)+')</span>':''}</div><div><b>Backend → Effective API:</b> ${d.backendApiMismatch?'MISMATCH':'MATCH / not configured'}</div><div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div><div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div><div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div><div style="margin-top:6px"><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div><div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div><div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div></div></div>`;
+    return `<div class="card" id="mdm-integration-diagnostics" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">🧬 Integration Diagnostics</span><span class="bdg ${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'br':'bn'}">${d.apiMismatch||d.clientMismatch||d.backendClientMismatch||d.backendApiMismatch?'CONFIG MISMATCH':'OK'}</span></div><div class="cbd" style="font-size:12px;line-height:1.55"><div><b>Effective API:</b> <code>${esc(d.effectiveApi)}</code></div><div><b>Bridge Endpoint:</b> <code>${esc((d.effectiveApi||'')+(d.effectiveApi?(d.effectiveApi.indexOf('?')>=0?'&':'?')+'bridge=1':'—'))}</code></div><div><b>Endpoint ID:</b> <code>${esc(d.endpointId)}</code></div><div><b>HTML API:</b> <code>${esc(d.htmlApi)}</code></div><div><b>Stored API:</b> <code>${esc(d.storedApi||'—')}</code> <span style="color:var(--txl)">(${esc(d.apiSource)})</span></div><div><b>Backend live Web App URL:</b> <code>${esc(d.backendApi||'—')}</code> ${d.backend?.webAppUrlSource?'<span style="color:var(--txl)">('+esc(d.backend.webAppUrlSource)+')</span>':''}</div><div><b>Backend → Effective API:</b> ${esc(d.apiStatus)}</div><div style="margin-top:6px"><b>Effective Google Client ID:</b> <code>${esc(d.effectiveClientId)}</code></div><div><b>HTML Client ID:</b> <code>${esc(d.htmlClientId)}</code></div><div><b>Stored Client ID:</b> <code>${esc(d.storedClientId||'—')}</code> <span style="color:var(--txl)">(${esc(d.clientSource)})</span></div><div style="margin-top:6px"><b>Backend:</b> ${b.ok?'Reachable':'Not verified'} ${b.version?'· v'+esc(b.version):''} ${b.deploymentId?'· '+esc(b.deploymentId):''}</div><div><b>Configuration Fingerprint:</b> <code>${esc(d.fingerprint)}</code></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px"><button class="btn btn-g btn-sm" onclick="V42.renderDiagnosticsWhenReady()">Refresh Diagnostics</button>${isGoogleUser(CLOUD.user)?'<button class="btn btn-g btn-sm" onclick="V42.restoreLatestCloudBackup()">Restore Latest Cloud Backup</button>':''}</div><div style="margin-top:7px;color:var(--txl)">Read-only diagnostic. It does not change API, Client ID, ERP data or business logic.</div></div></div>`;
   };
 
   V42.restoreLatestCloudBackup=async function(){
@@ -11344,7 +11448,67 @@ v2.8 — Definitive flat-light header + school category correction
   /* Startup: restore session, then try silent GIS recovery; never block local ERP. */
   setTimeout(()=>V42.restoreStartupSession(),100);
 
-  window.mdmInfrastructureSelfTest=async function(){
+  /* ---------- DNA 5.5: explicit credential lifecycle + regression guard ---------- */
+V42.authState='local_only';
+V42.authLastRecoveryAt=0;
+V42.authNextRecoveryAt=0;
+V42.authRecoveryTimer=null;
+V42.updateAuthState=function(state,detail){
+  V42.authState=state;
+  V42.authLastAuthDetail=detail||'';
+  try{window.dispatchEvent(new CustomEvent('mdm-auth-state',{detail:{state,detail:detail||''}}));}catch(_e){}
+};
+V42.scheduleCredentialRecovery=function(delayMs){
+  const delay=Math.max(5000,Number(delayMs)||60000);
+  V42.authNextRecoveryAt=Date.now()+delay;
+  if(V42.authRecoveryTimer) clearTimeout(V42.authRecoveryTimer);
+  V42.authRecoveryTimer=setTimeout(async()=>{
+    V42.authRecoveryTimer=null;
+    if(!navigator.onLine||!CLOUD.user||!isGoogleUser(CLOUD.user)) return;
+    const ok=await V42.ensureBackendAuthSilent();
+    V42.updateAuthState(ok?'authenticated':'recovery_required',ok?'Credential recovered':'Google credential recovery unavailable');
+    if(!ok) V42.scheduleCredentialRecovery(Math.min(delay*2,30*60*1000));
+  },delay);
+};
+V42.refreshCredentialLifecycle=function(){
+  if(!CLOUD.user||!isGoogleUser(CLOUD.user)){V42.updateAuthState('local_only','No Google cloud session');return;}
+  const remaining=V42.tokenExpiresAt?V42.tokenExpiresAt-Date.now():0;
+  if(remaining>120000){
+    V42.updateAuthState('authenticated','Credential valid beyond recovery window');
+    V42.scheduleCredentialRecovery(Math.max(30000,remaining-120000));
+  }else{
+    V42.updateAuthState('recovery_required','Credential expired or inside recovery window');
+    V42.scheduleCredentialRecovery(5000);
+  }
+};
+/* Never store the raw credential; lifecycle state is local diagnostic metadata only. */
+const _acceptGoogleCredentialOriginal=V42.acceptGoogleCredential;
+V42.acceptGoogleCredential=async function(credential){
+  const result=await _acceptGoogleCredentialOriginal(credential);
+  V42.refreshCredentialLifecycle();
+  return result;
+};
+const _ensureBackendAuthSilentOriginal=V42.ensureBackendAuthSilent;
+V42.ensureBackendAuthSilent=async function(){
+  const ok=await _ensureBackendAuthSilentOriginal();
+  if(ok) V42.refreshCredentialLifecycle();
+  else if(CLOUD.user&&isGoogleUser(CLOUD.user)) V42.updateAuthState('recovery_required','Fresh Google credential unavailable');
+  return ok;
+};
+window.mdmRegressionAudit=function(){
+  const required=[
+    ['niSave','Invoice save'],['printInvoicePDF','PDF renderer'],['sv','State save'],
+    ['V42.serializeState','State serializer'],['V42.flushQueue','Sync worker'],
+    ['V42.cloudBackupNow','Backup Now'],['V42.createRestorePoint','Restore point'],
+    ['V42.importRecovery','Recovery'],['V42.ensureBackendAuthSilent','Auth recovery']
+  ];
+  const results=required.map(([name,label])=>({name,label,ok:typeof (name.startsWith('V42.')?name.split('.').reduce((o,k)=>o?.[k],window):window[name])==='function'}));
+  const invoiceCheck=typeof p916ValidateAllInvoices==='function'?p916ValidateAllInvoices():{ok:false,error:'validator unavailable'};
+  return {version:V42.version,infraVersion:V42.finalVersion,coreFunctions:results,invoiceIntegrity:invoiceCheck,erpStateKeys:[...V42.stateKeys],authState:V42.authState,productionLiveTestRequired:true,ok:results.every(x=>x.ok)&&invoiceCheck.ok};
+};
+setInterval(()=>{try{V42.refreshCredentialLifecycle();}catch(_e){}},60000);
+
+window.mdmInfrastructureSelfTest=async function(){
     const out=[],add=(name,ok,detail)=>out.push({name,ok:!!ok,detail:detail||''});
     add('IndexedDB',!!window.indexedDB,'Persistent local storage');
     add('Canonical API',!!V42.apiUrl,'Effective backend configured');
@@ -11363,6 +11527,7 @@ v2.8 — Definitive flat-light header + school category correction
     add('Multi-device revision guard',true,'Backend rejects stale state revisions');
     add('Startup restore point',true,'One automatic checkpoint per browser session');
     add('Invoice pre-save checkpoint',true,'Checkpoint is awaited before invoice mutation');
+    add('Complete state inventory',V42.stateKeys.includes('iu')&&V42.stateKeys.includes('ar')&&V42.keyMap.dp==='dups','All persistent ERP state channels mapped');
     add('Schema guard',typeof V42.validateRecoveryPackage==='function','Version/integrity-aware restore');
     add('Invoice renderer',typeof window.renderInvoicePDF==='function'||typeof window.prepareInvoicePDF==='function','Existing renderer preserved');
     return out;
@@ -11370,17 +11535,6 @@ v2.8 — Definitive flat-light header + school category correction
 
   /* Keep the existing settings controls working while routing them to the canonical functions. */
   try{window.cloudSignIn=()=>V42.googleSignIn();}catch(e){}
-
-  // v5.3 startup ordering fix: the final infrastructure layer must be fully
-  // installed before the ERP hydrates state, renders UI, or installs cloud hooks.
-  // This is startup orchestration only; invoice/business calculations are untouched.
-  setTimeout(()=>{
-    try{ bootstrapV42(); }catch(e){
-      console.error("MDM ERP bootstrap failed",e);
-      const app=document.getElementById("app");
-      if(app) app.innerHTML='<div style="padding:32px;font:600 16px system-ui;color:#172033;background:#fff;min-height:100vh">MDM ERP startup failed. Open browser console for diagnostics.</div>';
-    }
-  },0);
 })();
 </script>
 
