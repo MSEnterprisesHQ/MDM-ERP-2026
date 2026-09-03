@@ -6114,12 +6114,15 @@ niSave = function(){
   }
 };
 
-// Patch doLogin to log
-const _doLogin_orig = doLogin;
-doLogin = function(){
-  _doLogin_orig();
-  if(A.loggedIn) auditLog("LOGIN","user",A.currentUser?.id||"","User logged in: "+(A.currentUser?.name||""),null);
-};
+// Legacy builds exposed doLogin here; the hardened build defines it later.
+// Do not abort startup when that legacy hook is absent.
+if (typeof window.doLogin === "function") {
+  const _doLogin_orig = window.doLogin;
+  window.doLogin = function(){
+    _doLogin_orig();
+    if(A.loggedIn) auditLog("LOGIN","user",A.currentUser?.id||"","User logged in: "+(A.currentUser?.name||""),null);
+  };
+}
 
 // ── PATCH gP() TO HANDLE AUDIT FULL VIEW ──────────────────
 const _gP_orig = gP;
