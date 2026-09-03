@@ -5047,30 +5047,35 @@ V42.backend = async function(action,payload){
   // server-side, so the API response remains readable and ACK can be verified.
   if(!V42.apiUrl) throw new Error("API endpoint not configured");
   if(!V42._apiBridgePromise){
+    // HtmlService adds a nested iframe, so event.source is not reliably the
+    // outer iframe. Correlate this bridge instance with an unpredictable token.
+    const bridgeToken='br_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    V42._apiBridgeToken=bridgeToken;
     V42._apiBridgePromise=new Promise((resolve,reject)=>{
       const frame=document.createElement('iframe');
       frame.id='mdm-api-bridge-frame';
       frame.style.cssText='position:fixed;width:1px;height:1px;left:-10000px;top:-10000px;border:0;opacity:0;pointer-events:none;';
       const timer=setTimeout(()=>{window.removeEventListener('message',onReady);frame.remove();reject(new Error('Master API bridge did not become ready. Verify the Apps Script Web App is deployed and accessible.'));},12000);
-      const onReady=ev=>{if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-bridge-ready')return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
+      const onReady=ev=>{if(ev.data?.type!=='mdm-api-bridge-ready' || ev.data?.token!==bridgeToken)return;clearTimeout(timer);window.removeEventListener('message',onReady);resolve(frame);};
       window.addEventListener('message',onReady);
       document.body.appendChild(frame);
-      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&v='+encodeURIComponent(V42.version||'4.51');
-    }).catch(e=>{V42._apiBridgePromise=null;throw e;});
+      frame.src=V42.apiUrl+(V42.apiUrl.indexOf('?')>=0?'&':'?')+'bridge=1&bridgeToken='+encodeURIComponent(bridgeToken)+'&v='+encodeURIComponent(V42.version||'4.51');
+    }).catch(e=>{V42._apiBridgePromise=null;V42._apiBridgeToken=null;throw e;});
   }
   try{
     const frame=await V42._apiBridgePromise;
+    const bridgeToken=V42._apiBridgeToken;
     const requestId='req_'+Date.now()+'_'+Math.random().toString(36).slice(2);
     return await new Promise((resolve,reject)=>{
       const timeout=setTimeout(()=>{window.removeEventListener('message',onMessage);reject(new Error('Master API transport timeout. The Apps Script Web App did not return an ACK.'));},20000);
       const onMessage=ev=>{
-        if(ev.source!==frame.contentWindow || ev.data?.type!=='mdm-api-response' || ev.data.requestId!==requestId)return;
+        if(ev.data?.type!=='mdm-api-response' || ev.data?.token!==bridgeToken || ev.data.requestId!==requestId)return;
         clearTimeout(timeout);window.removeEventListener('message',onMessage);
         if(ev.data.ok && ev.data.result?.ok) resolve(ev.data.result);
         else reject(new Error(ev.data.error || ev.data.result?.error || 'API request failed'));
       };
       window.addEventListener('message',onMessage);
-      frame.contentWindow.postMessage({type:'mdm-api-request',requestId,body},'*');
+      frame.contentWindow.postMessage({type:'mdm-api-request',token:bridgeToken,requestId,body},'*');
     });
   }catch(bridgeError){
     // Last-resort direct fetch is retained for deployments where CORS is already
@@ -11438,6 +11443,9 @@ v2.8 — Definitive flat-light header + school category correction
   setInterval(async()=>{if(navigator.onLine&&CLOUD.user){try{if(!V42.idToken)await V42.ensureBackendAuthSilent();await V42.flushQueue();}catch(e){}}},5*60*1000);
 
   function installGoogleLoginButton(){
+    // Preserve the established workflow: local ERP login stays local.
+    // Google authentication begins only from Backup & Sync on user request.
+    return;
     try{
       const localBtn=document.querySelector('button[onclick="doLogin()"]');
       if(!localBtn||document.getElementById('mdm-google-login-wrap'))return;
