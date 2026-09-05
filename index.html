@@ -309,14 +309,17 @@ a{color:inherit;text-decoration:none;}
 .inf-g{background:var(--glt);color:var(--gn);border:1px solid #bbf7d0;}
 .inf-r{background:var(--rlt);color:var(--rd);border:1px solid #fca5a5;}
 .toasts{position:fixed;bottom:24px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:340px;}
-.toast{padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 10px 34px rgba(0,0,0,.38),0 2px 10px rgba(0,0,0,.28);animation:tst .3s ease;display:flex;align-items:center;gap:9px;backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);border:1px solid rgba(255,255,255,.16);}
+.toast{position:relative;padding:14px 34px 36px 14px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 10px 34px rgba(0,0,0,.38),0 2px 10px rgba(0,0,0,.28);animation:tst .3s ease;backdrop-filter:blur(16px) saturate(160%);-webkit-backdrop-filter:blur(16px) saturate(160%);border:1px solid rgba(255,255,255,.16);}
+.toast-body{display:flex;align-items:flex-start;gap:9px;}
+.toast-icon{flex-shrink:0;}
+.toast-text{flex:1;min-width:0;}
 .tok{background:rgba(21,128,61,.82);color:#fff;}
 .ter{background:rgba(220,38,38,.85);color:#fff;}
 .tinf{background:rgba(3,105,161,.85);color:#fff;}
-.toast-copy-btn{flex-shrink:0;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;line-height:1.4;}
+.toast-copy-btn{position:absolute;right:10px;bottom:8px;background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:3px 9px;font-size:11px;font-weight:700;cursor:pointer;line-height:1.4;}
 .toast-copy-btn:hover{background:rgba(255,255,255,.3);}
 .toast-copy-btn:active{background:rgba(255,255,255,.4);}
-.toast-close-btn{flex-shrink:0;background:transparent;color:#fff;border:none;border-radius:6px;width:22px;height:22px;font-size:12px;font-weight:700;cursor:pointer;line-height:1;opacity:.75;display:flex;align-items:center;justify-content:center;}
+.toast-close-btn{position:absolute;top:7px;right:7px;background:transparent;color:#fff;border:none;border-radius:6px;width:20px;height:20px;font-size:11px;font-weight:700;cursor:pointer;line-height:1;opacity:.75;display:flex;align-items:center;justify-content:center;}
 .toast-close-btn:hover{background:rgba(255,255,255,.18);opacity:1;}
 .toast-close-btn:active{background:rgba(255,255,255,.28);}
 @keyframes tst{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
@@ -1807,7 +1810,7 @@ const ST0={
   },
 };
 const A={page:"dashboard",loggedIn:false,currentUser:null,flashId:null,firm:LS.get("f",F0),series:LS.get("sr",SR0),rates:LS.get("rt",RT0),heads:LS.get("hd",HD0),items:LS.get("it",IT0),schools:LS.get("sc",SC0),invoices:LS.get("iv",[]),users:LS.get("us",US0),rv:LS.get("rv",[]),dups:LS.get("dp",[]),sett:LS.get("st",ST0),batchCfg:LS.get("ib",{}),invoiceUndoArchive:LS.get("iu",[])};
-const SV_KEY_MAP={f:"firm",sc:"schools",it:"items",sr:"series",rt:"rates",hd:"heads",us:"users",st:"sett",iv:"invoices"};
+const SV_KEY_MAP={f:"firm",sc:"schools",it:"items",sr:"series",rt:"rates",hd:"heads",us:"users",st:"sett",iv:"invoices",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive"};
 let sv=(k,v)=>{A[SV_KEY_MAP[k]||k]=v;LS.set(k,v);};
 const d2=n=>Math.round((+n||0)*100)/100;
 const d3=n=>Math.round((+n||0)*1000)/1000;
@@ -1862,10 +1865,10 @@ function toast(m,t){
   const d=document.createElement("div");
   d.className="toast "+(t||"");
   const msgId="toast-msg-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
-  d.innerHTML="<span>"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span>"
-    +"<span id='"+msgId+"' style='flex:1;min-width:0'>"+ec(m)+"</span>"
-    +"<button type='button' class='toast-copy-btn' title='Copy message' aria-label='Copy message' onclick=\"event.stopPropagation();var t=document.getElementById('"+msgId+"');var txt=t?t.textContent:'';var btn=this;var done=function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy';},1200);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(function(){});}else{try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();}catch(e){}}\">Copy</button>"
-    +"<button type='button' class='toast-close-btn' title='Dismiss' aria-label='Dismiss' onclick=\"event.stopPropagation();this.closest('.toast')?.remove();\">&#10005;</button>";
+  d.innerHTML="<button type='button' class='toast-close-btn' title='Dismiss' aria-label='Dismiss' onclick=\"event.stopPropagation();this.closest('.toast')?.remove();\">&#10005;</button>"
+    +"<div class='toast-body'><span class='toast-icon'>"+(t==="ok"?"&#10003;":t==="err"?"&#10005;":"&#8505;")+"</span>"
+    +"<span id='"+msgId+"' class='toast-text'>"+ec(m)+"</span></div>"
+    +"<button type='button' class='toast-copy-btn' title='Copy message' aria-label='Copy message' onclick=\"event.stopPropagation();var t=document.getElementById('"+msgId+"');var txt=t?t.textContent:'';var btn=this;var done=function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy';},1200);};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done).catch(function(){});}else{try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);done();}catch(e){}}\">Copy</button>";
   document.getElementById("toasts").appendChild(d);
   const timer=setTimeout(()=>d.remove(),t==="err"?7000:3400);
   const closeBtn=d.querySelector('.toast-close-btn');
@@ -2569,6 +2572,8 @@ function gP(p){
   if((p==="settings"||p==="backupsync") && typeof CLOUD!=="undefined") setTimeout(()=>CLOUD.updateUI(),50);
   if(p==="backupsync" && typeof V42!=="undefined" && V42.renderDiagnostics) setTimeout(()=>V42.renderDiagnostics(),60);
   if(p==="backupsync" && typeof V42!=="undefined" && V42.renderBackupHistory && CLOUD.user) setTimeout(()=>V42.renderBackupHistory(),350);
+  if(p==="backupsync" && typeof V42!=="undefined" && V42.renderSelectiveRestoreOptions && CLOUD.user) setTimeout(()=>V42.renderSelectiveRestoreOptions(),650);
+  if(p==="backupsync" && typeof V42!=="undefined" && V42.renderSafetyPoints && CLOUD.user) setTimeout(()=>V42.renderSafetyPoints(),0);
   if(A.flashId){const fid=A.flashId;A.flashId=null;setTimeout(()=>{const row=document.getElementById("ir-"+fid);if(row){row.scrollIntoView({behavior:"smooth",block:"center"});row.classList.add("flash");setTimeout(()=>row.classList.remove("flash"),2200);}},300);}
 }
 
@@ -4124,8 +4129,71 @@ function histExportExcel(){
   if(!rows.length){toast("No records to export","err");return;}
   const escHtml=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const headers=["S.No.","Invoice No.","School Name","UDISE Code","Invoice Date",...(HS.includeCreated?["Created Date & Time"]:[]),"Class 1–5","Class 6–8","Total Students","Billing Month","Financial Year","Taxable Amount","CGST","SGST","GST","Net Payable","Status"];
-  const body=rows.map((inv,i)=>{const sch=A.schools.find(x=>x.id===inv.schoolId);return [i+1,inv.invNo,inv.schoolName||sch?.name||"",sch?.udise||"",inv.date||"",...(HS.includeCreated?[formatCreatedAt(inv.savedAt)]:[]),Number(inv.s15||0),Number(inv.s68||0),Number(inv.s15||0)+Number(inv.s68||0),inv.month||"",inv.year||"",Number(inv.taxable||0).toFixed(2),Number(inv.cgst||0).toFixed(2),Number(inv.sgst||0).toFixed(2),(Number(inv.cgst||0)+Number(inv.sgst||0)).toFixed(2),Number(inv.net||0).toFixed(2),inv.status||"active"];}).map(r=>`<tr>${r.map(v=>`<td>${escHtml(v)}</td>`).join("")}</tr>`).join("");
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>table{border-collapse:collapse;font-family:Arial;font-size:10pt}th,td{border:1px solid #999;padding:5px}th{font-weight:700;background:#EAF0F7}</style></head><body><h2>${escHtml(A.firm?.name||"MS ENTERPRISES")}</h2><h3>INVOICE LOG STATEMENT</h3><p>Filters: ${escHtml(histFilterDesc())}</p><table><thead><tr>${headers.map(h=>`<th>${escHtml(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+  const colCount=headers.length;
+
+  // "All Invoices" = no filter narrows the dataset — only then do the
+  // last-saved/second-last-saved highlights apply, since they're meant to
+  // show "what's newest overall", not "newest within this filtered slice".
+  const isAllInvoices = !HS.q && !HS.fMo && !HS.fYr && !HS.fSt && !HS.fSchool && !HS.fFrom && !HS.fTo;
+  let lastSavedId=null, secondLastSavedId=null;
+  if(isAllInvoices){
+    const bySaved=[...rows].sort((a,b)=>String(b.savedAt||b.date||"").localeCompare(String(a.savedAt||a.date||"")));
+    lastSavedId = bySaved[0]?.id || null;
+    secondLastSavedId = bySaved[1]?.id || null;
+  }
+
+  // Month-by-month grouping (chronological), matching the reference layout —
+  // a bold "<Month> <Year> INVOICES" separator row before each group.
+  const monthIdx=m=>Math.max(0,MN.indexOf(m));
+  const sorted=[...rows].sort((a,b)=>{
+    const ay=Number(a.year)||0, by=Number(b.year)||0;
+    if(ay!==by) return ay-by;
+    const am=monthIdx(a.month), bm=monthIdx(b.month);
+    if(am!==bm) return am-bm;
+    return String(a.date||"").localeCompare(String(b.date||""));
+  });
+
+  let bodyRows="", lastGroupKey=null, sno=0;
+  for(const inv of sorted){
+    const groupKey=(inv.month||"")+" "+(inv.year||"");
+    if(groupKey!==lastGroupKey){
+      bodyRows+=`<tr class="grp-row"><td colspan="${colCount}">${escHtml((inv.month||"")+" "+(inv.year||"")+" INVOICES")}</td></tr>`;
+      lastGroupKey=groupKey;
+    }
+    sno++;
+    const sch=A.schools.find(x=>x.id===inv.schoolId);
+    const cells=[sno,inv.invNo,inv.schoolName||sch?.name||"",sch?.udise||"",inv.date||"",...(HS.includeCreated?[formatCreatedAt(inv.savedAt)]:[]),Number(inv.s15||0),Number(inv.s68||0),Number(inv.s15||0)+Number(inv.s68||0),inv.month||"",inv.year||"",Number(inv.taxable||0).toFixed(2),Number(inv.cgst||0).toFixed(2),Number(inv.sgst||0).toFixed(2),(Number(inv.cgst||0)+Number(inv.sgst||0)).toFixed(2),Number(inv.net||0).toFixed(2),inv.status||"active"];
+    const rowCls = inv.id===lastSavedId ? "row-latest" : inv.id===secondLastSavedId ? "row-prev" : (sno%2===0 ? "row-alt" : "");
+    bodyRows+=`<tr class="${rowCls}">${cells.map(v=>`<td>${escHtml(v)}</td>`).join("")}</tr>`;
+  }
+
+  const legend = isAllInvoices
+    ? `<div class="legend"><span class="sw sw-latest"></span> Most recently saved invoice &nbsp;&nbsp; <span class="sw sw-prev"></span> Second most recently saved invoice</div>`
+    : "";
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{font-family:Calibri,Arial,sans-serif;}
+    table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:10.5pt;width:100%;}
+    th,td{border:1px solid #B8C4D9;padding:6px 8px;}
+    th{font-weight:700;background:#1F3864;color:#FFFFFF;text-transform:uppercase;font-size:9.5pt;letter-spacing:.3px;}
+    .title-block{background:#1F3864;color:#fff;padding:14px 18px;border-radius:4px 4px 0 0;}
+    .title-block h2{margin:0 0 2px;font-size:18pt;letter-spacing:.5px;}
+    .title-block h3{margin:0;font-size:11pt;font-weight:400;color:#CBD8EE;}
+    .meta-line{padding:8px 18px;background:#EAF0F7;color:#33475B;font-size:9.5pt;border-bottom:2px solid #1F3864;}
+    .grp-row td{background:#3A5A8C;color:#fff;font-weight:700;font-size:10pt;text-align:left;padding:6px 8px;}
+    .row-alt td{background:#F4F7FC;}
+    .row-latest td{background:#C6EFCE;font-weight:700;}
+    .row-prev td{background:#BDD7EE;font-weight:700;}
+    .legend{padding:8px 18px;font-size:9pt;color:#33475B;}
+    .sw{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:4px;}
+    .sw-latest{background:#C6EFCE;border:1px solid #7FBF7F;}
+    .sw-prev{background:#BDD7EE;border:1px solid #7FA6D9;}
+  </style></head><body>
+    <div class="title-block"><h2>${escHtml(A.firm?.name||"MS ENTERPRISES")}</h2><h3>INVOICE LOG STATEMENT</h3></div>
+    <div class="meta-line">Filters: ${escHtml(histFilterDesc())} &nbsp;|&nbsp; Generated: ${escHtml(new Date().toLocaleString("en-IN"))} &nbsp;|&nbsp; Total Records: ${rows.length}</div>
+    ${legend}
+    <table><thead><tr>${headers.map(h=>`<th>${escHtml(h)}</th>`).join("")}</tr></thead><tbody>${bodyRows}</tbody></table>
+  </body></html>`;
   const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
   const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=histFilename()+".xls";a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1000);
   toast(`Excel exported — ${rows.length} records` ,"ok");
@@ -4767,8 +4835,8 @@ V42.idbSet=function(store,key,value){return V42.openDB().then(db=>new Promise((r
 V42.idbDelete=function(store,key){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(key);r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error);}));};
 V42.idbAll=function(store){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readonly").objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}));};
 
-V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib"];
-V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"audit",rv:"rv",dp:"dups",ib:"batchCfg"};
+V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib","iu"];
+V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"al",rv:"rv",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive"};
 V42.serializeState = function(){const o={};V42.stateKeys.forEach(k=>{const prop=V42.keyMap[k];if(prop && typeof A[prop]!=="undefined") o[k]=A[prop];});return o;};
 V42.writeStateKey = function(k,v){
   const prop=V42.keyMap[k];
@@ -4939,7 +5007,7 @@ V42.googleSignIn = async function(){
    INFRASTRUCTURE HARDENING block further below (requires backend ACK before
    marking a device cloud-authenticated). The earlier duplicate removed. */
 
-V42.backend = async function(action,payload){
+V42._backendOnce = async function(action,payload){
   const body={action,idToken:V42.idToken||CLOUD.token||null,payload:payload||{},appVersion:V42.version,deviceId:V42.deviceId,user:(CLOUD.user||null)};
 
   // Apps Script hosted mode: use the server-side bridge directly.
@@ -5004,11 +5072,39 @@ V42.backend = async function(action,payload){
   }
 };
 
+// Google ID tokens are short-lived (typically ~1 hour) and V42.idToken is
+// never refreshed proactively — it's only ever set at sign-in. Before this
+// wrapper, a stale token caused every authenticated call (backup/sync/
+// listBackups/getBackup) to fail with a raw "token verification failed"
+// error until the user manually signed out and back in. Now: on a detected
+// auth-expiry-shaped failure, silently (or interactively, if silent fails)
+// re-authenticate once and retry the SAME call exactly once before giving up.
+V42._isAuthExpiryError = function(msg){
+  return /token|unauthoriz|unauthentic|invalid.{0,12}credential|authentication required|expired/i.test(String(msg||''));
+};
+V42.backend = async function(action,payload){
+  try{
+    return await V42._backendOnce(action,payload);
+  }catch(e){
+    if(action==='auth' || !V42._isAuthExpiryError(e.message) || !isGoogleUser(CLOUD.user)) throw e;
+    try{
+      V42.idToken=null; CLOUD.verified=false; CLOUD.updateUI();
+      const ok=await V42.ensureBackendAuthInteractive();
+      if(!ok || !V42.idToken) throw e; // reauth failed/declined — surface the original error
+      return await V42._backendOnce(action,payload); // retry exactly once with a fresh token
+    }catch(retryErr){
+      throw retryErr;
+    }
+  }
+};
+
 /* V42.ensureBackendAuth (old silent-only variant) was never actually called
    anywhere in the app — orphaned dead code, removed. The active silent+interactive
    flow is V42.ensureBackendAuthInteractive, defined in the v4.51+ hardening block. */
 
 V42.createLocalSnapshot = async function(){
+  // "iu" is now a first-class entry in V42.stateKeys/keyMap, so
+  // serializeState() already includes it — no special-casing needed.
   const data={schemaVersion:1,appVersion:V42.version,createdAt:new Date().toISOString(),deviceId:V42.deviceId,state:V42.serializeState()};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="MDM_Local_Snapshot_"+new Date().toISOString().slice(0,10)+".json";document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
@@ -5024,6 +5120,29 @@ V42.applyRecovery = async function(data){
 };
 V42.importRecovery = function(){
   const inp=document.createElement("input");inp.type="file";inp.accept=".json";inp.onchange=ev=>{const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=async e=>{try{await V42.applyRecovery(JSON.parse(e.target.result));}catch(err){toast("Recovery failed: "+err.message,"err");}};r.readAsText(f);};inp.click();
+};
+
+/* ---- Pre-restore safety points ----
+   Every restore action (Full Restore or Selective Restore, from a cloud
+   backup or a local snapshot) OVERWRITES current state — if the wrong
+   backup is picked by mistake, there was previously no way back short of
+   finding another backup that happened to already contain the newer data.
+   Before ANY restore mutation is applied, automatically capture the
+   device's current state here first. Keeps the most recent 5, oldest
+   dropped first. Uses the same "meta" IndexedDB store already used by the
+   older file-based recovery path (pre_restore_backup) — no schema change,
+   no new object store/version bump needed. */
+V42.savePreRestoreSafetyPoint = async function(reason){
+  try{
+    const existing = (await V42.idbGet("meta","pre_restore_safety_points")) || [];
+    const point = {at:new Date().toISOString(), reason:reason||"restore", state:V42.serializeState()};
+    const updated = [point, ...existing].slice(0,5);
+    await V42.idbSet("meta","pre_restore_safety_points", updated);
+    return point;
+  }catch(e){ console.error("[MDM] Could not save pre-restore safety point", e); return null; }
+};
+V42.listPreRestoreSafetyPoints = async function(){
+  try{ return (await V42.idbGet("meta","pre_restore_safety_points")) || []; }catch(e){ return []; }
 };
 
 V42.installUI = function(){
@@ -7214,11 +7333,12 @@ function doImp() {
   inp.onchange = ev=>{
     const file = ev.target.files[0];if(!file)return;
     const r = new FileReader();
-    r.onload = e=>{
+    r.onload = async e=>{
       try{
         const d = JSON.parse(e.target.result);
         if(!d.invoices||!d.firm){toast("Invalid backup file — missing required data","err");return;}
-        if(!confirm(`Restore backup from ${d.exportedAt?new Date(d.exportedAt).toLocaleString("en-IN"):"unknown date"}?\n\nThis will replace ALL current data.\n\nInvoices: ${d.invoices.length} | Schools: ${d.schools?.length||0}\n\nThis cannot be undone.`))return;
+        if(!confirm(`Restore backup from ${d.exportedAt?new Date(d.exportedAt).toLocaleString("en-IN"):"unknown date"}?\n\nThis will replace ALL current data.\n\nInvoices: ${d.invoices.length} | Schools: ${d.schools?.length||0}\n\nYour CURRENT data is automatically saved as a Safety Point first (see Backup & Sync).\n\nContinue?`))return;
+        await V42.savePreRestoreSafetyPoint('Before Restore Full Backup (Admin Control import)');
         // Restore all keys
         if(d.firm)   sv("f",d.firm);
         if(d.series) sv("sr",d.series);
@@ -7239,7 +7359,7 @@ function doImp() {
         // Re-init A.sett
         A.sett = A.st||ST0;
         auditLog("IMPORT","backup","full",`Backup restored — ${d.invoices.length} invoices, ${d.schools?.length||0} schools`,null);
-        toast("Backup restored successfully! Reloading...","ok");
+        toast("Backup restored — your previous data was saved as a Safety Point. Reloading...","ok");
         setTimeout(()=>window.location.reload(),1200);
       }catch(err){toast("Restore failed: "+err.message,"err");}
     };
@@ -9346,6 +9466,22 @@ const DRIVE = {
     if(mod==="invLog")   return true; // log is informational only, nothing to restore into A
     return true;
   },
+  /* Extracts just one module's slice from a FULL snapshot (the shape produced
+     by CLOUD.getPayload()/a real cloud backup), in the exact same shape
+     DRIVE.restoreModule() already expects — so selective restore from a real
+     cloud backup reuses the identical per-module rules as the local path,
+     rather than duplicating them. */
+  extractModuleFromSnapshot(mod, snapshot){
+    if(!snapshot) return null;
+    if(mod==="company") return snapshot.firm;
+    if(mod==="schools") return snapshot.schools;
+    if(mod==="items")   return snapshot.items;
+    if(mod==="settings") return {sett:snapshot.sett, series:snapshot.series, rates:snapshot.rates, heads:snapshot.heads};
+    if(mod==="alloc")   return snapshot.alm;
+    if(mod==="lpg")     return snapshot.lpg;
+    if(mod==="roster")  return snapshot.ro;
+    return null;
+  },
   restoreModuleFromDrive(mod){
     const path = this.paths[mod];
     if(!path) return false;
@@ -9593,6 +9729,12 @@ function cloudCardHTML(){
             &#8681; Restore Backup
           </button>
         </div>
+        <div style="margin-top:8px">
+          <button class="btn btn-g" style="width:100%;padding:9px;font-size:12.5px" onclick="V42.createLocalSnapshot()">
+            &#128190; Download Offline Copy (.json)
+          </button>
+          <div style="font-size:11px;color:var(--txl);margin-top:4px;text-align:center">Saves a complete backup file straight to this device — separate from Google Drive, for your own offline archive.</div>
+        </div>
 
       </div>
     </div>
@@ -9655,8 +9797,11 @@ function driveSyncOne(mod){
   V42.enqueue('state',key,payload).then(()=>V42.flushQueue()).then(r=>{if(r&&r.failed)toast('Sync attempt failed — check connection','err');else{toast('Sync attempt completed','ok');if(A.page==='backupsync')gP('backupsync');}}).catch(e=>toast('Sync failed: '+e.message,'err'));
 }
 function driveViewDetails(mod,label,file,driveOK,localOK){
-  const t=DRIVE.lastSynced(mod);
-  const text=`${label}\n\nFile: ${file}\nDrive: ${driveOK?'Synced':'Not synced'}\nOffline: ${localOK?'Available':'Not available'}\nLast synced: ${t?driveFmtTime(t):'Not synced yet'}\n\nOffline means the application has a local copy in its offline-first storage (IndexedDB/local app storage). It is not a separate downloaded JSON file.`;
+  const key=DRIVE_MOD_KEY_MAP[mod];
+  const confirmed=key?V42.getCloudConfirmed(key):null;
+  const t=mod==='system'?(DRIVE.getMetadata()?.lastSyncTime||null):mod==='backup'?(CLOUD.lastBackup||null):(confirmed?confirmed.at:null);
+  const via=confirmed?(confirmed.via==='backup'?' (covered by a full backup)':confirmed.via==='sync'?' (individually confirmed)':''):'';
+  const text=`${label}\n\nFile: ${file}\nDrive: ${driveOK?'Synced':'Not synced'}\nOffline: ${localOK?'Available':'Not available'}\nLast synced: ${t?driveFmtTime(t)+via:'Not synced yet'}\n\nOffline means the application has a local copy in its offline-first storage (IndexedDB/local app storage). It is not a separate downloaded JSON file.`;
   alert(text);
 }
 function driveOpenInDrive(mod){toast('Open in Drive is available after the corresponding cloud file is confirmed.','info');}
@@ -9771,49 +9916,122 @@ function driveSelectiveRestoreHTML(){
     ["company","Company"],["schools","Schools"],["items","Items"],
     ["settings","Settings"],["alloc","MDM · Allocation"],["lpg","MDM · LPG"],["roster","MDM · Roster"],
   ];
-  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <select id="drv-restore-mod" class="fi" style="max-width:220px">
-      ${opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}
-    </select>
-    <button class="btn btn-g btn-sm" onclick="driveRestoreSelectedModule()">Restore This Module</button>
-    <span style="font-size:11px;color:var(--txl)">Restores only the selected module — everything else stays untouched. Uses this browser's last synced local copy.</span>
+  return `<div style="display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="drv-restore-mod" class="fi" style="max-width:220px">
+        ${opts.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}
+      </select>
+      <select id="drv-restore-cloud-file" class="fi" style="max-width:260px">
+        <option value="">Loading Google Drive backups…</option>
+      </select>
+      <button class="btn btn-g btn-sm" onclick="driveRestoreSelectedModuleFromCloud()">Restore From Cloud Backup</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-g btn-sm" onclick="driveRestoreSelectedModule()">Restore This Module (local copy)</button>
+      <span style="font-size:11px;color:var(--txl)">Restores only the selected module — everything else stays untouched. "Local copy" uses this browser's last synced copy; "Cloud Backup" fetches the real file from Google Drive and works even on a new device.</span>
+    </div>
   </div>`;
 }
+
+/* Populates the cloud-backup dropdown for Selective Restore with the same
+   real Drive backups Backup History shows — so a specific module can be
+   pulled from a specific point-in-time cloud backup, not just "whatever is
+   in this browser right now". */
+V42.renderSelectiveRestoreOptions = async function(){
+  const sel=document.getElementById('drv-restore-cloud-file');
+  if(!sel) return;
+  try{
+    const backups=await V42.listBackups();
+    if(!backups.length){ sel.innerHTML=`<option value="">No Google Drive backups yet</option>`; return; }
+    sel.innerHTML=backups.map(b=>`<option value="${ec(b.fileId)}">${ec(b.fileName)}${b.updatedAt?' — '+driveFmtTime(b.updatedAt):''}</option>`).join('');
+  }catch(e){
+    sel.innerHTML=`<option value="">Could not load: ${ec(e.message)}</option>`;
+  }
+};
 
 /* Real cloud restore — fetches the actual backup file from Google Drive via
    the backend, then applies it locally. This is the path that works even if
    this browser/device never had the data to begin with. */
 async function driveRestoreCloudBackup(fileId,fileName){
-  if(!confirm(`Full Restore from Google Drive backup "${fileName}" will overwrite Company, Schools, Items, Invoices, Settings and MDM data on this device.\n\nLocal user accounts/passwords on THIS device are not touched by restore (backups never store real passwords), and Google sign-in is unaffected.\n\nThis cannot be undone. Continue?`)) return;
+  if(!confirm(`Full Restore from Google Drive backup "${fileName}" will overwrite Company, Schools, Items, Invoices, Settings and MDM data on this device.\n\nYour CURRENT data on this device is automatically saved as a Safety Point first, so this can be undone from Backup & Sync if you picked the wrong backup.\n\nLocal user accounts/passwords on THIS device are not touched by restore (backups never store real passwords), and Google sign-in is unaffected.\n\nContinue?`)) return;
   try{
     toast('Fetching backup from Google Drive…','info');
     const doc=await V42.getBackupById(fileId);
     const snapshot=doc && doc.snapshot;
     if(!snapshot || !snapshot.firm) throw new Error('Backup file is missing or in an unexpected format');
+    await V42.savePreRestoreSafetyPoint('Before Full Restore from Google Drive backup: '+fileName);
     const ok=DRIVE.applyFullSnapshot(snapshot);
     if(!ok) throw new Error('Backup snapshot could not be applied');
     auditLog("IMPORT","backup","cloud","Full restore from Google Drive backup: "+fileName,null);
-    toast("Restored from "+fileName+" — local login accounts on this device were left untouched","ok");
+    toast("Restored from "+fileName+" — your previous data was saved as a Safety Point, and local login accounts on this device were left untouched","ok");
     gP("dashboard");
   }catch(e){
     toast('Restore failed: '+e.message,'err');
   }
 }
 
-function driveRestoreLocalSnapshot(path){
-  if(!confirm("Full Restore will overwrite Company, Schools, Items, Invoices, Settings and MDM data with this LOCAL snapshot (this browser only).\n\nLocal user accounts/passwords on THIS device are not touched by restore, and Google sign-in is unaffected.\n\nThis cannot be undone. Continue?")) return;
+async function driveRestoreLocalSnapshot(path){
+  if(!confirm("Full Restore will overwrite Company, Schools, Items, Invoices, Settings and MDM data with this LOCAL snapshot (this browser only).\n\nYour CURRENT data on this device is automatically saved as a Safety Point first, so this can be undone from Backup & Sync if you picked the wrong backup.\n\nLocal user accounts/passwords on THIS device are not touched by restore, and Google sign-in is unaffected.\n\nContinue?")) return;
+  await V42.savePreRestoreSafetyPoint('Before Full Restore from local snapshot: '+path);
   const ok = DRIVE.restoreFullFromBackup(path);
-  if(ok){ auditLog("IMPORT","backup","local","Full restore from local snapshot: "+path,null); toast("Restored from "+path.split("/").pop()+" — local login accounts on this device were left untouched","ok"); gP("dashboard"); }
+  if(ok){ auditLog("IMPORT","backup","local","Full restore from local snapshot: "+path,null); toast("Restored from "+path.split("/").pop()+" — your previous data was saved as a Safety Point, and local login accounts on this device were left untouched","ok"); gP("dashboard"); }
   else toast("Could not read that backup snapshot","err");
 }
 
-function driveRestoreSelectedModule(){
+async function driveRestoreSelectedModule(){
   const sel = document.getElementById("drv-restore-mod");
   const mod = sel ? sel.value : null;
   if(!mod) return;
-  if(!confirm("Restore the "+mod+" module from its last synced Drive copy? This will overwrite current "+mod+" data.")) return;
+  if(!confirm("Restore the "+mod+" module from its last synced Drive copy? This will overwrite current "+mod+" data.\n\nYour CURRENT data is automatically saved as a Safety Point first.")) return;
+  await V42.savePreRestoreSafetyPoint('Before Selective Restore ('+mod+') from local copy');
   const ok = DRIVE.restoreModuleFromDrive(mod);
-  if(ok){ auditLog("IMPORT","backup","cloud","Selective restore: "+mod,null); toast(mod+" module restored","ok"); gP("backupsync"); }
+  if(ok){ auditLog("IMPORT","backup","cloud","Selective restore: "+mod,null); toast(mod+" module restored — your previous data was saved as a Safety Point","ok"); gP("backupsync"); }
+}
+
+async function driveUndoToSafetyPoint(index){
+  if(!confirm("Undo to this Safety Point? This will overwrite current data with exactly what was saved at that moment (right before a restore).\n\nThis itself creates a new Safety Point first, so this undo can also be undone.")) return;
+  try{
+    // Capture the target BEFORE saving a new safety point — saving prepends
+    // a new entry and can drop the oldest one, which would shift every
+    // existing index by one and silently restore the wrong point otherwise.
+    const points=await V42.listPreRestoreSafetyPoints();
+    const target=points[index];
+    if(!target) throw new Error("That safety point could not be found");
+    await V42.savePreRestoreSafetyPoint('Before undoing to an earlier Safety Point');
+    for(const k of Object.keys(target.state)){ if(V42.stateKeys.includes(k)) sv(k, target.state[k]); }
+    auditLog("IMPORT","backup","local","Restored a pre-restore Safety Point from "+target.at,null);
+    toast("Restored to that Safety Point","ok");
+    gP("backupsync");
+  }catch(e){
+    toast("Could not restore that Safety Point: "+e.message,"err");
+  }
+}
+
+async function driveRestoreSelectedModuleFromCloud(){
+  const modSel = document.getElementById("drv-restore-mod");
+  const fileSel = document.getElementById("drv-restore-cloud-file");
+  const mod = modSel ? modSel.value : null;
+  const fileId = fileSel ? fileSel.value : null;
+  const fileName = fileSel && fileSel.selectedOptions[0] ? fileSel.selectedOptions[0].textContent : "";
+  if(!mod) return;
+  if(!fileId){ toast("Pick a Google Drive backup first","err"); return; }
+  if(!confirm(`Restore just the ${mod} module from "${fileName}"? Everything else on this device stays untouched.\n\nYour CURRENT data is automatically saved as a Safety Point first.`)) return;
+  try{
+    toast('Fetching backup from Google Drive…','info');
+    const doc=await V42.getBackupById(fileId);
+    const snapshot=doc && doc.snapshot;
+    if(!snapshot || !snapshot.firm) throw new Error('Backup file is missing or in an unexpected format');
+    const data=DRIVE.extractModuleFromSnapshot(mod, snapshot);
+    if(data===null || data===undefined) throw new Error('That backup does not contain '+mod+' data');
+    await V42.savePreRestoreSafetyPoint('Before Selective Restore ('+mod+') from Google Drive backup: '+fileName);
+    const ok=DRIVE.restoreModule(mod, data);
+    if(!ok) throw new Error('Could not apply the restored data');
+    auditLog("IMPORT","backup","cloud","Selective restore from Google Drive backup ("+fileName+"): "+mod,null);
+    toast(mod+" module restored from "+fileName+" — your previous data was saved as a Safety Point","ok");
+    gP("backupsync");
+  }catch(e){
+    toast('Restore failed: '+e.message,'err');
+  }
 }
 
 function pgBackupSync(){
@@ -9837,6 +10055,13 @@ function pgBackupSync(){
   <div class="card" style="margin-bottom:14px">
     <div class="chd"><span class="cht">&#9881; Selective Restore</span></div>
     <div class="cbd">${driveSelectiveRestoreHTML()}</div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="chd"><span class="cht">&#128737; Safety Points</span></div>
+    <div class="cbd" id="mdm-safety-points-body">
+      <div style="color:var(--txm);font-size:13px">Loading…</div>
+    </div>
   </div>
   ` : ``}
 
@@ -11131,6 +11356,24 @@ v2.8 — Definitive flat-light header + school category correction
     if(!raw) return null;
     if(typeof raw==='string') return {at:raw, via:'confirmed'};
     return raw;
+  };
+
+  /* Renders the auto-saved pre-restore safety points and wires up their
+     one-click undo. This is the visible, usable side of
+     V42.savePreRestoreSafetyPoint — without this, the protection exists
+     but nobody could actually find or use it after an accidental restore. */
+  V42.renderSafetyPoints = async function(){
+    const el=document.getElementById('mdm-safety-points-body');
+    if(!el) return;
+    const points=await V42.listPreRestoreSafetyPoints();
+    if(!points.length){
+      el.innerHTML=`<div style="color:var(--txm);font-size:13px">None yet — one is created automatically right before every restore, so you can undo it if the wrong backup was picked.</div>`;
+      return;
+    }
+    el.innerHTML=`<div style="font-size:11px;color:var(--txl);margin-bottom:8px">Automatically saved right before each restore — last ${points.length} kept. "Undo" brings this device back to exactly how it was at that moment.</div>
+    <div class="tw"><table class="dt"><thead><tr><th>Saved</th><th>Reason</th><th></th></tr></thead><tbody>
+      ${points.map((p,i)=>`<tr><td>${driveFmtTime(p.at)}</td><td style="font-size:12px;color:var(--txm)">${ec(p.reason||'')}</td><td style="text-align:right"><button class="btn btn-g btn-sm" onclick="driveUndoToSafetyPoint(${i})">Undo to This</button></td></tr>`).join('')}
+    </tbody></table></div>`;
   };
 
   V42.flushQueue = async function(){
