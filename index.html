@@ -1812,6 +1812,14 @@ const ST0={
 const A={page:"dashboard",loggedIn:false,currentUser:null,flashId:null,firm:LS.get("f",F0),series:LS.get("sr",SR0),rates:LS.get("rt",RT0),heads:LS.get("hd",HD0),items:LS.get("it",IT0),schools:LS.get("sc",SC0),invoices:LS.get("iv",[]),users:LS.get("us",US0),rv:LS.get("rv",[]),dups:LS.get("dp",[]),sett:LS.get("st",ST0),batchCfg:LS.get("ib",{}),invoiceUndoArchive:LS.get("iu",[])};
 const SV_KEY_MAP={f:"firm",sc:"schools",it:"items",sr:"series",rt:"rates",hd:"heads",us:"users",st:"sett",iv:"invoices",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive"};
 let sv=(k,v)=>{A[SV_KEY_MAP[k]||k]=v;LS.set(k,v);};
+// Global on purpose: called from multiple <script> blocks, including the
+// v4.51 hardening block AND page-render functions defined earlier in the
+// file (e.g. cloudCardHTML). A version of these used to live only inside
+// that later block's IIFE, which made it invisible to earlier callers —
+// every such call threw ReferenceError and silently broke page rendering
+// (the exact "stuck on Loading..." symptom on Backup & Sync).
+function isGoogleUser(u){ return !!(u && u.authMethod === 'google' && u.email); }
+function isLocalUser(u){ return !!(u && (u.authMethod === 'local' || u.authMethod === 'client')); }
 const d2=n=>Math.round((+n||0)*100)/100;
 const d3=n=>Math.round((+n||0)*1000)/1000;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -11312,8 +11320,10 @@ v2.8 — Definitive flat-light header + school category correction
   'use strict';
   const INFRA_VERSION = '4.51';
 
-  function isGoogleUser(u){ return !!(u && u.authMethod === 'google' && u.email); }
-  function isLocalUser(u){ return !!(u && (u.authMethod === 'local' || u.authMethod === 'client')); }
+  // isGoogleUser/isLocalUser now live in the global scope (see top of file)
+  // so every caller across every <script> block can reach them — the
+  // duplicates that used to shadow them here (harmlessly, since identical)
+  // have been removed.
 
   /* ---- Emergency local login: preserve existing credentials and add durable session ---- */
   window.doLogin = async function(){
