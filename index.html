@@ -4131,6 +4131,18 @@ function histExportExcel(){
   const headers=["S.No.","Invoice No.","School Name","UDISE Code","Invoice Date",...(HS.includeCreated?["Created Date & Time"]:[]),"Class 1–5","Class 6–8","Total Students","Billing Month","Financial Year","Taxable Amount","CGST","SGST","GST","Net Payable","Status"];
   const colCount=headers.length;
 
+  // Excel's HTML-import renderer is table-oriented and unreliable with
+  // class-based CSS / <div> layout outside a <table>, and it frequently
+  // ignores border-collapse (each adjacent cell draws its own border,
+  // visibly doubling/thickening the grid). To render correctly and look
+  // clean in real Excel — not just a browser preview — every element below
+  // uses INLINE styles, and the header/title lives INSIDE the table as
+  // merged rows, not a <div> above it.
+  const BORDER='1px solid #E3E7EE';
+  const NAVY='#1F3864';
+  const th_=s=>`style="border:${BORDER};padding:6px 8px;font-weight:700;background:${NAVY};color:#FFFFFF;text-transform:uppercase;font-size:9.5pt;letter-spacing:.3px;text-align:left;"`;
+  const td_=extra=>`style="border:${BORDER};padding:6px 8px;font-size:10.5pt;font-family:Calibri,Arial,sans-serif;${extra||''}"`;
+
   // "All Invoices" = no filter narrows the dataset — only then do the
   // last-saved/second-last-saved highlights apply, since they're meant to
   // show "what's newest overall", not "newest within this filtered slice".
@@ -4157,42 +4169,34 @@ function histExportExcel(){
   for(const inv of sorted){
     const groupKey=(inv.month||"")+" "+(inv.year||"");
     if(groupKey!==lastGroupKey){
-      bodyRows+=`<tr class="grp-row"><td colspan="${colCount}">${escHtml((inv.month||"")+" "+(inv.year||"")+" INVOICES")}</td></tr>`;
+      bodyRows+=`<tr><td colspan="${colCount}" ${td_(`background:#3A5A8C;color:#fff;font-weight:700;font-size:10pt;`)}>${escHtml((inv.month||"")+" "+(inv.year||"")+" INVOICES")}</td></tr>`;
       lastGroupKey=groupKey;
     }
     sno++;
     const sch=A.schools.find(x=>x.id===inv.schoolId);
     const cells=[sno,inv.invNo,inv.schoolName||sch?.name||"",sch?.udise||"",inv.date||"",...(HS.includeCreated?[formatCreatedAt(inv.savedAt)]:[]),Number(inv.s15||0),Number(inv.s68||0),Number(inv.s15||0)+Number(inv.s68||0),inv.month||"",inv.year||"",Number(inv.taxable||0).toFixed(2),Number(inv.cgst||0).toFixed(2),Number(inv.sgst||0).toFixed(2),(Number(inv.cgst||0)+Number(inv.sgst||0)).toFixed(2),Number(inv.net||0).toFixed(2),inv.status||"active"];
-    const rowCls = inv.id===lastSavedId ? "row-latest" : inv.id===secondLastSavedId ? "row-prev" : (sno%2===0 ? "row-alt" : "");
-    bodyRows+=`<tr class="${rowCls}">${cells.map(v=>`<td>${escHtml(v)}</td>`).join("")}</tr>`;
+    const rowBg = inv.id===lastSavedId ? "background:#C6EFCE;font-weight:700;" : inv.id===secondLastSavedId ? "background:#BDD7EE;font-weight:700;" : (sno%2===0 ? "background:#F4F7FC;" : "");
+    bodyRows+=`<tr>${cells.map(v=>`<td ${td_(rowBg)}>${escHtml(v)}</td>`).join("")}</tr>`;
   }
 
-  const legend = isAllInvoices
-    ? `<div class="legend"><span class="sw sw-latest"></span> Most recently saved invoice &nbsp;&nbsp; <span class="sw sw-prev"></span> Second most recently saved invoice</div>`
+  const legendRow = isAllInvoices
+    ? `<tr><td colspan="${colCount}" ${td_('background:#FAFBFD;color:#33475B;font-size:9pt;border-top:none;')}>
+        <span style="display:inline-block;width:11px;height:11px;background:#C6EFCE;border:1px solid #7FBF7F;vertical-align:middle;margin-right:4px;"></span> Most recently saved invoice
+        &nbsp;&nbsp;&nbsp;
+        <span style="display:inline-block;width:11px;height:11px;background:#BDD7EE;border:1px solid #7FA6D9;vertical-align:middle;margin-right:4px;"></span> Second most recently saved invoice
+      </td></tr>`
     : "";
 
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-    body{font-family:Calibri,Arial,sans-serif;}
-    table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:10.5pt;width:100%;}
-    th,td{border:1px solid #B8C4D9;padding:6px 8px;}
-    th{font-weight:700;background:#1F3864;color:#FFFFFF;text-transform:uppercase;font-size:9.5pt;letter-spacing:.3px;}
-    .title-block{background:#1F3864;color:#fff;padding:14px 18px;border-radius:4px 4px 0 0;}
-    .title-block h2{margin:0 0 2px;font-size:18pt;letter-spacing:.5px;}
-    .title-block h3{margin:0;font-size:11pt;font-weight:400;color:#CBD8EE;}
-    .meta-line{padding:8px 18px;background:#EAF0F7;color:#33475B;font-size:9.5pt;border-bottom:2px solid #1F3864;}
-    .grp-row td{background:#3A5A8C;color:#fff;font-weight:700;font-size:10pt;text-align:left;padding:6px 8px;}
-    .row-alt td{background:#F4F7FC;}
-    .row-latest td{background:#C6EFCE;font-weight:700;}
-    .row-prev td{background:#BDD7EE;font-weight:700;}
-    .legend{padding:8px 18px;font-size:9pt;color:#33475B;}
-    .sw{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:middle;margin-right:4px;}
-    .sw-latest{background:#C6EFCE;border:1px solid #7FBF7F;}
-    .sw-prev{background:#BDD7EE;border:1px solid #7FA6D9;}
-  </style></head><body>
-    <div class="title-block"><h2>${escHtml(A.firm?.name||"MS ENTERPRISES")}</h2><h3>INVOICE LOG STATEMENT</h3></div>
-    <div class="meta-line">Filters: ${escHtml(histFilterDesc())} &nbsp;|&nbsp; Generated: ${escHtml(new Date().toLocaleString("en-IN"))} &nbsp;|&nbsp; Total Records: ${rows.length}</div>
-    ${legend}
-    <table><thead><tr>${headers.map(h=>`<th>${escHtml(h)}</th>`).join("")}</tr></thead><tbody>${bodyRows}</tbody></table>
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>
+  <table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;width:100%;">
+    <tr><td colspan="${colCount}" style="background:${NAVY};color:#FFFFFF;text-align:center;font-size:20pt;font-weight:700;letter-spacing:.6px;padding:14px 10px 4px;border:none;">${escHtml(A.firm?.name||"MS ENTERPRISES")}</td></tr>
+    <tr><td colspan="${colCount}" style="background:${NAVY};color:#CBD8EE;text-align:center;font-size:10pt;font-weight:400;padding:0 10px 12px;border:none;">${escHtml(A.firm?.address||"")}</td></tr>
+    <tr><td colspan="${colCount}" style="background:#33475B;color:#FFFFFF;text-align:center;font-size:12pt;font-weight:700;letter-spacing:.4px;padding:8px 10px;border:none;">INVOICE LOG STATEMENT</td></tr>
+    <tr><td colspan="${colCount}" style="background:#EAF0F7;color:#33475B;font-size:9.5pt;padding:8px 12px;border-bottom:2px solid ${NAVY};border-top:none;border-left:none;border-right:none;">Filters: ${escHtml(histFilterDesc())} &nbsp;|&nbsp; Generated: ${escHtml(new Date().toLocaleString("en-IN"))} &nbsp;|&nbsp; Total Records: ${rows.length}</td></tr>
+    ${legendRow}
+    <tr>${headers.map(h=>`<th ${th_()}>${escHtml(h)}</th>`).join("")}</tr>
+    ${bodyRows}
+  </table>
   </body></html>`;
   const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
   const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=histFilename()+".xls";a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(url);},1000);
@@ -4759,7 +4763,7 @@ function confirmAdminRecoveryLogin(){
   toast("Administrator password reset. Sign in with the new password.","ok");
 }
 window.doLogout=function(){
-  try{ auditLog('LOGIN','user',A.currentUser?.id||'','User logged out: '+(A.currentUser?.name||''),null); }catch(e){}
+  try{ auditLog('LOGIN','user',A.currentUser?.id||'','User logged out: '+(A.currentUser?.name||''),{deviceId:V42.deviceId,device:briefDeviceInfo(),result:'logout'}); }catch(e){}
   A.loggedIn=false; A.currentUser=null;
   CLOUD.user=null; CLOUD.ready=false; CLOUD.token=null; V42.idToken=null;
   try{ localStorage.removeItem('mdm_local_user'); }catch(e){}
@@ -5276,6 +5280,21 @@ window.addEventListener("offline",()=>toast("Device offline — data will remain
 // ═══════════════════════════════════════════════════════
 // PHASE-2 v2.0 — AUDIT TRAIL INFRASTRUCTURE
 // ═══════════════════════════════════════════════════════
+function briefDeviceInfo(){
+  const ua=navigator.userAgent||"";
+  let browser="Browser";
+  if(/Edg\//.test(ua)) browser="Edge";
+  else if(/Chrome\//.test(ua) && !/OPR\//.test(ua)) browser="Chrome";
+  else if(/Firefox\//.test(ua)) browser="Firefox";
+  else if(/Safari\//.test(ua) && !/Chrome\//.test(ua)) browser="Safari";
+  let os="";
+  if(/Windows/.test(ua)) os="Windows";
+  else if(/Android/.test(ua)) os="Android";
+  else if(/iPhone|iPad|iPod/.test(ua)) os="iOS";
+  else if(/Mac OS X/.test(ua)) os="macOS";
+  else if(/Linux/.test(ua)) os="Linux";
+  return (browser+(os?" on "+os:"")).trim();
+}
 function auditLog(action, entity, entityId, summary, data) {
   const entry = {
     id: uid(),
@@ -5326,6 +5345,7 @@ function pgAdm() {
     {id:"users",   l:"Users"},
     {id:"appsett", l:"App Settings"},
     {id:"backup",  l:"Backup & Data"},
+    {id:"logins",  l:"Logins & Devices"},
   ];
   let c = "";
   if(ADM_T==="firm")    c = admFirm();
@@ -5339,6 +5359,7 @@ function pgAdm() {
   else if(ADM_T==="users")  c = admUsers();
   else if(ADM_T==="appsett")c = admAppSett();
   else if(ADM_T==="backup") c = admBackup();
+  else if(ADM_T==="logins") c = admLoginHistory();
 
   return `<div class="shd"><div><div class="stl">Admin Settings</div><div class="sst">System configuration — all masters, settings and data management</div></div><span class="bdg bo">Admin Panel v2.0</span></div>
   <div class="tabs" style="margin-bottom:16px;flex-wrap:wrap">${tabs.map(t=>`<div class="tab${ADM_T===t.id?" on":""}" onclick="ADM_T='${t.id}';gP('admin')">${t.l}</div>`).join("")}</div>
@@ -6074,7 +6095,32 @@ function admBackup(){
   </div>`;
 }
 
-// ── AUDIT TRAIL FULL VIEW ──────────────────────────────────
+// ── LOGIN & DEVICE HISTORY ──────────────────────────────────
+function admLoginHistory(){
+  const entries = (A.al||[]).filter(e=>e.action==='LOGIN').slice().reverse();
+  const resultBadge = r => r==='success' ? `<span class="bdg bg" style="font-size:10px">Success</span>`
+    : r==='failed' ? `<span class="bdg br" style="font-size:10px">Failed</span>`
+    : r==='logout' ? `<span class="bdg bs" style="font-size:10px">Signed out</span>`
+    : `<span class="bdg bs" style="font-size:10px">—</span>`;
+  const thisDeviceBadge = id => id && id===V42.deviceId ? `<span class="bdg bn" style="font-size:9px;margin-left:5px">This device</span>` : '';
+  return `<div class="shd"><div><div class="stl">Logins &amp; Devices</div><div class="sst">${entries.length} login-related event(s) — local logins, Google sign-ins, sign-outs, and failed attempts</div></div>
+    <button class="btn btn-g btn-sm" onclick="exportAudit()">&#8595; Export CSV</button>
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <div class="cbd" style="font-size:11.5px;color:var(--txl)">Shows every sign-in attempt recorded on this browser's audit trail — including from other devices once they've synced. A failed attempt does not identify who tried, only the username/email attempted and the device/browser used.</div>
+  </div>
+  <div class="card tw">
+    <table class="dt"><thead><tr><th>Time</th><th>Who / attempted as</th><th>Method</th><th>Device</th><th>Result</th></tr></thead>
+    <tbody>${entries.length===0?`<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--txl)">No login activity recorded yet</td></tr>`:
+      entries.map(e=>{
+        const method = e.entity==='cloud' ? 'Google' : e.entity==='user' ? 'Local' : ec(e.entity);
+        const device = e.data?.device ? ec(e.data.device) : '—';
+        return `<tr><td style="font-size:11px;white-space:nowrap">${new Date(e.ts).toLocaleString("en-IN")}</td><td style="font-weight:600">${ec(e.entityId||e.by||'')}</td><td style="font-size:11px">${method}</td><td style="font-size:11px;color:var(--txl)">${device}${thisDeviceBadge(e.data?.deviceId)}</td><td>${resultBadge(e.data?.result)}</td></tr>`;
+      }).join("")}
+    </tbody></table>
+  </div>`;
+}
+
 function admAuditFull() {
   const al = A.al || [];
   const all = [...al].reverse();
@@ -9735,6 +9781,14 @@ function cloudCardHTML(){
           </button>
           <div style="font-size:11px;color:var(--txl);margin-top:4px;text-align:center">Saves a complete backup file straight to this device — separate from Google Drive, for your own offline archive.</div>
         </div>
+        ${isGoogleUser(CLOUD.user) ? `
+        <div style="margin-top:8px">
+          <button class="btn btn-g" style="width:100%;padding:9px;font-size:12.5px" onclick="driveRestoreLastSession()">
+            &#8635; Restore Last Session
+          </button>
+          <div style="font-size:11px;color:var(--txl);margin-top:4px;text-align:center">Pulls the most recent backup from this Google account — from any device — and applies it here.</div>
+        </div>
+        ` : ``}
 
       </div>
     </div>
@@ -11267,7 +11321,10 @@ v2.8 — Definitive flat-light header + school category correction
       const user=(document.getElementById('lu')||{}).value?.trim()||'';
       const pass=(document.getElementById('lp')||{}).value||'';
       const found=(A.users||[]).find(u=>u.username===user&&u.password===pass);
-      if(!found){ toast('Invalid username or password','err'); return; }
+      if(!found){
+        try{ auditLog('LOGIN','user',user,'Failed local login attempt (username: '+(user||'blank')+')',{deviceId:V42.deviceId,device:briefDeviceInfo(),result:'failed'}); }catch(e){}
+        toast('Invalid username or password','err'); return;
+      }
 
       const localUser={...found,authMethod:'local',deviceId:V42.deviceId,signedInAt:new Date().toISOString()};
       A.loggedIn=true;
@@ -11277,7 +11334,7 @@ v2.8 — Definitive flat-light header + school category correction
       V42.idToken=null;
       try{ await V42.saveSession(localUser); }catch(e){ console.warn('Local session persistence failed',e); }
       try{ localStorage.setItem('mdm_local_user',JSON.stringify(localUser)); localStorage.removeItem('cloud_user'); }catch(e){}
-      try{ auditLog('LOGIN','user',localUser.id||'','User logged in: '+(localUser.name||localUser.username||''),null); }catch(e){}
+      try{ auditLog('LOGIN','user',localUser.id||'','User logged in: '+(localUser.name||localUser.username||''),{deviceId:V42.deviceId,device:briefDeviceInfo(),result:'success'}); }catch(e){}
       renderShell();
       gP('dashboard');
       toast('Local emergency login active — cloud sync requires Google sign-in','ok');
@@ -11319,17 +11376,89 @@ v2.8 — Definitive flat-light header + school category correction
       localStorage.setItem('cloud_user',JSON.stringify(mergedUser));
       localStorage.removeItem('mdm_local_user');
       A.loggedIn=true; A.currentUser=mergedUser;
-      auditLog('LOGIN','cloud','google','Google account authenticated and accepted by master: '+user.email,null);
+      auditLog('LOGIN','cloud',user.email,'Google account authenticated and accepted by master: '+user.email,{deviceId:V42.deviceId,device:briefDeviceInfo(),result:'success'});
       CLOUD.ready=true; CLOUD.verified=true;
       // Our temporary chooser was removed at credential receipt. Do not call
       // google.accounts.id.cancel() here; that API belongs to Google's prompt lifecycle.
       CLOUD.updateUI();
       const q=await V42.flushQueue();
+      await V42.autoHydrateIfFreshDevice();
       if(A.page==='backupsync') gP('backupsync');
       toast('Signed in as '+(user.name||user.email)+(q.sent?' — '+q.sent+' record(s) synced':''),'ok');
     }catch(e){
+      // payload/user are scoped inside the try block above and may not exist
+      // yet if the credential itself was malformed — decode defensively,
+      // just for the failure log, without letting this itself ever throw.
+      let attemptedEmail='unknown';
+      try{ const p=String(credential).split('.')[1]; const decoded=JSON.parse(atob(p.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(p.length/4)*4,'='))); if(decoded.email) attemptedEmail=String(decoded.email).toLowerCase(); }catch(_e){}
+      try{ auditLog('LOGIN','cloud',attemptedEmail,'Failed Google sign-in attempt ('+attemptedEmail+'): '+e.message,{deviceId:V42.deviceId,device:briefDeviceInfo(),result:'failed'}); }catch(_e){}
       toast('Google sign-in failed: '+e.message,'err');
       console.error('[MDM v4.51] Google authentication failure',e);
+    }
+  };
+
+  /* ---- Shared core: fetch the single most recent Google Drive backup for
+     this account and apply it. Used by BOTH the automatic fresh-device
+     hydrate below AND the manual "Restore Last Session" button — one
+     implementation, so there's never a second, slightly different copy of
+     "what does restoring the latest backup actually do" to keep in sync. ---- */
+  V42.restoreFromLatestCloudBackup = async function(reasonPrefix){
+    const backups = await V42.listBackups();
+    if(!backups.length) throw new Error('No Google Drive backups exist yet for this account');
+    const latest = backups[0];
+    const doc = await V42.getBackupById(latest.fileId);
+    const snapshot = doc && doc.snapshot;
+    if(!snapshot || !snapshot.firm) throw new Error('Latest cloud backup is missing or in an unexpected format');
+    await V42.savePreRestoreSafetyPoint((reasonPrefix||'Before restoring latest cloud backup')+': '+latest.fileName);
+    const ok = DRIVE.applyFullSnapshot(snapshot);
+    if(!ok) throw new Error('Cloud backup could not be applied');
+    return latest;
+  };
+
+  /* ---- Cross-device continuity: a brand-new device has an empty local
+     database even after a fully successful Google sign-in — nothing before
+     this point ever pulled existing cloud data DOWN, only pushed local
+     changes up. Detect a genuinely fresh/empty device (no invoices AND no
+     schools — the two clearest signals real data exists) and, if the
+     account already has a cloud backup, restore the most recent one
+     automatically so the device isn't blank after login. A device that
+     already has real local data is never touched by this — only a
+     verifiably empty one. */
+  V42.autoHydrateIfFreshDevice = async function(){
+    try{
+      const looksFresh = (A.invoices||[]).length===0 && (A.schools||[]).length===0;
+      if(!looksFresh) return;
+      const backups = await V42.listBackups();
+      if(!backups.length) return; // nothing to pull yet — normal for a first-ever setup
+      toast('New device detected — restoring your data from Google Drive…','info');
+      const latest = await V42.restoreFromLatestCloudBackup('Before automatic cross-device restore on sign-in');
+      auditLog('IMPORT','backup','cloud','Automatic cross-device restore on sign-in from: '+latest.fileName,null);
+      toast('Your data is now available on this device (from '+latest.fileName+')','ok');
+      if(A.page!=='dashboard') gP('dashboard');
+    }catch(e){
+      // Sign-in itself already succeeded — a failed auto-hydrate should not
+      // look like a failed login. Surface it as a soft warning instead.
+      toast('Signed in, but could not auto-restore your cloud data: '+e.message+'. Use Backup & Sync → Restore Backup manually.','err');
+    }
+  };
+
+  /* ---- Manual counterpart to the automatic hydrate above: the heuristic
+     only fires when THIS device looks empty. "Restore Last Session" lets
+     someone deliberately pull whatever was most recently backed up from
+     ANY device on this account — e.g. they made changes on their phone a
+     moment ago and want this desktop caught up right now, without waiting
+     for/relying on the fresh-device detection. ---- */
+  window.driveRestoreLastSession = async function(){
+    if(!isGoogleUser(CLOUD.user)){ toast('Sign in with Google first','err'); return; }
+    if(!confirm('Restore Last Session pulls the MOST RECENT backup from this Google account — from any device — and applies it here.\n\nYour CURRENT data on this device is automatically saved as a Safety Point first, so this can be undone from Backup & Sync if needed.\n\nContinue?')) return;
+    try{
+      toast('Fetching your last session from Google Drive…','info');
+      const latest = await V42.restoreFromLatestCloudBackup('Before manual Restore Last Session');
+      auditLog('IMPORT','backup','cloud','Manual Restore Last Session from: '+latest.fileName,null);
+      toast('Restored your last session (from '+latest.fileName+') — your previous data on this device was saved as a Safety Point','ok');
+      gP('dashboard');
+    }catch(e){
+      toast('Restore Last Session failed: '+e.message,'err');
     }
   };
 
@@ -11603,7 +11732,7 @@ v2.8 — Definitive flat-light header + school category correction
       CLOUD.user=null; CLOUD.ready=false; CLOUD.token=null; V42.idToken=null;
       localStorage.removeItem('cloud_user');
       try{ await V42.clearSession(); }catch(e){}
-      auditLog('LOGIN','cloud','google','Google account disconnected: '+was,null);
+      auditLog('LOGIN','cloud',was,'Google account disconnected: '+was,{deviceId:V42.deviceId,device:briefDeviceInfo(),result:'logout'});
       CLOUD.updateUI();
       toast('Google account disconnected — local login remains available','ok');
     }catch(e){ toast('Sign-out failed: '+e.message,'err'); }
