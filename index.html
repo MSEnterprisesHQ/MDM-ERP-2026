@@ -3490,7 +3490,7 @@ function niSave(){
   const frR=parseFloat(NI.fruitRate)||0;
   const seriesCounterBefore=A.series.counter;
   const generatedAt=new Date().toISOString();
-  const inv={id:uid(),invNo:nxt,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:generatedAt,status:"active",syncStatus:"pending",createdByUserId:A.currentUser?.id||"",createdByName:A.currentUser?.name||"",undoMeta:{eligible:true,generatedAt,seriesCounterBefore,seriesStateBefore:JSON.parse(JSON.stringify(A.series))},revisions:[],printCount:0,lastPrintedAt:null,delivery:{status:"NOT_SENT",method:"",at:null},deliveryStatus:"NOT_SENT",deliveryMethod:"",deliveryAt:null};
+  const inv={id:uid(),invNo:nxt,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||"",schoolAddress:sch?.address||"",schoolUdise:sch?.udise||"",schoolBlock:sch?.block||"",schoolDistrict:sch?.district||"",schoolMobile:sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:generatedAt,status:"active",syncStatus:"pending",createdByUserId:A.currentUser?.id||"",createdByName:A.currentUser?.name||"",undoMeta:{eligible:true,generatedAt,seriesCounterBefore,seriesStateBefore:JSON.parse(JSON.stringify(A.series))},revisions:[],printCount:0,lastPrintedAt:null,delivery:{status:"NOT_SENT",method:"",at:null},deliveryStatus:"NOT_SENT",deliveryMethod:"",deliveryAt:null};
   sv("iv",[inv,...A.invoices]);
   // Series counter is now informational only (Invoice Register is the source
   // of truth for numbering) — keep it monotonic with whatever was just used.
@@ -3503,7 +3503,7 @@ function niSave(){
 function niSaveEdited(){
   const idx=A.invoices.findIndex(i=>i.id===NI.editId); if(idx<0){NI.editId=null;return niSave();}
   const old=A.invoices[idx], sch=A.schools.find(s=>s.id===NI.schoolId); const s15=Math.max(0,parseInt(NI.s15)||0),s68=Math.max(0,parseInt(NI.s68)||0),sFr=NI.useFruit?Math.max(0,parseInt(NI.sFruit)||0):0,frR=parseFloat(NI.fruitRate)||0;
-  const updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||old.schoolName,s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:new Date().toISOString(),revisions:[...(old.revisions||[]),{by:A.currentUser?.name||"Administrator",at:new Date().toISOString(),reason:"Edited from saved invoice",beforeNet:old.net,afterNet:NI.calc.mTot.net}]};
+  const updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||old.schoolName,schoolAddress:sch?.address||old.schoolAddress||"",schoolUdise:sch?.udise||old.schoolUdise||"",schoolBlock:sch?.block||old.schoolBlock||"",schoolDistrict:sch?.district||old.schoolDistrict||"",schoolMobile:sch?.mobile||old.schoolMobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:new Date().toISOString(),revisions:[...(old.revisions||[]),{by:A.currentUser?.name||"Administrator",at:new Date().toISOString(),reason:"Edited from saved invoice",beforeNet:old.net,afterNet:NI.calc.mTot.net}]};
   sv("iv",A.invoices.map((i,j)=>j===idx?updated:i)); NI.saved=true; const id=updated.id; NI.editId=null; A.flashId=id; toast("Invoice "+updated.invNo+" updated — revision saved","ok"); auditLog("UPDATE","invoice",id,"Edited invoice: "+updated.invNo,null); setTimeout(()=>showInvSuccess(updated),250); gP("new");
 }
 
@@ -3748,7 +3748,7 @@ function pgHist(){
   };
   let vMod="";
   if(HS.vId){const inv=A.invoices.find(i=>i.id===HS.vId);if(inv){
-    const sch=A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:"",address:"",mobile:""};
+    const sch=A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:inv.schoolUdise||"",address:inv.schoolAddress||"",mobile:inv.schoolMobile||"",block:inv.schoolBlock||"",district:inv.schoolDistrict||""};
     const fm={date:inv.date,month:inv.month,year:inv.year};
     const tabs=[{id:"merged",l:"Invoice"},{id:"annexA",l:"Annexure A"},{id:"annexB",l:"Annexure B"},{id:"annexC",l:"Annexure C"},{id:"gst",l:"GST"}];
     let tc=`<div class="info inf-b">Full preview available for invoices saved in this session.</div>`;
@@ -4339,17 +4339,23 @@ let SC={q:"",blockFilter:"",eid:null,did:null,show:false,sf:{name:"",udise:"",bl
 function scWorking(){ if(!Array.isArray(SC.draft)) SC.draft=A.schools.map(s=>({...s})); return SC.draft; }
 function scInitDraft(){ SC.draft=A.schools.map(s=>({...s})); SC.dirty=false; }
 function schMasterResetOpen(){SC.resetShow=true;SC.resetTyped="";gP("schools");}
-function schMasterResetConfirm(){
+async function schMasterResetConfirm(){
   if((SC.resetTyped||"").trim()!=="RESET SCHOOLS"){toast("Type the confirmation phrase exactly","err");return;}
   const before=(A.schools||[]).map(s=>({...s}));
   const sample=SC_SAMPLE.map(s=>({...s}));
+  // Wipes every real school (UDISE codes, addresses, everything) down to 4
+  // sample rows. The audit log already keeps a before/after snapshot, but
+  // that requires manually digging through JSON to recover from — a Safety
+  // Point gives a genuine one-click undo, the same protection every restore
+  // action already has.
+  await V42.savePreRestoreSafetyPoint('Before School Master Reset ('+before.length+' schools)');
   sv("sc",sample);
   SC.draft=sample.map(s=>({...s}));
   SC.dirty=false;
   SC.resetShow=false;
   SC.resetTyped="";
   auditLog("UPDATE","schools","sc","Master Reset — School Master reset to 4 sample schools ("+before.length+" real schools removed; invoices and all other data untouched)",{before,after:sample});
-  toast("School Master reset to sample data","ok");
+  toast("School Master reset to sample data — your previous schools were saved as a Safety Point","ok");
   gP("schools");
 }
 function scSave(){ const before=(A.schools||[]).map(s=>({...s})); const list=scWorking().map(s=>({...s})); sv("sc",list); SC.draft=list.map(s=>({...s})); SC.dirty=false; auditLog("UPDATE","schools","sc","School Master updated ("+list.length+" schools) — includes location/address/block/district changes",{before,after:list}); toast("School Master changes saved","ok"); gP("schools"); }
@@ -9307,8 +9313,16 @@ const CLOUD = {
 
     if(this.user) {
       if(badge)  {
-        if(this.verified){ badge.textContent = "Connected"; badge.style.background = "var(--glt)"; badge.style.color = "var(--gn)"; badge.style.border = "1px solid #BBF7D0"; }
-        else { badge.textContent = "Reconnecting…"; badge.style.background = "var(--alt)"; badge.style.color = "var(--am)"; badge.style.border = "1px solid #FDE68A"; }
+        if(this.verified){ badge.textContent = "Connected"; badge.style.background = "var(--glt)"; badge.style.color = "var(--gn)"; badge.style.border = "1px solid #BBF7D0"; badge.style.cursor = "default"; badge.title = ""; badge.onclick = null; }
+        else {
+          badge.textContent = "Reconnecting… (tap to retry)"; badge.style.background = "var(--alt)"; badge.style.color = "var(--am)"; badge.style.border = "1px solid #FDE68A";
+          // Automatic reconnect (silent, then a one-time prompt) doesn't
+          // always succeed quickly on every browser — this badge is always
+          // tappable as a manual, guaranteed-available fallback, so nobody
+          // is ever purely dependent on the automatic path working.
+          badge.style.cursor = "pointer"; badge.title = "Tap to reconnect to Google now";
+          badge.onclick = ()=>{ V42.ensureBackendAuthInteractive().then(ok=>{ CLOUD.updateUI(); if(ok) toast('Reconnected to Google','ok'); }); };
+        }
       }
       if(notSgn) notSgn.style.display = "none";
       if(sgn)    sgn.style.display    = "";
@@ -11559,7 +11573,12 @@ v2.8 — Definitive flat-light header + school category correction
           catch(e){ finish(false); }
         }});
         google.accounts.id.prompt(n=>{ if(n.isNotDisplayed && (n.isNotDisplayed()||n.isSkippedMoment())) finish(false); });
-        setTimeout(()=>finish(false),5000);
+        // If this passive prompt hasn't resolved within 5s, explicitly cancel
+        // it (not just give up waiting) — otherwise Google's own One Tap UI
+        // can keep showing/lingering after this function has already moved
+        // on, which is confusing on its own even without the separate
+        // overlay-duplication issue this was found alongside.
+        setTimeout(()=>{ try{ google.accounts.id.cancel(); }catch(e){} finish(false); },5000);
       });
     }catch(e){ return false; }
   };
@@ -11640,9 +11659,36 @@ v2.8 — Definitive flat-light header + school category correction
     try{
       await V42.loadGIS();
       if(!V42.googleClientId || !isGoogleUser(CLOUD.user)) return false;
+      // Guard against a second overlay stacking on top of one that's already
+      // showing (e.g. this gets called from more than one place close
+      // together — a background auth-retry AND a manual button tap). Two
+      // stacked instances of the same overlay is exactly how a fully
+      // unresponsive "Continue with Google" dialog happens: the top one can
+      // fail to render its button/handlers while blocking the working one
+      // underneath. If one already exists, wait for IT to resolve instead
+      // of creating a second.
+      const existing=document.getElementById('mdm-google-gis-overlay');
+      if(existing){
+        return await new Promise(resolve=>{
+          const check=setInterval(()=>{
+            if(!document.getElementById('mdm-google-gis-overlay')){ clearInterval(check); resolve(!!V42.idToken); }
+          },300);
+          setTimeout(()=>{ clearInterval(check); resolve(!!V42.idToken); },30000);
+        });
+      }
       return await new Promise(resolve=>{
         let done=false;
-        const finish=v=>{if(done)return;done=true;try{document.getElementById('mdm-google-gis-overlay')?.remove();}catch(e){};resolve(!!v);};
+        const finish=v=>{
+          if(done)return;done=true;
+          clearTimeout(safety);
+          try{ document.getElementById('mdm-google-gis-overlay')?.remove(); }catch(e){}
+          resolve(!!v);
+        };
+        // Safety net: this overlay must NEVER be able to sit stuck forever,
+        // regardless of the cause — if nothing resolves it within 45s
+        // (render failure, click handler not firing, anything else), force
+        // it closed so the user is never permanently blocked.
+        const safety=setTimeout(()=>finish(false),45000);
         google.accounts.id.initialize({client_id:V42.googleClientId,callback:async resp=>{
           try{if(!resp?.credential) return finish(false); await V42.acceptGoogleCredential(resp.credential); finish(!!V42.idToken);}
           catch(e){console.error('[MDM] interactive Google re-auth failed',e);finish(false);}
@@ -11650,15 +11696,16 @@ v2.8 — Definitive flat-light header + school category correction
         const overlay=document.createElement('div');
         overlay.id='mdm-google-gis-overlay';
         overlay.style.cssText='position:fixed;inset:0;z-index:20000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
-        overlay.innerHTML='<div style="background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:18px;min-width:280px;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.22)"><div style="font-weight:800;font-size:14px;margin-bottom:10px">Continue with Google</div><div id="mdm-google-gis-overlay-button"></div><button type="button" class="btn btn-g btn-sm" style="margin-top:10px;width:100%">Cancel</button></div>';
+        overlay.innerHTML='<div style="background:var(--card,#fff);border:1px solid var(--bd,#ddd);border-radius:14px;padding:18px;min-width:280px;max-width:420px;box-shadow:0 16px 50px rgba(0,0,0,.22)"><div style="font-weight:800;font-size:14px;margin-bottom:10px">Continue with Google</div><div id="mdm-google-gis-overlay-button">Loading…</div><button type="button" class="btn btn-g btn-sm" style="margin-top:10px;width:100%" onclick="document.getElementById(\'mdm-google-gis-overlay\')?.remove()">Cancel</button></div>';
         document.body.appendChild(overlay);
+        // Inline onclick (above) is the primary, reliable dismiss path — it
+        // works even if this addEventListener somehow never attaches. This
+        // second listener additionally resolves the pending Promise; without
+        // it the inline handler alone would remove the overlay but leave
+        // this function hanging forever waiting for a result.
         overlay.querySelector('button')?.addEventListener('click',()=>finish(false));
-        // When the GIS button opens Google's own account popup, the parent window
-        // loses focus. Hide only our wrapper at that moment; Google's popup remains.
-        const hideOnBlur=()=>{try{overlay.remove();}catch(_){}};
-        window.addEventListener('blur',hideOnBlur,{once:true});
         const host=document.getElementById('mdm-google-gis-overlay-button');
-        if(host) google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320});
+        if(host){ host.innerHTML=''; google.accounts.id.renderButton(host,{type:'standard',theme:'outline',size:'large',text:'continue_with',shape:'rectangular',width:320}); }
       });
     }catch(e){console.error('[MDM] GIS re-auth setup failed',e);return false;}
   };
