@@ -4607,7 +4607,7 @@ function pgHist(){
     const markClass=isL?" hist-mark-last":isP?" hist-mark-second":"";
     const menuOpen=HS.mId===inv.id;
     const totalStudents=(inv.s15||0)+(inv.s68||0);
-    const rawShare=Array.isArray(inv.shareHistory)&&inv.shareHistory.length?inv.shareHistory:(inv.deliveryMethod&&inv.deliveryAt?[{method:inv.deliveryMethod,at:inv.deliveryAt}]:[]);
+    const rawShare=histValidShareRecords(inv);
     const latestShare=rawShare.length?rawShare[rawShare.length-1]:null;
     const shareIcon=latestShare?histMobileShareIcon(latestShare.method):"";
     const shareLabel=latestShare?(latestShare.method||"Shared PDF"):"Not Shared";
@@ -4634,7 +4634,7 @@ function pgHist(){
           <div class="hist-date">${HS.view==="timeline"?ec(tLabel(inv)):(()=>{const raw=inv.date||"";if(!raw)return"—";const d=new Date(raw);return isNaN(d)?ec(raw):ec(d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}));})()}</div>
         </div>
       </div>
-      <div class="hist-grid-cell">
+      <div class="hist-grid-cell hist-school-cell">
         <div class="hist-data-block hist-school-block">
           <div class="hist-data-label">SCHOOL</div>
           <div class="hist-school-name" title="${ec(inv.schoolName)}">${ec(inv.schoolName)}</div>
@@ -4642,7 +4642,7 @@ function pgHist(){
           ${isSchoolLead?`<div style="display:flex;justify-content:flex-end;margin-top:5px"><button type="button" class="btn btn-p btn-sm hist-school-pack-btn" title="Share selected invoices from this school group" style="font-size:8.5px;padding:4px 8px;display:inline-flex;align-items:center;gap:4px" onclick="event.stopPropagation();openBatchShare('${ec(inv.schoolId)}')">&#128228; Group Share · ${schoolInvoices.length}</button></div>`:""}
         </div>
       </div>
-      <div class="hist-grid-cell">
+      <div class="hist-grid-cell hist-class-cell">
         <div class="hist-data-block hist-class-block">
           <div class="hist-data-label">CLASS BREAKDOWN</div>
           <div class="hist-class-grid">
@@ -4657,8 +4657,8 @@ function pgHist(){
           </div>
         </div>
       </div>
-      <div class="hist-grid-cell"><div class="hist-data-block"><div class="hist-data-label">TOTAL STUDENTS</div><div class="hist-students">${ns(totalStudents)}</div></div></div>
-      <div class="hist-grid-cell"><div class="hist-data-block"><div class="hist-data-label">NET PAYABLE</div><div class="hist-amount">${R(inv.net)}</div></div></div>
+      <div class="hist-grid-cell hist-students-cell"><div class="hist-data-block"><div class="hist-data-label">TOTAL STUDENTS</div><div class="hist-students">${ns(totalStudents)}</div></div></div>
+      <div class="hist-grid-cell hist-amount-cell"><div class="hist-data-block"><div class="hist-data-label">NET PAYABLE</div><div class="hist-amount">${R(inv.net)}</div></div></div>
       <div class="hist-grid-cell hist-status-cell hist-sync-cell">
         <div class="hist-status-item hist-status-sync"><div class="hist-data-label">SYNC</div><div class="hist-status-value">${sBdg(inv.status,inv.syncStatus)}</div></div>
       </div>
@@ -4669,10 +4669,9 @@ function pgHist(){
         <div class="hist-status-item hist-status-share">
           <div class="hist-data-label">SHARE</div>
           <div class="hist-status-value hist-share-value">${histShareStatus(inv)}</div>
-          <button type="button" class="hist-quick-whatsapp" title="Open message template and share invoice PDF via WhatsApp" onclick="event.stopPropagation();shrInv('${ec(inv.id)}')">&#128172; WhatsApp + PDF</button>
         </div>
       </div>
-      <div class="hist-grid-cell">
+      <div class="hist-grid-cell hist-actions-cell">
         <div class="hist-actions">
           <div class="hist-actions-label">ACTIONS</div>
           <div class="hist-action-buttons">
@@ -5028,7 +5027,7 @@ function openMobileShareDetails(id){
   if(window.innerWidth>760)return;
   const inv=A.invoices.find(i=>i.id===id);
   if(!inv)return;
-  const raw=Array.isArray(inv.shareHistory)&&inv.shareHistory.length?inv.shareHistory:(inv.deliveryMethod&&inv.deliveryAt?[{method:inv.deliveryMethod,at:inv.deliveryAt}]:[]);
+  const raw=histValidShareRecords(inv);
   if(!raw.length){toast("This invoice has not been shared yet","err");return;}
   const latest=raw[raw.length-1]||{};
   const method=String(latest.method||"Shared");
@@ -5039,24 +5038,52 @@ function openMobileShareDetails(id){
   dlg.innerHTML=`<div class="modal hist-share-details-modal" role="dialog" aria-modal="true" aria-label="Share Details">
     <div class="mhd"><div><div class="mt">Share Details</div><div style="font-size:10px;color:var(--txl);margin-top:2px">${ec(inv.invNo)} · ${ec(inv.schoolName||"")}</div></div><button type="button" class="btn btn-g btn-sm" aria-label="Close" onclick="document.getElementById('hist-share-details-dlg')?.remove()">&#10005;</button></div>
     <div class="mbd hist-share-details-body">
-      <div class="hist-share-detail-channel"><span class="hist-mobile-share-icon ${tone}">${histMobileShareIcon(method)}</span><div><div class="hist-share-detail-label">LAST SHARED VIA</div><div class="hist-share-detail-method">${ec(method)}</div></div></div>
-      <div class="hist-share-detail-row"><span>Status</span><b>Shared</b></div>
+      <div class="hist-share-detail-channel"><span class="hist-mobile-share-icon ${tone}">${histMobileShareIcon(method)}</span><div><div class="hist-share-detail-label">LAST ATTEMPTED VIA</div><div class="hist-share-detail-method">${ec(method)}</div></div></div>
+      <div class="hist-share-detail-row"><span>Status</span><b>Attempted</b></div>
       <div class="hist-share-detail-row"><span>Date &amp; Time</span><b>${ec(when)}</b></div>
-      <div class="hist-share-detail-row"><span>Document</span><b>Invoice PDF</b></div>
+      <div class="hist-share-detail-row"><span>Action</span><b>Share attempt recorded</b></div>
     </div>
   </div>`;
   dlg.addEventListener("click",e=>{if(e.target===dlg)dlg.remove();});
   document.body.appendChild(dlg);
 }
-function histShareStatus(inv){
-  // Icons represent only share actions recorded after the existing share workflow completes.
-  // Opening a share dialog, preparing a PDF, or cancelling a share does not create a record.
+function histValidShareRecords(inv){
+  if(!inv||typeof inv!=="object")return [];
+  // Share STATUS is an attempt log: show each channel the user actually invoked.
+  // A launched WhatsApp text action is an attempt even though it cannot prove delivery.
+  const attempts=Array.isArray(inv.shareAttempts)?inv.shareAttempts:[];
+  const validAttempt=r=>!!(r&&r.method&&r.at&&!/(FAILED|ERROR|ABORTED|CANCELLED|CANCELED|PENDING)/i.test(String(r.status||"")));
+  const explicitAttempts=attempts.filter(validAttempt);
+  // Migration fallback for channels recorded by earlier builds. Merge rather than
+  // replace, so a new attempt never hides older channels already in shareHistory.
   const history=Array.isArray(inv.shareHistory)?inv.shareHistory:[];
-  const legacy=(!history.length&&inv.deliveryMethod&&inv.deliveryAt)?[{method:inv.deliveryMethod,at:inv.deliveryAt,shareStatus:inv.shareStatus||"SHARE"}]:[];
-  const successful=[...history,...legacy].filter(r=>{
-    const st=String(r?.shareStatus||"SHARE").toUpperCase();
-    return !/(FAILED|CANCELLED|CANCELED|PENDING|ABORTED|ERROR)/.test(st);
-  });
+  const validStatus=r=>["SHARE","RE-SHARE"].includes(String(r?.shareStatus||"").trim().toUpperCase());
+  const recorded=history.filter(r=>!!(r&&r.method&&r.at&&validStatus(r)));
+  const delivery=inv.delivery||{};
+  const isSent=String(delivery.status||inv.deliveryStatus||"").toUpperCase()==="SENT";
+  if(!recorded.length&&!explicitAttempts.length&&isSent&&inv.deliveryMethod&&inv.deliveryAt){
+    const legacy={method:delivery.method||inv.deliveryMethod,at:delivery.at||inv.deliveryAt,shareStatus:inv.shareStatus||"SHARE"};
+    if(legacy.method&&legacy.at)recorded.push(legacy);
+  }
+  const merged=[...recorded,...explicitAttempts];
+  const seen=new Set();
+  return merged.filter(r=>{const key=String(r.method).toLowerCase()+"|"+String(r.at);if(seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>new Date(a.at||0)-new Date(b.at||0));
+}
+function recordShareAttempt(id,method){
+  const inv=A.invoices.find(i=>i.id===id);if(!inv)return;
+  const at=new Date().toISOString();
+  const attempts=Array.isArray(inv.shareAttempts)?inv.shareAttempts.slice():[];
+  const normalized=String(method||"DEVICE_SHARE").toUpperCase();
+  const recent=attempts.length?attempts[attempts.length-1]:null;
+  if(recent&&String(recent.method||"").toUpperCase()===normalized&&Math.abs(Date.now()-new Date(recent.at).getTime())<15000)return;
+  attempts.push({method:method||"DEVICE_SHARE",at,status:"ATTEMPTED",by:A.currentUser?.name||"Administrator"});
+  const updated={...inv,shareAttempts:attempts,lastShareAttemptAt:at,lastShareAttemptMethod:method||"DEVICE_SHARE"};
+  sv("iv",A.invoices.map(i=>i.id===id?updated:i));
+  auditLog("SHARE_ATTEMPT","invoice",id,`Share attempt recorded (${method||"DEVICE_SHARE"}): ${inv.invNo}`,{at,method:method||"DEVICE_SHARE"});
+}
+function histShareStatus(inv){
+  // Display channels that have been attempted; no attempt means Not Shared.
+  const successful=histValidShareRecords(inv);
   if(!successful.length)return '<span class="hist-share-none">Not Shared</span>';
   const channelFor=method=>{
     const x=String(method||"").toLowerCase();
@@ -5072,7 +5099,7 @@ function histShareStatus(inv){
     const last=successful.slice().reverse().find(r=>channelFor(r.method)===ch);
     const when=last?.at?new Date(last.at):null;
     const ts=when&&!isNaN(when)?when.toLocaleString("en-IN"):"Recorded share action";
-    return `<span class="hist-share-channel-icon ${ch}" role="img" aria-label="${label} share action recorded" title="${label} · ${ec(ts)}">${histMobileShareIcon(ch)}</span>`;
+    return `<span class="hist-share-channel-icon ${ch}" role="img" aria-label="${label} share attempted" title="${label} · Attempted ${ec(ts)}">${histMobileShareIcon(ch)}</span>`;
   }).join("");
   return `<div class="hist-share-wrap" aria-label="Recorded share channels">${labels}</div>`;
 }
@@ -5159,7 +5186,7 @@ function addRev(id){
 // MASTER REVISION CONTROL — append-only revision snapshots, bulk-safe
 // This module intentionally reuses the existing invoice and sync storage.
 // ═══════════════════════════════════════════════════════════════════
-let MR={tab:"bulk",month:"",year:"",periodMode:"monthRange",fyStartYear:"",quickMonth:"",fromMonth:"",fromYear:"",toMonth:"",toYear:"",fromDate:"",toDate:"",bulkCategory:"",bulkSchoolId:"",bulkSchoolSearch:"",q:"",individualQ:"",individualMonth:"",individualYear:"",individualFYStart:"",individualPeriodMode:"monthRange",individualFromMonth:"",individualFromYear:"",individualToMonth:"",individualToYear:"",individualFromDate:"",individualToDate:"",individualCategory:"",individualSchoolId:"",individualSchoolSearch:"",individualBlock:"",bulkBlock:"",mode:"add",itemId:"",customName:"",unit:"Pcs",hsn:"",qtyPerChild:"1",rate:"",gst:"0",taxTreatment:"",taxMode:"",reason:"",selectedIds:[],fruitOffIds:[],specialFruitMode:false,preview:null,queueFilter:"",advancedOpen:false,visibleRevisionCategories:{egg:true,fuel:false}};
+let MR={tab:"bulk",month:"",year:"",periodMode:"monthRange",fyStartYear:"",quickMonth:"",fromMonth:"",fromYear:"",toMonth:"",toYear:"",fromDate:"",toDate:"",bulkCategory:"",bulkSchoolId:"",bulkSchoolSearch:"",q:"",individualQ:"",individualMonth:"",individualYear:"",individualFYStart:"",individualPeriodMode:"monthRange",individualFromMonth:"",individualFromYear:"",individualToMonth:"",individualToYear:"",individualFromDate:"",individualToDate:"",individualCategory:"",individualSchoolId:"",individualSchoolSearch:"",individualBlock:"",bulkBlock:"",mode:"add",itemId:"",customName:"",unit:"Pcs",hsn:"",qtyPerChild:"1",rate:"",gst:"0",taxTreatment:"",taxMode:"",reason:"",selectedIds:[],fruitOffIds:[],specialFruitMode:false,preview:null,queueFilter:"",advancedOpen:false,visibleRevisionCategories:{egg:true,fuel:false},shareSelectedIds:[]};
 let MRSearchTimer=null;
 function mrSearchDebounce(){clearTimeout(MRSearchTimer);MRSearchTimer=setTimeout(()=>gP("masterrevision"),250);}
 function mrInvalidatePreview(){MR.preview=null;document.getElementById("mr-preview")?.remove();}
@@ -5167,6 +5194,18 @@ function mrOnModeChange(value){MR.mode=value;MR.preview=null;MR.rate="";MR.gst="
 function mrOnItemChange(value){MR.itemId=value;const item=mrItemsForScope(mrFilteredInvoices()).find(i=>String(i.id||i.name)===String(value))||null;MR.rate="";MR.gst="";MR.taxTreatment="";MR.taxMode="";if(item){MR.unit=item.unit||"Pcs";MR.hsn="";}else if(!value){MR.unit="Pcs";MR.hsn="";}mrInvalidatePreview();gP("masterrevision");}
 function mrQuickExclude(kind){const invoices=mrFilteredInvoices().filter(i=>(MR.selectedIds||[]).includes(i.id));if(!invoices.length){toast("Select the invoices/months first.","warn");return;}const items=mrItemsForScope(invoices);const re=kind==="fruit"?/(egg\s*\/\s*fruits?|fruit)/i:/(lpg|firewood|fuel|jalavan|jalawan|gas)/i;const candidates=items.filter(i=>re.test(String(i.name||""))||re.test(String(i.id||"")));if(!candidates.length){toast(kind==="fruit"?"Egg/Fruit item was not found in the selected invoices.":"LPG / firewood item was not found in the selected invoices.","warn");return;}const exact=candidates.find(i=>kind==="fruit"?(String(i.id||"").toLowerCase()==="fruit"||/egg\s*\/\s*fruits?/i.test(String(i.name||""))):/(lpg|firewood|jalavan|jalawan)/i.test(String(i.name||"")))||candidates[0];MR.mode="exclude";MR.itemId=String(exact.id||exact.name);MR.customName="";MR.preview=null;gP("masterrevision");toast("Exclude item selected. Review the item and invoice list, then Preview Changes before confirming.","info");}
 function mrCanManage(){const role=String(A.currentUser?.role||"").toLowerCase().trim();return role==="admin"||role==="administrator"||role.startsWith("admin");}
+function mrToggleShareSelection(id,checked){const key=String(id);const set=new Set((MR.shareSelectedIds||[]).map(String));if(checked)set.add(key);else set.delete(key);MR.shareSelectedIds=[...set];const n=document.getElementById("mr-share-selected-count");if(n)n.textContent=String(MR.shareSelectedIds.length)+" selected";}
+function mrSelectVisibleForShare(checked){const visible=mrFilteredInvoices();const set=new Set((MR.shareSelectedIds||[]).map(String));visible.forEach(i=>checked?set.add(String(i.id)):set.delete(String(i.id)));MR.shareSelectedIds=[...set];gP("masterrevision");}
+function mrShareSelectedInvoices(){
+  const ids=new Set((MR.shareSelectedIds||[]).map(String));
+  const chosen=sortInvoicesChronologically(mrFilteredInvoices().filter(i=>ids.has(String(i.id))));
+  if(!chosen.length){toast("Select at least one invoice to share.","warn");return;}
+  const schoolIds=[...new Set(chosen.map(i=>String(i.schoolId||"")))];
+  if(schoolIds.length!==1){toast("For one consolidated message, select invoices from one school only.","warn");return;}
+  const schoolId=chosen[0].schoolId;
+  _batchShareState={schoolId,invoices:chosen,schoolName:batchSchoolName(schoolId),selectedIds:chosen.map(i=>String(i.id))};
+  renderBatchShareDialog();
+}
 if(!Array.isArray(A.mrb)) A.mrb=LS.get("mrb",[]);
 function mrMoney(v){return Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function mrMonthYear(inv){return `${String(inv?.month||"")} ${String(inv?.year||"")}`.trim();}
@@ -5590,7 +5629,8 @@ function pgMasterIndividual(){
   ${selectedSchool?`<div class="card" style="margin-top:4px"><div class="cbd"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"><div><div style="font-weight:800;font-size:15px">${ec(selectedSchool.name)}</div><div style="font-size:11px;color:var(--txl)">${ec(SCH_CAT_LABEL[schCategory(selectedSchool.name)]||"Others")}${selectedSchool.udise?` · UDISE ${ec(selectedSchool.udise)}`:""}${selectedSchool.block?` · ${ec(selectedSchool.block)}`:""}</div></div><span class="bdg bn">${allInvoices.filter(i=>mrSchoolMatches(i,selectedSchool.id)).length} invoice(s) total</span></div><div style="margin-top:12px;font-weight:700">Monthly Invoice Summary</div><div class="tw" style="margin-top:6px"><table class="dt"><thead><tr><th>Billing Month</th><th class="num">Invoices</th><th class="num">Net Total</th><th>Action</th></tr></thead><tbody>${monthlyRows.length?monthlyRows.map(m=>`<tr><td>${ec(m.month)} ${ec(m.year)}</td><td class="num">${m.count}</td><td class="num">${mrMoney(m.net)}</td><td><button class="btn btn-g btn-sm" onclick="MR.individualMonth=${JSON.stringify(m.month)};MR.individualYear=${JSON.stringify(m.year)};MR.individualQ='';gP('masterrevision')">View month</button></td></tr>`).join(""):`<tr><td colspan="4">No invoices found for this school.</td></tr>`}</tbody></table></div></div></div>`:`<div class="muted">Select a school above to view its monthly invoice summary.</div>`}
   </div></div>
   <div class="card" style="margin-top:12px"><div class="chd"><span class="cht">2. Find a Specific Invoice</span><span class="bdg bn">${invoices.length} match(es)</span></div><div class="cbd"><div class="fg fg3 mr-individual-invoice-filters"><div class="fc"><label class="flbl">Billing Month</label><select class="fi" onchange="MR.individualMonth=this.value;gP('masterrevision')">${monthOptions}</select></div><div class="fc"><label class="flbl">Billing Year</label><select class="fi" onchange="MR.individualYear=this.value;gP('masterrevision')">${yearOptions}</select></div><div class="fc"><label class="flbl">Invoice Number / School / UDISE</label><input class="fi" value="${ec(MR.individualQ)}" placeholder="Type invoice number or school name…" oninput="MR.individualQ=this.value;mrIndividualSearchDebounce()"/></div></div>
-  <div class="tw mr-invoice-table" style="margin-top:12px"><table class="dt"><thead><tr><th>Invoice</th><th>Month / Year</th><th>School</th><th class="num">Net Payable</th><th>Revision</th><th>Actions</th></tr></thead><tbody>${invoices.length?invoices.map(inv=>`<tr><td><b>${ec(inv.invNo||"")}</b><div style="font-size:10px;color:var(--txl)">${ec(inv.date||"")}</div></td><td>${ec(mrMonthYear(inv))}</td><td>${ec(inv.schoolName||"")}</td><td class="num">${mrMoney(inv.net)}</td><td>${(inv.revisions||[]).length?`<span class="bdg bo">Rev ${(inv.revisions||[]).length}</span>`:`<span class="bdg bn">Original</span>`}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="HS.rId='${String(inv.id).replace(/'/g,"\\'")}';HS.page=1;gP('history')">History</button><button class="btn btn-p btn-sm" onclick="niEditSaved('${String(inv.id).replace(/'/g,"\\'")}')">Edit / Revise</button></div></td></tr>`).join(""):`<tr><td colspan="6">No matching invoices.</td></tr>`}</tbody></table></div><div class="mr-invoice-cards">${invoices.length?invoices.map(inv=>`<div class="card mr-invoice-card"><div class="cbd"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><b>${ec(inv.invNo||"")}</b>${(inv.revisions||[]).length?`<span class="bdg bo">Rev ${(inv.revisions||[]).length}</span>`:`<span class="bdg bn">Original</span>`}</div><div style="font-size:12px;color:var(--txl);margin-top:4px">${ec(mrMonthYear(inv))} · ${ec(inv.date||"")}</div><div style="font-weight:700;margin-top:7px">${ec(inv.schoolName||"")}</div><div style="font-size:12px;margin-top:5px">Net Payable: <b>${mrMoney(inv.net)}</b></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-g btn-sm" onclick="HS.rId='${String(inv.id).replace(/'/g,"\\'")}';HS.page=1;gP('history')">History</button><button class="btn btn-p btn-sm" onclick="niEditSaved('${String(inv.id).replace(/'/g,"\\'")}')">Edit / Revise</button></div></div></div>`).join(""):`<div class="info inf-b">No matching invoices.</div>`}</div></div></div>`;
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;margin-bottom:6px"><label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700"><input type="checkbox" onchange="mrSelectVisibleForShare(this.checked)"/> Select all visible</label><span id="mr-share-selected-count" style="font-size:11px;color:var(--txl)">${(MR.shareSelectedIds||[]).length} selected</span><button type="button" class="btn btn-p btn-sm" onclick="mrShareSelectedInvoices()">All Share Selected</button><button type="button" class="btn btn-g btn-sm" onclick="MR.shareSelectedIds=[];gP('masterrevision')">Clear Selection</button></div>
+  <div class="tw mr-invoice-table" style="margin-top:12px"><table class="dt"><thead><tr><th>Select</th><th>Invoice</th><th>Month / Year</th><th>School</th><th class="num">Net Payable</th><th>Revision</th><th>Actions</th></tr></thead><tbody>${invoices.length?invoices.map(inv=>`<tr><td><input type="checkbox" ${(MR.shareSelectedIds||[]).map(String).includes(String(inv.id))?"checked":""} onchange="mrToggleShareSelection('${String(inv.id).replace(/'/g,"\\'")}',this.checked)" aria-label="Select invoice ${ec(inv.invNo||"")}"/></td><td><b>${ec(inv.invNo||"")}</b><div style="font-size:10px;color:var(--txl)">${ec(inv.date||"")}</div></td><td>${ec(mrMonthYear(inv))}</td><td>${ec(inv.schoolName||"")}</td><td class="num">${mrMoney(inv.net)}</td><td>${(inv.revisions||[]).length?`<span class="bdg bo">Rev ${(inv.revisions||[]).length}</span>`:`<span class="bdg bn">Original</span>`}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="HS.rId='${String(inv.id).replace(/'/g,"\\'")}';HS.page=1;gP('history')">History</button><button class="btn btn-p btn-sm" onclick="niEditSaved('${String(inv.id).replace(/'/g,"\\'")}')">Edit / Revise</button></div></td></tr>`).join(""):`<tr><td colspan="7">No matching invoices.</td></tr>`}</tbody></table></div><div class="mr-invoice-cards">${invoices.length?invoices.map(inv=>`<div class="card mr-invoice-card"><div class="cbd"><div style="display:flex;justify-content:space-between;gap:8px;align-items:start"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" ${(MR.shareSelectedIds||[]).map(String).includes(String(inv.id))?"checked":""} onchange="mrToggleShareSelection('${String(inv.id).replace(/'/g,"\\'")}',this.checked)"/><b>${ec(inv.invNo||"")}</b></label>${(inv.revisions||[]).length?`<span class="bdg bo">Rev ${(inv.revisions||[]).length}</span>`:`<span class="bdg bn">Original</span>`}</div><div style="font-size:12px;color:var(--txl);margin-top:4px">${ec(mrMonthYear(inv))} · ${ec(inv.date||"")}</div><div style="font-weight:700;margin-top:7px">${ec(inv.schoolName||"")}</div><div style="font-size:12px;margin-top:5px">Net Payable: <b>${mrMoney(inv.net)}</b></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-g btn-sm" onclick="HS.rId='${String(inv.id).replace(/'/g,"\\'")}';HS.page=1;gP('history')">History</button><button class="btn btn-p btn-sm" onclick="niEditSaved('${String(inv.id).replace(/'/g,"\\'")}')">Edit / Revise</button></div></div></div>`).join(""):`<div class="info inf-b">No matching invoices.</div>`}</div></div></div>`;
 }
 function mrIndividualSearchDebounce(){clearTimeout(MRSearchTimer);MRSearchTimer=setTimeout(()=>gP("masterrevision"),250);}
 function pgMasterRevision(){
@@ -8059,6 +8099,24 @@ function batchMonthYear(inv){
   const yr=String(inv?.year||"").trim();
   return yr?`${mon} - ${yr}`:mon;
 }
+// Canonical chronology for every batch share surface: calendar year, then month.
+// Never rely on selection order, savedAt, invoice number, or reverse().
+function batchChronologyKey(inv){
+  const monthNames={JAN:0,FEB:1,MAR:2,APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11};
+  const raw=String(inv?.month||inv?.billingMonth||"").trim().toUpperCase();
+  const mon=raw.slice(0,3);
+  const year=Number(inv?.year||inv?.billingYear||String(inv?.date||"").slice(0,4));
+  const month=monthNames[mon];
+  // Unknown month/year sorts after dated invoices, with stable tie-breaking below.
+  return Number.isFinite(year)&&year>0&&month!==undefined ? year*12+month : Number.MAX_SAFE_INTEGER;
+}
+function sortInvoicesChronologically(invoices){
+  return (Array.isArray(invoices)?invoices:[]).filter(Boolean).slice().sort((a,b)=>
+    batchChronologyKey(a)-batchChronologyKey(b) ||
+    String(a.invNo||"").localeCompare(String(b.invNo||""),undefined,{numeric:true}) ||
+    String(a.id||"").localeCompare(String(b.id||""))
+  );
+}
 function resolveSchoolContact(schoolId){
   const sch=(A.schools||[]).find(x=>String(x.id||"")===String(schoolId||""));
   const inv=(A.invoices||[]).find(x=>String(x.schoolId||"")===String(schoolId||""));
@@ -8066,7 +8124,7 @@ function resolveSchoolContact(schoolId){
   return String(raw||"").trim();
 }
 function buildBatchShareMessage(invoices,schoolName){
-  const list=Array.isArray(invoices)?invoices:[];
+  const list=sortInvoicesChronologically(invoices);
   const contact=resolveSchoolContact(_batchShareState?.schoolId || list[0]?.schoolId || "");
   const school=String(schoolName||"Selected School");
   // Use the same active template resolver as single-invoice sharing. This keeps
@@ -8074,7 +8132,8 @@ function buildBatchShareMessage(invoices,schoolName){
   const rendered=list.map((inv,n)=>{
     const tpl=currentShareMsgTemplate(inv);
     const msg=renderMsgTemplate(tpl,inv);
-    return `*• Invoice #${String(n+1).padStart(2,"0")} — ${String(inv.invNo||"—")}*\n${msg}`;
+    const revisionTag=invoiceIsRevisedForShare(inv)?" — 🔄 REVISED":"";
+    return `*• Invoice #${String(n+1).padStart(2,"0")} — ${String(inv.invNo||"—")}${revisionTag}*\n${msg}`;
   });
   const contactLine=contact?`\nContact No.: ${contact}`:"";
   const udise=resolveMsgVars(list[0]||{}).UDISECode||"—";
@@ -8124,7 +8183,7 @@ function batchSelectedInvoices(){
   const s=_batchShareState;
   if(!s)return [];
   const ids=new Set(Array.isArray(s.selectedIds)?s.selectedIds:[]);
-  return s.invoices.filter(i=>ids.has(String(i.id)));
+  return sortInvoicesChronologically(s.invoices.filter(i=>ids.has(String(i.id))));
 }
 function syncBatchSelectionMessage(){
   const s=_batchShareState;if(!s)return;
@@ -8161,7 +8220,7 @@ function renderBatchSelectionSummary(){
 }
 
 function openBatchShare(schoolId){
-  const invoices=batchSchoolInvoices(schoolId);
+  const invoices=sortInvoicesChronologically(batchSchoolInvoices(schoolId));
   if(!invoices.length){toast("No saved PDFs are available for this school.","err");return;}
   _batchShareState={
     schoolId,
@@ -8249,7 +8308,8 @@ function sendBatchWhatsAppText(){
   if(ta)ta.value=msg;
   try{const cp=navigator.clipboard?.writeText(msg);if(cp&&typeof cp.catch==="function")cp.catch(()=>{});}catch(_){}
   window.location.href=getWhatsAppTextUrl(msg);
-  if(_batchShareState)auditLog("SHARE","school",_batchShareState.schoolId,`Batch WhatsApp text opened for ${selected.length} selected invoices`,{invoiceIds:selected.map(i=>i.id)});
+  selected.forEach(inv=>recordShareAttempt(inv.id,"WHATSAPP_TEXT"));
+  if(_batchShareState)auditLog("SHARE_ATTEMPT","school",_batchShareState.schoolId,`Batch WhatsApp text opened for ${selected.length} selected invoices`,{invoiceIds:selected.map(i=>i.id)});
 }
 async function sendBatchWhatsAppPdfs(){
   const selected=batchSelectedInvoices();
@@ -8262,6 +8322,7 @@ async function sendBatchWhatsAppPdfs(){
       if(!fileMatchesInvoice(file,inv))throw new Error("Prepared PDF does not match "+inv.invNo);
       if(!navigator.share||!navigator.canShare||!navigator.canShare({files:[file]}))
         throw new Error("This device cannot share PDF files.");
+      recordShareAttempt(inv.id,"WHATSAPP_PDF");
       await navigator.share({files:[file],title:"MDM Invoice "+inv.invNo});
       markDeliveryState(inv.id,"WHATSAPP_PDF");
     }
@@ -8298,6 +8359,8 @@ async function sendBatchShareChannel(channel){
     // Reuse the existing single-share Web Share/native path whenever possible.
     // Batch only changes the payload from one invoice to the selected invoice pack.
     if(normalized==="telegram" || normalized==="email" || normalized==="device"){
+      const attemptMethod=normalized==="telegram"?"TELEGRAM":normalized==="email"?"EMAIL":"DEVICE_SHARE";
+      selected.forEach(inv=>recordShareAttempt(inv.id,attemptMethod));
       if(!(navigator.share && navigator.canShare && navigator.canShare({files,text:msg}))){
         // Fall back to the native/device share bridge if the project exposes it.
         if(window.AndroidShare?.shareFilesWithText){
@@ -8348,6 +8411,7 @@ async function sendBatchWhatsAppPdf(id){
     const file=await prepareInvoicePdf(id);
     if(!fileMatchesInvoice(file,inv))throw new Error("Prepared PDF does not match this invoice");
     if(!navigator.share||!navigator.canShare||!navigator.canShare({files:[file]}))throw new Error("This device cannot share PDF files.");
+    recordShareAttempt(id,"WHATSAPP_PDF");
     await navigator.share({files:[file],title:"MDM Invoice "+inv.invNo});
     markDeliveryState(id,"WHATSAPP_PDF");
     auditLog("SHARE","invoice",id,"Batch WhatsApp PDF shared: "+inv.invNo,{batchSchoolId:_batchShareState?.schoolId||inv.schoolId||null});
@@ -8359,10 +8423,12 @@ async function sendBatchWhatsAppPdf(id){
 }
 
 function markDeliveryState(id,method,revisionNo){
-  // Call only after the existing share/export dispatch succeeds. Failed/cancelled
-  // share attempts must never reach this function or count as sent.
+  // Preserve the existing delivery history, and independently record the channel attempt.
   const inv=A.invoices.find(i=>i.id===id);if(!inv)return;
   const at=new Date().toISOString(),updated=mrWithDeliveryRecord(inv,method,revisionNo??(inv.revisions||[]).length,at);
+  const attempts=Array.isArray(updated.shareAttempts)?updated.shareAttempts.slice():[];
+  attempts.push({method:method||"DEVICE_SHARE",at,status:"ATTEMPTED",by:A.currentUser?.name||"Administrator"});
+  updated.shareAttempts=attempts;updated.lastShareAttemptAt=at;updated.lastShareAttemptMethod=method||"DEVICE_SHARE";
   sv("iv",A.invoices.map(i=>i.id===id?updated:i));
   auditLog("SHARE","invoice",id,`${updated.shareStatus} recorded: ${inv.invNo}`,{at,method,revisionNo:revisionNo??(inv.revisions||[]).length});
 }
@@ -8403,7 +8469,8 @@ function sendWhatsAppTextStep(id){
   try{ if(navigator.clipboard?.writeText) navigator.clipboard.writeText(msg).catch(()=>{}); }catch(e){}
   const url=getWhatsAppTextUrl(msg);
   window.location.href=url;
-  auditLog("SHARE","invoice",id,"WhatsApp Step 1: opened WhatsApp with invoice text only: "+inv.invNo,null);
+  recordShareAttempt(id,"WHATSAPP_TEXT");
+  auditLog("SHARE_ATTEMPT","invoice",id,"WhatsApp Step 1: opened WhatsApp with invoice text only: "+inv.invNo,null);
 }
 
 async function sendWhatsAppPdfStep(id){
@@ -8490,6 +8557,7 @@ async function shareWithPdf(id,channel){
       // the delivered Android host has been proven to send the PDF but drop text.
       if(typeof window.AndroidShare.sharePdfWithText!=="function")
         throw{code:"native_whatsapp_bridge_required"};
+      recordShareAttempt(id,"WHATSAPP");
       const result=window.AndroidShare.sharePdfWithText(b64,file.name,msg);
       if(result&&typeof result.then==="function")await result;
 
@@ -8502,6 +8570,7 @@ async function shareWithPdf(id,channel){
 
     const webFileShareSupported=!!(navigator.share&&navigator.canShare&&navigator.canShare({files:[file],text:msg}));
     if(webFileShareSupported){
+      recordShareAttempt(id,channel.toUpperCase());
       await navigator.share({files:[file],title:"MDM Invoice "+inv.invNo,text:msg});
       document.getElementById("shr-dlg")?.remove();
       toast("Invoice message + prepared PDF share opened","ok");
@@ -9221,6 +9290,19 @@ function pgSett() {
     </div>
   </div>
 
+  <!-- BULK ORIGINAL INVOICE MESSAGE TEMPLATE v4.61.55 -->
+  <div class="card" id="bulk-original-template-manager" style="margin-bottom:14px">
+    <div class="chd"><span class="cht">📚 Bulk Invoice Share Template</span><span class="bdg bn">Original / Mixed Batch</span></div>
+    <div class="cbd">
+      <div style="font-size:11.5px;color:var(--txl);margin-bottom:10px">Customize the general message shown around the automatically generated invoice details when sharing multiple invoices together. School name, UDISE, contact, invoice details and count are filled automatically.</div>
+      <label class="flbl">Bulk Message Template</label>
+      <textarea class="fi" id="st-bulk-msgtpl" rows="8" style="font-size:12px;line-height:1.5;font-family:inherit" oninput="bulkTplPreviewUpdate('original')"></textarea>
+      <div style="font-size:10.5px;color:var(--txl);margin:6px 0 12px">Placeholders: <span class="mono">{SchoolName}</span> <span class="mono">{UDISECode}</span> <span class="mono">{ContactNo}</span> <span class="mono">{InvoiceList}</span> <span class="mono">{TotalInvoices}</span> <span class="mono">{RevisionSummary}</span> (use RevisionSummary for mixed batches)</div>
+      <label class="flbl">Live Preview</label><div id="st-bulk-msgtpl-preview" style="white-space:pre-wrap;font-size:12px;line-height:1.5;background:var(--slx);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn btn-p" style="padding:9px;font-size:12px" onclick="saveBulkMsgTemplate('original')">Save Bulk Template</button><button class="btn btn-n" style="padding:9px;font-size:12px" onclick="resetBulkMsgTemplate('original')">Reset to Default</button></div>
+    </div>
+  </div>
+
   <!-- REVISED INVOICE TEMPLATE MANAGER v4.60.0 -->
   <div class="card" id="revision-template-manager" style="margin-bottom:14px">
     <div class="chd"><span class="cht">🧾 Revised Invoice Template Manager</span><span class="bdg bo">Separate from Original</span></div>
@@ -9238,6 +9320,19 @@ function pgSett() {
       <label class="flbl">Saved Template Versions (up to 5 previous)</label>
       <div id="st-revision-template-history" style="display:grid;gap:7px"></div>
       <div style="font-size:10.5px;color:var(--txl);margin-top:8px">Restoring a version creates a new current version; it does not delete the selected historical version. Template history is separate from invoice revision history.</div>
+    </div>
+  </div>
+
+  <!-- BULK REVISED INVOICE MESSAGE TEMPLATE v4.61.55 -->
+  <div class="card" id="bulk-revision-template-manager" style="margin-bottom:14px">
+    <div class="chd"><span class="cht">🔄 Bulk Revision Share Template</span><span class="bdg bo">Revised Batch</span></div>
+    <div class="cbd">
+      <div style="font-size:11.5px;color:var(--txl);margin-bottom:10px">A separate editable wrapper for sharing multiple revised invoices. Automatic invoice fields and each invoice's revised message remain generated by the ERP.</div>
+      <label class="flbl">Bulk Revision Message Template</label>
+      <textarea class="fi" id="st-bulk-revision-msgtpl" rows="8" style="font-size:12px;line-height:1.5;font-family:inherit" oninput="bulkTplPreviewUpdate('revision')"></textarea>
+      <div style="font-size:10.5px;color:var(--txl);margin:6px 0 12px">Placeholders: <span class="mono">{SchoolName}</span> <span class="mono">{UDISECode}</span> <span class="mono">{ContactNo}</span> <span class="mono">{InvoiceList}</span> <span class="mono">{TotalInvoices}</span></div>
+      <label class="flbl">Live Preview</label><div id="st-bulk-revision-msgtpl-preview" style="white-space:pre-wrap;font-size:12px;line-height:1.5;background:var(--slx);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn btn-p" style="padding:9px;font-size:12px" onclick="saveBulkMsgTemplate('revision')">Save Bulk Template</button><button class="btn btn-n" style="padding:9px;font-size:12px" onclick="resetBulkMsgTemplate('revision')">Reset to Default</button></div>
     </div>
   </div>
 
@@ -14145,80 +14240,80 @@ v2.8 — Definitive flat-light header + school category correction
 
 
 
-/* v4.61.49 ROOT-CAUSE REPAIR
-   One authoritative desktop frame. Keep the established theme/header and content contrast;
-   do not paint a pale full-row background over the active dark/light theme. */
+/* v4.61.50 — targeted alignment and single-frame finishing pass
+   Retains the v4.61.49 visual baseline; changes only requested row alignment,
+   the redundant last-cell divider, share-channel display, and view-specific frame color. */
 @media (min-width:761px){
   .hist-grid-row{
     box-sizing:border-box!important;
     border:1px solid #B9C6D8!important;
     border-radius:9px!important;
     background:var(--card)!important;
-    box-shadow:none!important;
-    outline:0!important;
-    overflow:hidden!important;
-    gap:0!important;
-    margin:5px 0 10px!important;
-    position:relative!important;
+    box-shadow:none!important;outline:0!important;overflow:hidden!important;
+    gap:0!important;margin:5px 0 10px!important;position:relative!important;
   }
-  /* Status accent changes the same perimeter; it never adds a second frame. */
-  .hist-grid-row.hist-mark-last{border-color:#86C99A!important;}
-  .hist-grid-row.hist-mark-second{border-color:#8BBEED!important;}
-  .hist-grid-row:has(.hist-status-value .bdg[title*="Cancelled"]){border-color:#E5A3A3!important;}
   .hist-grid-row::before,.hist-grid-row::after{content:none!important;display:none!important;}
 
-  /* Keep the existing violet gradient and use a single divider below it. */
+  /* One perimeter color per view: violet in List, green in Timeline. */
+  .hist-grid-row.hist-mode-list{border-color:#A99AFF!important;}
+  .hist-grid-row.hist-mode-timeline{border-color:#A6D7B8!important;}
+  .hist-grid-row.hist-mode-list.hist-mark-last,
+  .hist-grid-row.hist-mode-list.hist-mark-second{border-color:#A99AFF!important;}
+  .hist-grid-row.hist-mode-timeline.hist-mark-last,
+  .hist-grid-row.hist-mode-timeline.hist-mark-second{border-color:#A6D7B8!important;}
+  .hist-grid-row:has(.hist-status-value .bdg[title*="Cancelled"]){border-color:#E5A3A3!important;}
+
+  /* Header strip keeps its existing violet/green view-specific treatment. */
   .hist-grid-row>.hist-record-violet-head{
-    border:0!important;
-    border-bottom:1px solid rgba(255,255,255,.58)!important;
-    box-shadow:none!important;
-    outline:0!important;
+    border:0!important;border-bottom:1px solid rgba(255,255,255,.42)!important;
+    box-shadow:none!important;outline:0!important;
   }
   .hist-grid-row>.hist-record-violet-head>div{
     border-top:0!important;border-bottom:0!important;border-left:0!important;
-    border-right:1px solid rgba(255,255,255,.48)!important;
-    box-shadow:none!important;
+    border-right:1px solid rgba(255,255,255,.32)!important;box-shadow:none!important;
   }
   .hist-grid-row>.hist-record-violet-head>div:last-child{border-right:0!important;}
 
-  /* One vertical divider per data cell; no cell outlines or nested shadows. */
+  /* Exactly one subtle divider between data cells; the Actions edge is the frame itself. */
   .hist-grid-row>.hist-grid-cell{
-    min-width:0!important;box-sizing:border-box!important;
-    display:flex!important;align-items:center!important;justify-content:center!important;
-    text-align:center!important;
-    border:0!important;
-    border-right:1px solid #D5DCE7!important;
-    box-shadow:none!important;outline:0!important;
-    padding:7px 8px!important;
+    min-width:0!important;box-sizing:border-box!important;display:flex!important;
+    align-items:center!important;justify-content:center!important;text-align:center!important;
+    border:0!important;border-right:1px solid #D5DCE7!important;
+    box-shadow:none!important;outline:0!important;padding:7px 8px!important;
   }
-  .hist-grid-row>.hist-grid-cell:last-child{border-right:0!important;}
+  .hist-grid-row>.hist-grid-cell.hist-actions-cell{border-right:0!important;}
 
-  /* School group centered as a block, its text stays left aligned. */
+  /* School text remains left-aligned. Center its block horizontally, but keep it top-aligned. */
+  .hist-grid-row>.hist-school-cell{align-items:flex-start!important;justify-content:center!important;}
   .hist-grid-row .hist-school-block{
-    width:max-content!important;max-width:100%!important;margin-inline:auto!important;
-    align-items:flex-start!important;text-align:left!important;
+    width:max-content!important;max-width:100%!important;margin:0 auto!important;
+    align-self:flex-start!important;align-items:flex-start!important;justify-content:flex-start!important;
+    text-align:left!important;
   }
   .hist-grid-row .hist-school-name,.hist-grid-row .hist-udise{text-align:left!important;}
 
-  /* Class breakdown: horizontal centering only; preserve its normal vertical flow. */
-  .hist-grid-row>.hist-grid-cell.hist-invoice{justify-content:flex-start!important;}
+  /* Center Class Breakdown horizontally without forcing vertical centering. */
+  .hist-grid-row>.hist-class-cell{justify-content:center!important;}
   .hist-grid-row .hist-class-block{
-    width:100%!important;align-self:stretch!important;margin-inline:auto!important;
-    justify-content:flex-start!important;
+    width:100%!important;max-width:100%!important;align-self:flex-start!important;
+    margin:0 auto!important;justify-content:flex-start!important;
   }
-  .hist-grid-row .hist-class-grid{width:100%!important;margin-inline:auto!important;max-width:100%!important;}
+  .hist-grid-row .hist-class-grid{width:100%!important;max-width:100%!important;margin:0 auto!important;}
 
-  /* Remaining data/status/action cells are centered without changing text colors. */
-  .hist-grid-row .hist-students,.hist-grid-row .hist-amount{
-    width:100%!important;text-align:center!important;
+  /* Student total and net payable centered horizontally within their columns. */
+  .hist-grid-row>.hist-students-cell,.hist-grid-row>.hist-amount-cell{justify-content:center!important;}
+  .hist-grid-row>.hist-students-cell>.hist-data-block,
+  .hist-grid-row>.hist-amount-cell>.hist-data-block{
+    width:100%!important;align-items:center!important;text-align:center!important;
   }
+  .hist-grid-row .hist-students,.hist-grid-row .hist-amount{text-align:center!important;}
+
   .hist-grid-row .hist-status-item,.hist-grid-row .hist-status-value{
     justify-content:center!important;align-items:center!important;text-align:center!important;
   }
   .hist-grid-row .hist-actions,.hist-grid-row .hist-action-buttons{
     justify-content:center!important;align-items:center!important;margin-inline:auto!important;
   }
-  /* Light view tint is restricted to the header strip, not the full data row. */
   .hist-grid-row.hist-mode-list>.hist-record-violet-head{
     background:linear-gradient(100deg,#A99AFF 0%,#8F7AF2 52%,#A99AFF 100%)!important;
   }
@@ -14226,11 +14321,51 @@ v2.8 — Definitive flat-light header + school category correction
     background:linear-gradient(100deg,#B8E3C8 0%,#D5EFDF 52%,#B8E3C8 100%)!important;
     color:#203F30!important;border-bottom-color:#A6D7B8!important;
   }
-  .hist-grid-row.hist-mode-timeline>.hist-record-violet-head>div{
-    border-right-color:rgba(32,63,48,.18)!important;
-  }
+  .hist-grid-row.hist-mode-timeline>.hist-record-violet-head>div{border-right-color:rgba(32,63,48,.18)!important;}
+  /* Share column is status-only: Not Shared until a successful share is recorded, then channel icons only. */
+  .hist-grid-row .hist-quick-whatsapp{display:none!important;}
+}
+@media(max-width:760px){
+  /* Keep existing mobile card layout; its share actions remain governed by the mobile workflow. */
+  .hist-quick-whatsapp{display:none!important;}
 }
 
 </style>
+
+<script>
+/* v4.61.55 — Audited bulk templates with persistence and invoice-list safeguards for original/mixed and revised batches. */
+(function(){
+  'use strict';
+  const DEFAULT_BULK_ORIGINAL=`📌 INVOICE UPDATE\n\n**{SchoolName}**\nUDISE Code: {UDISECode}{ContactNo}\n\nPlease find below the invoice details for your reference:\n\n{InvoiceList}\n\n━━━━━━━━━━━━━━━━━━━━\n\n📊 INVOICE SUMMARY\n\nTotal Invoices: {TotalInvoices}\n{RevisionSummary}\nYour PDF invoice attachments are available below for download.\n\nThank you.\n\nMS Enterprises`;
+  const DEFAULT_BULK_REVISION=`📌 REVISED INVOICE UPDATE\n\n**{SchoolName}**\nUDISE Code: {UDISECode}{ContactNo}\n\nPlease find below the revised invoice details for your reference:\n\n{InvoiceList}\n\n━━━━━━━━━━━━━━━━━━━━\n\n📊 INVOICE SUMMARY\n\nTotal Invoices: {TotalInvoices}\nRevised Invoices: {TotalInvoices}\n\nYour revised PDF invoice attachments are available below for download.\nPlease use the latest revised invoices for your records.\n\nThank you.\n\nMS Enterprises`;
+  const settingKey=mode=>mode==='revision'?'bulkRevisionShareMsgTemplate':'bulkShareMsgTemplate';
+  function getTpl(mode){const key=settingKey(mode);const saved=(typeof A!=='undefined'&&A.sett&&A.sett[key]);const fallback=mode==='revision'?DEFAULT_BULK_REVISION:DEFAULT_BULK_ORIGINAL;return typeof saved==='string'&&saved.trim()&&saved.includes('{InvoiceList}')?saved:fallback}
+  function exampleValues(){return {SchoolName:'UMS KHARIHANIYA',UDISECode:'—',ContactNo:'',InvoiceList:'• Invoice #01 — JUN - 2026\n  Invoice No. : MSE2627-184\n  Amount : ₹5,587.00\n\n• Invoice #02 — 🔄 REVISED SEP - 2026\n  Invoice No. : MSE2627-276\n  Amount : ₹41,348.00',TotalInvoices:'2'}}
+  function renderBulkTpl(tpl,values){return String(tpl||'').replace(/\{(\w+)\}/g,(m,k)=>Object.prototype.hasOwnProperty.call(values,k)?String(values[k]):m)}
+  window.bulkTplPreviewUpdate=function(mode){const id=mode==='revision'?'st-bulk-revision-msgtpl':'st-bulk-msgtpl';const outId=mode==='revision'?'st-bulk-revision-msgtpl-preview':'st-bulk-msgtpl-preview';const ta=document.getElementById(id),out=document.getElementById(outId);if(!ta||!out)return;out.textContent=renderBulkTpl(ta.value,exampleValues())};
+  window.saveBulkMsgTemplate=function(mode){const id=mode==='revision'?'st-bulk-revision-msgtpl':'st-bulk-msgtpl';const ta=document.getElementById(id);if(!ta)return;const tpl=String(ta.value||'');if(!tpl.trim()){alert('Bulk template cannot be empty.');return}if(!tpl.includes('{InvoiceList}')){alert('The {InvoiceList} placeholder is required. Without it, invoice details would be missing from the bulk message.');return}const missing=['SchoolName','UDISECode','TotalInvoices'].filter(k=>!tpl.includes('{'+k+'}'));if(missing.length&&!confirm('Optional placeholders missing: '+missing.map(k=>'{'+k+'}').join(', ')+'.\n\nSave anyway?'))return;const key=settingKey(mode);const settings={...(A.sett||ST0),[key]:tpl};try{sv('st',settings);A.sett=settings;try{localStorage.setItem('mdm_erp_'+key+'_v1',tpl)}catch(_){}if(typeof auditLog==='function')auditLog('UPDATE','settings',key,'Bulk invoice share template saved',null);if(typeof toast==='function')toast('Bulk template saved','ok');bulkTplPreviewUpdate(mode)}catch(e){alert('Template save failed: '+e.message)}};
+  window.resetBulkMsgTemplate=function(mode){if(!confirm('Reset this bulk template to the suggested default?'))return;const key=settingKey(mode);const settings={...(A.sett||ST0),[key]:mode==='revision'?DEFAULT_BULK_REVISION:DEFAULT_BULK_ORIGINAL};try{sv('st',settings);A.sett=settings;const id=mode==='revision'?'st-bulk-revision-msgtpl':'st-bulk-msgtpl';const ta=document.getElementById(id);if(ta)ta.value=settings[key];bulkTplPreviewUpdate(mode);if(typeof toast==='function')toast('Bulk template reset to default','ok')}catch(e){alert('Template reset failed: '+e.message)}};
+  function init(){for(const mode of ['original','revision']){const id=mode==='revision'?'st-bulk-revision-msgtpl':'st-bulk-msgtpl';const ta=document.getElementById(id);if(ta){ta.value=getTpl(mode);bulkTplPreviewUpdate(mode)}}}
+  window.buildBatchShareMessage=function(invoices,schoolName){
+    const list=typeof window.sortInvoicesChronologically==='function'?sortInvoicesChronologically(invoices):(Array.isArray(invoices)?invoices.slice():[]);
+    if(!list.length)return '';
+    const allRevised=list.every(inv=>typeof window.invoiceIsRevisedForShare==='function'?invoiceIsRevisedForShare(inv):!!(inv&&(inv.revisionNo>0||inv.status==='revised'||inv.revisionStatus==='REVISED')));
+    const mode=allRevised?'revision':'original';
+    const contact=typeof window.resolveSchoolContact==='function'?resolveSchoolContact(window._batchShareState?.schoolId||list[0]?.schoolId||''):'';
+    const vars=typeof window.resolveMsgVars==='function'?resolveMsgVars(list[0]):{};
+    const items=list.map((inv,n)=>{const tpl=typeof window.currentShareMsgTemplate==='function'?currentShareMsgTemplate(inv):'';const msg=typeof window.getRenderedShareMessage==='function'?getRenderedShareMessage(inv):(typeof window.renderMsgTemplate==='function'?renderMsgTemplate(tpl,inv):tpl);const rev=(typeof window.invoiceIsRevisedForShare==='function'?invoiceIsRevisedForShare(inv):false);return `*• Invoice #${String(n+1).padStart(2,'0')} — ${String(inv.invNo||'—')}${rev?' — 🔄 REVISED':''}*\n${String(msg||'').trim()}`}).join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
+    const revisedCount=list.filter(inv=>typeof window.invoiceIsRevisedForShare==='function'?invoiceIsRevisedForShare(inv):!!(inv&&(inv.revisionNo>0||inv.status==='revised'||inv.revisionStatus==='REVISED'))).length;
+    const normalCount=list.length-revisedCount;
+    const revisionSummary=revisedCount>0&&normalCount>0?`Revised Invoices: ${revisedCount}\nOriginal Invoices: ${normalCount}`:revisedCount>0&&normalCount===0?`Revised Invoices: ${revisedCount}`:'';
+    const values={SchoolName:String(schoolName||vars.SchoolName||'Selected School'),UDISECode:String(vars.UDISECode||'—'),ContactNo:contact?`\nContact No.: ${contact}`:'',InvoiceList:items,TotalInvoices:String(list.length),RevisionSummary:revisionSummary};
+    const rendered=renderBulkTpl(getTpl(mode),values).replace(/\\n/g,'\n').trim();
+    // Defensive fallback: malformed/blank persisted templates must never suppress a batch message.
+    if(rendered)return rendered;
+    return renderBulkTpl(mode==='revision'?DEFAULT_BULK_REVISION:DEFAULT_BULK_ORIGINAL,values).trim();
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+  const oldGP=window.gP;if(typeof oldGP==='function'&&!oldGP.__bulkTplWrapped){window.gP=function(){const r=oldGP.apply(this,arguments);setTimeout(init,0);return r};window.gP.__bulkTplWrapped=true}
+})();
+</script>
 </body>
 </html>
