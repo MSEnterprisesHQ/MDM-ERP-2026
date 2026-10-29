@@ -1,3 +1,4 @@
+<!-- MDM ERP v4.61.74: Minimalist message expand + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
 BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
@@ -6,7 +7,7 @@ Level 2 adds only application appearance controls, invoice header theme controls
 MDM PROJECT — VERSION HISTORY
 Update: v4.35 — Vector-safe Android Print Preview — Final surgical pass: Terms & Conditions left-aligned within its dedicated thin footer row; major invoice section outer borders use the active theme accent/darker color consistently. No other invoice geometry, data, calculations, sharing, or export logic changed.
 Update: v4.35 — Replaced the Android print bridge raster PNG with PDF.js SVG output. Native print sheet behavior is preserved, while saved PDFs retain vector text/lines; no canvas/PNG is used in the print document.
-Current Version: v4.61.14
+Current Version: v4.61.67
 Update: v4.57.4 — Corrects School Master ID/category resolution, includes inactive schools for historical lookup, and requires explicit historical rate/GST inputs. Original invoice, PDF, and print core paths are preserved where feasible; cloud end-to-end testing is still required.
 Update: v4.36 — Locked Master vector restore: removed SVG/canvas/raster print conversion from Main Invoice preview/print path. The authoritative jsPDF PDF remains the sole source. No invoice geometry, calculations, data, Annexure/GST, or other export logic changed.
 Update: v4.37 — Canonical PDF print/share bridge: Main Invoice Print/Preview now opens the exact prepared PDF File used by Save/Share, with no secondary HTML print renderer and no browser print() interception. This is a surgical bridge-only change; locked invoice geometry/data/calculations and Annexure/GST are untouched.
@@ -2473,6 +2474,8 @@ const ST0={
   autoBackup:false,         // Auto backup on export
   cloudReady:false,         // Future: Google Drive sync flag
   shareMsgTemplate:null,    // Invoice Share Message Template (null = use DEFAULT_SHARE_MSG_TEMPLATE)
+  shareModalTheme:"classic", // classic | minimalist
+  shareModalSize:"medium", // small | medium | large (medium default for compact display)
   themeDesign:{
     invoicePreset:"master",
     headerBg:"#9AB8D6",
@@ -2833,13 +2836,25 @@ function niEffectiveSeries(){
 // withFallback=true is used for read-only previews (top badge, Full Pack
 // print) so they never show blank before the user has typed a manual number.
 function niAutoCounter(es){
+  // Single source of truth for both the Summary preview and actual allocation.
+  // Next Available fills the first gap inside the active batch; Continuous
+  // Sequence always advances beyond the highest used counter in this FY.
   const win=invNoBatchWindow(es,NI.month,NI.year);
+  const start=Math.max(1,Number.parseInt(win.start,10)||1);
+  const end=Math.max(start,Number.parseInt(win.end,10)||start);
   const fyNums=invNoFYCounters(es);
   const used=new Set(fyNums);
-  const highest=fyNums.length?fyNums[fyNums.length-1]:(win.start-1);
-  if(NI.autoStrategy==="continuous") return highest+1;
-  for(let n=Math.max(1,win.start);n<=Math.max(win.start,win.end);n++) if(!used.has(n)) return n;
-  return highest+1;
+  const highest=fyNums.length?fyNums[fyNums.length-1]:(start-1);
+  if(NI.autoStrategy==="continuous"){
+    let n=highest+1;
+    while(used.has(n)) n++;
+    return n;
+  }
+  for(let n=start;n<=end;n++) if(!used.has(n)) return n;
+  // Batch is full: continue after the highest FY counter, never return a used number.
+  let n=Math.max(highest+1,end+1);
+  while(used.has(n)) n++;
+  return n;
 }
 function niResolvedInvNo(withFallback){
   const es=niEffectiveSeries();
@@ -3752,10 +3767,9 @@ function niNumberCard(){
   const rangeStart=win.start,rangeEnd=Math.max(rangeStart,win.end);
   const externalUsed=extRefUsedCounters(es),fyNums=invNoFYCounters(es),fyUsed=new Set(fyNums),available=[];
   for(let n=rangeStart;n<=rangeEnd;n++) if(!fyUsed.has(n)) available.push(n);
-  const firstAvailable=available[0]??null;
-  const highestUsed=fyNums.length?fyNums[fyNums.length-1]:rangeStart-1;
-  const continuous=highestUsed+1;
-  const nextN=NI.autoStrategy==="continuous"?continuous:(firstAvailable??continuous);
+  // Preview must use the exact same allocator used by Fetch/Save.
+  // Keep `available` separately for the selectable gap picker below.
+  const nextN=niAutoCounter(es);
   const nextInv=fN(es,nextN);
   const auto=NI.autoAllocate!==false;
   const seriesLabel=es.prefix+es.fy;
@@ -4393,6 +4407,7 @@ function histMenuAction(action, encodedId){
   if(!id)return;
   if(action==='view'){opIM(id);return;}
   if(action==='pdf'){hsPDF(id);return;}
+  if(action==='documents'){histOpenDocumentMenu(id);return;}
   if(action==='share'){shrInv(id);return;}
   if(action==='revisions'){HS.rId=id;HS.page=1;gP('history');return;}
   if(action==='audit'){AUD_ID=id;gP('audit');return;}
@@ -4418,8 +4433,9 @@ function toggleHistMenu(id, btn){
   menu.dataset.invoiceId=id;
   menu.innerHTML=`
     <button type="button" class="hist-action-menu-item" role="menuitem" data-action="view">View</button>
-    <button type="button" class="hist-action-menu-item" role="menuitem" data-action="pdf">PDF</button>
-    <button type="button" class="hist-action-menu-item" role="menuitem" data-action="share">Share</button>
+    <button type="button" class="hist-action-menu-item" role="menuitem" data-action="pdf">Invoice PDF / Save</button>
+    <button type="button" class="hist-action-menu-item" role="menuitem" data-action="documents">Download A / B / C / GST</button>
+    <button type="button" class="hist-action-menu-item" role="menuitem" data-action="share">${batchInvoiceShared(inv)?'Share Again':'Share'}</button>
     <button type="button" class="hist-action-menu-item" role="menuitem" data-action="revisions">Revisions</button>
     <button type="button" class="hist-action-menu-item" role="menuitem" data-action="audit">Audit</button>
     ${isInvoiceUndoAuthorized(inv)&&invoiceUndoAllowed(inv).ok?`<div class="hist-action-menu-sep"></div><button type="button" class="hist-action-menu-item undo-action" role="menuitem" data-action="undo">&#8630; Undo Generation</button>`:''}
@@ -4525,8 +4541,8 @@ function pgHist(){
     const fm={date:inv.date,month:inv.month,year:inv.year};
     const tabs=[{id:"merged",l:"Invoice"},{id:"annexA",l:"Annexure A"},{id:"annexB",l:"Annexure B"},{id:"annexC",l:"Annexure C"},{id:"gst",l:"GST"}];
     let tc=`<div class="info inf-b">Full preview available for invoices saved in this session.</div>`;
-    if(inv.mergedItems){const c={merged:inv.mergedItems,mTot:inv.mergedTotals,annexA:inv.annexA||[],annexB:inv.annexB||[],tA:inv.totalsA||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0},tB:inv.totalsB||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0}};if(HS.vTab==="merged")tc=invDoc(c,fm,sch,inv.invNo);else if(HS.vTab==="annexA")tc=axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,fm,inv.invNo);else if(HS.vTab==="annexB")tc=axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,fm,inv.invNo);else if(HS.vTab==="annexC")tc=axCDoc(c,sch,fm,inv.invNo);else tc=`<div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Gross</th></tr></thead><tbody>${c.merged.map(i=>`<tr><td style="font-weight:600">${ec(i.name)}</td><td class="num">${R(i.taxable)}</td><td class="num">${R(i.cgst)}</td><td class="num">${R(i.sgst)}</td><td class="num" style="font-weight:700">${R(i.gross)}</td></tr>`).join("")}<tr class="tr-tot"><td style="font-weight:700">TOTAL</td><td class="num">${R(inv.taxable)}</td><td class="num">${R(inv.cgst)}</td><td class="num">${R(inv.sgst)}</td><td class="num" style="font-size:13px">${R(inv.net)}</td></tr></tbody></table></div>`;}
-    vMod=`<div class="ov" onclick="if(event.target===this){HS.vId=null;gP('history')}"><div class="modal mxl"><div class="mhd"><div><div class="mt">Invoice &mdash; ${ec(inv.invNo)}</div>${inv.printCount?`<div class="pcnt" style="margin-top:3px">&#128424; Printed ${inv.printCount}x${inv.lastPrintedAt?" &middot; Last: "+new Date(inv.lastPrintedAt).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}</div>`:""}</div><div style="display:flex;gap:7px"><button class="btn btn-p btn-sm" onclick="hsPDF('${inv.id}',HS.vTab)">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="HS.vId=null;gP('history')">&#10005;</button></div></div><div class="mbd"><div class="tabs" style="margin-bottom:14px">${tabs.map(t=>`<div class="tab${HS.vTab===t.id?" on":""}" onclick="HS.vTab='${t.id}';gP('history')">${t.l}</div>`).join("")}</div>${tc}</div></div></div>`;
+    if(inv.mergedItems){const c={merged:inv.mergedItems,mTot:inv.mergedTotals,annexA:inv.annexA||[],annexB:inv.annexB||[],tA:inv.totalsA||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0},tB:inv.totalsB||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0}};try{if(HS.vTab==="merged")tc=invDoc(c,fm,sch,inv.invNo);else if(HS.vTab==="annexA")tc=axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,fm,inv.invNo);else if(HS.vTab==="annexB")tc=axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,fm,inv.invNo);else if(HS.vTab==="annexC")tc=axCDoc(c,sch,fm,inv.invNo);else tc=gstSummaryDoc(c,sch,fm,inv.invNo);}catch(previewErr){tc=`<div class="info inf-a"><b>Document preview could not be rendered.</b><div style="margin-top:5px">${ec(previewErr?.message||"Unknown preview error")}</div><button type="button" class="btn btn-g btn-sm" style="margin-top:8px" onclick="hsPDF('${ec(inv.id)}','${ec(HS.vTab)}')">Try Print / Save PDF</button></div>`;}}
+    vMod=`<div class="ov" onclick="if(event.target===this){HS.vId=null;gP('history')}"><div class="modal mxl"><div class="mhd"><div><div class="mt">Invoice &mdash; ${ec(inv.invNo)}</div>${inv.printCount?`<div class="pcnt" style="margin-top:3px">&#128424; Printed ${inv.printCount}x${inv.lastPrintedAt?" &middot; Last: "+new Date(inv.lastPrintedAt).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}</div>`:""}</div><div style="display:flex;gap:7px"><button class="btn btn-p btn-sm" onclick="hsPDF('${inv.id}',HS.vTab)">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="HS.vId=null;gP('history')">&#10005;</button></div></div><div class="mbd"><div class="tabs hist-preview-tabs" role="tablist" aria-label="Invoice documents" style="margin-bottom:14px">${tabs.map(t=>`<button type="button" role="tab" aria-selected="${HS.vTab===t.id?"true":"false"}" class="tab${HS.vTab===t.id?" on":""}" onclick="histSetPreviewTab('${t.id}')">${t.l}</button>`).join("")}</div>${tc}</div></div></div>`;
   }}
   let rMod="";
   if(HS.rId){const inv=A.invoices.find(i=>i.id===HS.rId);if(inv){const revs=inv.revisions||[];rMod=`<div class="ov" onclick="if(event.target===this){HS.rId=null;gP('history')}"><div class="modal"><div class="mhd"><div class="mt">Revision History &mdash; ${ec(inv.invNo)}</div><button class="btn btn-g btn-sm" onclick="HS.rId=null;gP('history')">&#10005;</button></div><div class="mbd"><div style="padding:10px 14px;border:1.5px solid var(--nv2);border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px"><span style="font-weight:700;color:var(--nvtx)">Original (Rev 0)</span><span class="bdg bn">Original</span></div><div style="font-size:12px;color:var(--txl)">Saved: ${(inv.originalSnapshot?.savedAt||inv.savedAt)?new Date(inv.originalSnapshot?.savedAt||inv.savedAt).toLocaleString("en-IN"):"-"} &middot; Original Net: ${R(inv.originalSnapshot?.net??inv.net)}</div><div style="font-size:11px;color:var(--txl);margin-top:4px">Original item, rate, quantity and tax snapshot is preserved.</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-g btn-xs" onclick="mrViewRevision('${inv.id}',0)">View Original</button><button class="btn btn-g btn-xs" onclick="mrRevisionAction('${inv.id}',0,'download')">Original PDF</button><button class="btn btn-g btn-xs" onclick="mrRevisionAction('${inv.id}',0,'print')">Print</button><button class="btn btn-p btn-xs" onclick="mrRevisionAction('${inv.id}',0,'share')">Share</button></div></div>${revs.length===0?`<div class="info inf-b">No revisions yet.</div>`:revs.map((rev,i)=>`<div style="padding:10px 14px;border:1.5px solid var(--am);border-radius:8px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-weight:700;color:var(--am)">Revision ${i+1}</span><span class="bdg bam">Revised</span></div><div style="font-size:12px"><b>By:</b> ${ec(rev.by||"")} &middot; <b>When:</b> ${rev.at?new Date(rev.at).toLocaleString("en-IN"):"-"}</div><div style="font-size:12px;margin-top:3px"><b>Reason:</b> ${ec(rev.reason||"")}</div><div style="font-size:12px;margin-top:3px"><b>Net:</b> ${R(rev.beforeNet??rev.before?.net)} → ${R(rev.afterNet??rev.after?.net)} <span style="color:var(--txl)">(Δ ${R(rev.delta||0)})</span></div>${rev.batchId?`<div style="font-size:11px;margin-top:3px"><b>Batch:</b> ${ec(rev.batchId)}</div>`:""}${rev.before&&rev.after?`<details style="margin-top:7px;font-size:11px"><summary style="cursor:pointer;font-weight:700">View before / after snapshot</summary><div style="padding:6px;background:var(--bg);border-radius:6px;margin-top:5px"><b>Before:</b> ${R(rev.before.net)} · ${(rev.before.mergedItems||[]).length} items<br/>${(rev.before.mergedItems||[]).map(it=>`<div>${ec(it.name||it.id)} — Qty ${ec(it.qty??"-")}, Rate ${R(it.rate)}, GST ${ec(it.gst??0)}%, Amount ${R(it.gross)}</div>`).join("")}<hr style="border:0;border-top:1px solid var(--bd);margin:6px 0"/><b>After:</b> ${R(rev.after.net)} · ${(rev.after.mergedItems||[]).length} items<br/>${(rev.after.mergedItems||[]).map(it=>`<div>${ec(it.name||it.id)} — Qty ${ec(it.qty??"-")}, Rate ${R(it.rate)}, GST ${ec(it.gst??0)}%, Amount ${R(it.gross)}</div>`).join("")}</div></details>`:""}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><button class="btn btn-g btn-xs" onclick="mrViewRevision('${inv.id}',${Number(rev.revisionNo||0)||i+1})">View Rev ${Number(rev.revisionNo||0)||i+1}</button><button class="btn btn-g btn-xs" onclick="mrRevisionAction('${inv.id}',${Number(rev.revisionNo||0)||i+1},'download')">Download PDF</button><button class="btn btn-g btn-xs" onclick="mrRevisionAction('${inv.id}',${Number(rev.revisionNo||0)||i+1},'print')">Print</button><button class="btn btn-p btn-xs" onclick="mrRevisionAction('${inv.id}',${Number(rev.revisionNo||0)||i+1},'share')">Share</button></div></div>`).join("")}${(inv.shareHistory||[]).length?`<details style="margin-top:10px;padding:10px;border:1px solid var(--bd);border-radius:8px"><summary style="cursor:pointer;font-weight:800">Delivery History (${(inv.shareHistory||[]).length})</summary><div style="margin-top:8px;font-size:12px">${(inv.shareHistory||[]).slice().reverse().map((d,di)=>`<div style="padding:7px 0;border-bottom:1px solid var(--bd)"><b>${ec(d.shareStatus||((di===((inv.shareHistory||[]).length-1))?inv.shareStatus:"SHARE")||"SHARE")}</b> · Revision ${Number(d.revisionNo)||0}<br/><span style="color:var(--txl)">${d.at?new Date(d.at).toLocaleString("en-IN"):"Timestamp unavailable"} · ${ec(d.method||"Method unavailable")} ${d.by?"· "+ec(d.by):""}</span></div>`).join("")}</div><div style="font-size:10px;color:var(--txl);margin-top:6px">Dispatch/share is recorded; this does not confirm recipient read or receipt.</div></details>`:""}<button class="btn btn-am btn-sm" style="margin-top:8px" onclick="addRev('${inv.id}')">+ Add Revision</button></div></div></div>`;}}
@@ -5005,6 +5021,72 @@ function histExportExcel(){
   toast(`Excel exported — ${rows.length} records` ,"ok");
   auditLog("EXPORT","report","invoiceLog","Exported Invoice Log Excel — "+rows.length+" records ("+histFilterDesc()+")",null);
 }
+function histSetPreviewTab(tab){
+  const allowed=new Set(["merged","annexA","annexB","annexC","gst"]);
+  if(!allowed.has(String(tab)))return;
+  if(!HS.vId){toast("Open an invoice first to preview its documents.","err");return;}
+  HS.vTab=String(tab);
+  try{gP("history");}catch(e){toast("Could not open this document preview: "+(e.message||"Unknown error"),"err");}
+}
+function histOpenDocument(id,tab){
+  HS.vId=String(id||"");
+  histSetPreviewTab(tab||"merged");
+}
+async function hsDownloadDocument(id,tab){
+  const inv=(A.invoices||[]).find(i=>String(i.id)===String(id));
+  if(!inv||!inv.mergedItems){toast("No invoice data found","err");return;}
+  if(!tab||tab==="merged"){await hsPDF(id,"merged","download");return;}
+  let body="",label="";
+  const sch=A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:"",address:"",mobile:""};
+  const c={merged:inv.mergedItems,mTot:inv.mergedTotals,annexA:inv.annexA||[],annexB:inv.annexB||[],tA:inv.totalsA||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0},tB:inv.totalsB||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0}};
+  if(tab==="annexA"){body=axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,inv,inv.invNo);label="Annexure_A";}
+  else if(tab==="annexB"){body=axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,inv,inv.invNo);label="Annexure_B";}
+  else if(tab==="annexC"){body=axCDoc(c,sch,inv,inv.invNo);label="Annexure_C";}
+  else if(tab==="gst"){body=gstSummaryDoc(c,sch,inv,inv.invNo);label="GST_Summary";}
+  else {toast("Unknown document type","err");return;}
+  let host=null;
+  try{
+    await loadPdfLibs();
+    if(!window.html2canvas){
+      await new Promise((resolve,reject)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";sc.onload=resolve;sc.onerror=()=>reject(new Error("PDF rendering helper could not be loaded"));document.head.appendChild(sc);});
+    }
+    const {jsPDF}=window.jspdf;
+    host=document.createElement("div");
+    host.style.cssText="position:fixed;left:-12000px;top:0;width:794px;background:#fff;color:#111;z-index:-1;";
+    const css=typeof getInvCSS==="function"?getInvCSS():"";
+    host.innerHTML=`<style>${css} body{background:#fff!important} @page{size:A4;margin:10mm} .page-break{break-after:page;page-break-after:always}</style><div class="hs-direct-doc">${body}</div>`;
+    document.body.appendChild(host);
+    const target=host.querySelector(".hs-direct-doc");
+    const pdf=new jsPDF({unit:"pt",format:"a4",orientation:(A.as2||{}).orientation==="landscape"?"landscape":"portrait",compress:true});
+    await new Promise((resolve,reject)=>{
+      try{pdf.html(target,{x:24,y:24,margin:[24,24,24,24],autoPaging:"text",html2canvas:{scale:1.5,backgroundColor:"#ffffff",useCORS:true},callback:(doc)=>resolve(doc)});}
+      catch(err){reject(err);}
+    });
+    const base=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net}).replace(/\.pdf$/i,"");
+    const filename=(base+"_"+label+".pdf").replace(/[\\/:*?"<>|]+/g,"-");
+    pdf.save(filename);
+    auditLog("EXPORT","invoice",id,"Directly exported "+label+": "+filename,{tab});
+    toast("PDF download started: "+filename,"ok");
+  }catch(e){
+    toast("Direct PDF export failed: "+(e.message||"Unknown error")+". Use Print / Save as PDF as fallback.","err");
+    // Explicit fallback; never silently download HTML with a .pdf extension.
+    hsPDF(id,tab,"print");
+  }finally{if(host)host.remove();}
+}
+
+function histOpenDocumentMenu(id){
+  const inv=(A.invoices||[]).find(x=>String(x.id)===String(id));
+  if(!inv){toast("Invoice not found","err");return;}
+  document.getElementById("hist-document-menu")?.remove();
+  const ov=document.createElement("div");ov.className="ov";ov.id="hist-document-menu";
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  const docs=[
+    ["merged","Download Invoice PDF"],["annexA","Download Annexure A (Classes 1–5)"],
+    ["annexB","Download Annexure B (Classes 6–8)"],["annexC","Download Annexure C (Combined)"],["gst","Download GST Summary"]
+  ];
+  ov.innerHTML=`<div class="modal" style="max-width:390px"><div class="mhd"><div><div class="mt">Download / Print Documents</div><div style="font-size:10.5px;color:var(--txl);margin-top:2px">${ec(inv.invNo)} · ${ec(inv.schoolName||"")}</div></div><button type="button" class="btn btn-g btn-sm" onclick="document.getElementById('hist-document-menu')?.remove()">Close</button></div><div class="mbd"><div class="info inf-b" style="margin-bottom:9px">All documents attempt a direct PDF download using the configured invoice filename plus a document suffix. If the browser PDF renderer is unavailable, the app opens Print / Save as PDF as an explicit fallback.</div>${docs.map(([tab,label])=>`<button type="button" class="btn btn-g" style="width:100%;margin:4px 0;text-align:left" onclick="document.getElementById('hist-document-menu')?.remove();hsDownloadDocument('${ec(inv.id)}','${tab}')">↓ ${label}</button>`).join("")}</div></div>`;
+  document.body.appendChild(ov);
+}
 function opIM(id){HS.vId=id;HS.vTab="merged";addRV(id);gP("history");}
 /* hsPDF replaced by v2.1 below */
 function histMobileShareIcon(method){
@@ -5069,14 +5151,14 @@ function histValidShareRecords(inv){
   const seen=new Set();
   return merged.filter(r=>{const key=String(r.method).toLowerCase()+"|"+String(r.at);if(seen.has(key))return false;seen.add(key);return true;}).sort((a,b)=>new Date(a.at||0)-new Date(b.at||0));
 }
-function recordShareAttempt(id,method){
+function recordShareAttempt(id,method,reason){
   const inv=A.invoices.find(i=>i.id===id);if(!inv)return;
   const at=new Date().toISOString();
   const attempts=Array.isArray(inv.shareAttempts)?inv.shareAttempts.slice():[];
   const normalized=String(method||"DEVICE_SHARE").toUpperCase();
   const recent=attempts.length?attempts[attempts.length-1]:null;
   if(recent&&String(recent.method||"").toUpperCase()===normalized&&Math.abs(Date.now()-new Date(recent.at).getTime())<15000)return;
-  attempts.push({method:method||"DEVICE_SHARE",at,status:"ATTEMPTED",by:A.currentUser?.name||"Administrator"});
+  attempts.push({method:method||"DEVICE_SHARE",at,status:"ATTEMPTED",by:A.currentUser?.name||"Administrator",reShareReason:reason||""});
   const updated={...inv,shareAttempts:attempts,lastShareAttemptAt:at,lastShareAttemptMethod:method||"DEVICE_SHARE"};
   sv("iv",A.invoices.map(i=>i.id===id?updated:i));
   auditLog("SHARE_ATTEMPT","invoice",id,`Share attempt recorded (${method||"DEVICE_SHARE"}): ${inv.invNo}`,{at,method:method||"DEVICE_SHARE"});
@@ -5379,7 +5461,15 @@ function mrLifecycleHTML(inv){
   const generated=!!(inv.savedAt||inv.createdAt||inv.date), issued=!!inv.issuedAt;
   const shared=mrInvoiceShared(inv), printed=printRows.some(x=>Number(x.revisionNo||0)===revNo)||(revNo===0&&(Number(inv.printCount)||0)>0&&!printRows.length);
   const badge=(label,ok)=>`<span class="bdg ${ok?"bg":"bn"}" style="margin:1px 2px 1px 0;display:inline-block">${label}${ok?" ✓":" · Pending"}</span>`;
-  return `<div style="min-width:170px;line-height:1.8">${badge("Generated",generated)}${badge("Issued",issued&&(!inv.reIssuePending))}${shared?`<span class="bdg ${String(inv.shareStatus||"SHARE").toUpperCase()==="RE-SHARE"?"bp":"bg"}" style="margin:1px 2px 1px 0;display:inline-block">${ec(inv.shareStatus||"SHARE")} ✓</span>`:badge("SHARE",false)}${badge("Printed",printed)}${(inv.shareHistory||[]).length?`<button class="btn btn-g btn-xs" style="margin-top:3px" onclick="mrShowDeliveryHistory('${inv.id}')">Delivery history (${(inv.shareHistory||[]).length})</button>`:""}${inv.recallPending?`<span class="bdg br" style="margin:1px 2px;display:inline-block">Recall notice pending</span>`:""}${inv.reSharePending?`<span class="bdg bo" style="margin:1px 2px;display:inline-block">Re-share pending</span>`:""}${inv.reIssuePending?`<span class="bdg bo" style="margin:1px 2px;display:inline-block">Re-issue pending</span>`:""}${inv.recallPending?`<button class="btn btn-g btn-xs" style="margin-top:3px" onclick="mrMarkRecallSent('${inv.id}')">Mark Recall Notice Sent</button>`:""}${!issued?`<button class="btn btn-g btn-xs" style="margin-top:3px" onclick="mrMarkIssued('${inv.id}')">Mark Issued</button>`:""}</div>`;
+  const latestRevision=Math.max(0,revNo);
+  const safeId=String(inv.id||"").replace(/'/g,"\\'");
+  const revisionActions=`<div class="mr-revision-action-buttons" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px;line-height:1.2">
+    <button type="button" class="btn btn-g btn-xs" onclick="mrViewRevision('${safeId}',${latestRevision})" title="View this saved invoice version">View</button>
+    <button type="button" class="btn btn-g btn-xs" onclick="mrRevisionAction('${safeId}',${latestRevision},'download')" title="Download PDF for this version">Download PDF</button>
+    <button type="button" class="btn btn-g btn-xs" onclick="mrRevisionAction('${safeId}',${latestRevision},'print')" title="Print this version">Print</button>
+    <button type="button" class="btn btn-p btn-xs" onclick="mrRevisionAction('${safeId}',${latestRevision},'share')" title="Share PDF for this version">Share</button>
+  </div>`;
+  return `<div style="min-width:170px;line-height:1.8">${badge("Generated",generated)}${badge("Issued",issued&&(!inv.reIssuePending))}${shared?`<span class="bdg ${String(inv.shareStatus||"SHARE").toUpperCase()==="RE-SHARE"?"bp":"bg"}" style="margin:1px 2px 1px 0;display:inline-block">${ec(inv.shareStatus||"SHARE")} ✓</span>`:badge("SHARE",false)}${badge("Printed",printed)}${revisionActions}${(inv.shareHistory||[]).length?`<button class="btn btn-g btn-xs" style="margin-top:5px" onclick="mrShowDeliveryHistory('${safeId}')">Delivery history (${(inv.shareHistory||[]).length})</button>`:""}${inv.recallPending?`<span class="bdg br" style="margin:1px 2px;display:inline-block">Recall notice pending</span>`:""}${inv.reSharePending?`<span class="bdg bo" style="margin:1px 2px;display:inline-block">Re-share pending</span>`:""}${inv.reIssuePending?`<span class="bdg bo" style="margin:1px 2px;display:inline-block">Re-issue pending</span>`:""}${inv.recallPending?`<button class="btn btn-g btn-xs" style="margin-top:3px" onclick="mrMarkRecallSent('${safeId}')">Mark Recall Notice Sent</button>`:""}${!issued?`<button class="btn btn-g btn-xs" style="margin-top:3px" onclick="mrMarkIssued('${safeId}')">Mark Issued</button>`:""}</div>`;
 }
 function mrMarkRecallSent(id){
   if(!mrCanManage()){toast("Administrator access is required to record a recall notice.","err");return;}
@@ -5944,7 +6034,7 @@ function pgLed(){
       <span style="font-size:11px;color:var(--txl)">to</span>
       <input class="fi" type="date" value="${ec(LP.to)}" onchange="LP.to=this.value"/>`:""}
     <button class="btn btn-g btn-sm" onclick="printSchoolLedger('${sch.id}')">🖨 Print Selected Ledger</button>
-  </div><div class="stats s3" style="margin-bottom:14px"><div class="stat"><div class="sl-l">Total Invoices</div><div class="sv">${invs.length}</div></div><div class="stat"><div class="sl-l">Total Billed</div><div class="sv" style="font-size:17px">${R(tot)}</div></div><div class="stat"><div class="sl-l">Last Invoice</div><div class="sv" style="font-size:14px">${invs[0]?ec(invs[0].invNo):"&mdash;"}</div><div class="ss">${invs[0]?invs[0].date:"&mdash;"}</div></div></div><div class="card" style="margin-bottom:14px"><div class="chd"><span class="cht">Invoice Timeline</span></div><div class="tw"><table class="dt"><thead><tr><th>Invoice No.</th><th>Date</th><th>Month</th><th class="num">Class 1–5</th><th class="num">Class 6–8</th><th class="num">Net Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>${invs.length===0?`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txl)">No invoices yet</td></tr>`:invs.map(inv=>`<tr><td class="mono" style="font-weight:700;color:var(--nvtx)">${ec(inv.invNo)}</td><td>${inv.date}</td><td><span class="bdg bn">${inv.month} ${inv.year}</span></td><td class="num">${inv.s15||0}</td><td class="num">${inv.s68||0}</td><td class="num" style="font-weight:700;color:var(--sf)">${R(inv.net)}</td><td>${sBdg(inv.status,inv.syncStatus)}</td><td><div style="display:flex;gap:5px"><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}')">Open</button><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></td></tr>`).join("")}</tbody></table></div></div><div class="card"><div class="chd"><span class="cht">PDF Archive &mdash; ${ec(sch.name)}</span></div><div class="cbd">${invs.filter(i=>i.mergedItems).length===0?`<div style="color:var(--txl);font-size:12px">No PDFs yet. Save invoices to populate.</div>`:invs.filter(i=>i.mergedItems).map(inv=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap;gap:6px"><div><span class="mono" style="font-weight:700;color:var(--nvtx)">${ec(inv.invNo)}</span> &mdash; ${inv.month} ${inv.year}</div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button>${inv.annexA&&inv.annexA.length&&inv.annexB&&inv.annexB.length?`<button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexC';gP('history')">&#8595; Ann.C</button>`:""}</div></div>`).join("")}</div></div>`;
+  </div><div class="stats s3" style="margin-bottom:14px"><div class="stat"><div class="sl-l">Total Invoices</div><div class="sv">${invs.length}</div></div><div class="stat"><div class="sl-l">Total Billed</div><div class="sv" style="font-size:17px">${R(tot)}</div></div><div class="stat"><div class="sl-l">Last Invoice</div><div class="sv" style="font-size:14px">${invs[0]?ec(invs[0].invNo):"&mdash;"}</div><div class="ss">${invs[0]?invs[0].date:"&mdash;"}</div></div></div><div class="card" style="margin-bottom:14px"><div class="chd"><span class="cht">Invoice Timeline</span></div><div class="tw"><table class="dt"><thead><tr><th>Invoice No.</th><th>Date</th><th>Month</th><th class="num">Class 1–5</th><th class="num">Class 6–8</th><th class="num">Net Amount</th><th>Status</th><th>Actions</th></tr></thead><tbody>${invs.length===0?`<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txl)">No invoices yet</td></tr>`:invs.map(inv=>`<tr><td class="mono" style="font-weight:700;color:var(--nvtx)">${ec(inv.invNo)}</td><td>${inv.date}</td><td><span class="bdg bn">${inv.month} ${inv.year}</span></td><td class="num">${inv.s15||0}</td><td class="num">${inv.s68||0}</td><td class="num" style="font-weight:700;color:var(--sf)">${R(inv.net)}</td><td>${sBdg(inv.status,inv.syncStatus)}</td><td><div style="display:flex;gap:5px"><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}')">Open</button><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; PDF</button><button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></td></tr>`).join("")}</tbody></table></div></div><div class="card"><div class="chd"><span class="cht">PDF Archive &mdash; ${ec(sch.name)}</span></div><div class="cbd">${invs.filter(i=>i.mergedItems).length===0?`<div style="color:var(--txl);font-size:12px">No PDFs yet. Save invoices to populate.</div>`:invs.filter(i=>i.mergedItems).map(inv=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px;flex-wrap:wrap;gap:6px"><div><span class="mono" style="font-weight:700;color:var(--nvtx)">${ec(inv.invNo)}</span> &mdash; ${inv.month} ${inv.year}</div><div style="display:flex;gap:6px"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button><button class="btn btn-g btn-sm" onclick="histOpenDocument('${inv.id}','annexC')">&#8595; Ann.C</button></div></div>`).join("")}</div></div>`;
 }
 
 function ledgerFYLabel(y){
@@ -6017,7 +6107,7 @@ function pgArc(){
       tree+=`<div style="padding:6px 14px 6px 26px;background:var(--slx);font-size:12px;font-weight:600;color:var(--nvtx);border-bottom:1px solid var(--bd)">&#9500; ${mo}</div>`;
       Object.entries(grp[fy][mo]).forEach(([sc,invs])=>{
         tree+=`<div style="padding:6px 14px 6px 40px;font-size:12px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px"><span style="font-weight:600">&#128193; ${ec(sc)}</span><span class="bdg bs">${invs.length} files</span></div>`;
-        invs.forEach(inv=>{tree+=`<div style="padding:5px 14px 5px 58px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px"><span class="mono" style="color:var(--nvtx);font-weight:600">${ec(inv.invNo)}</span><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button>${inv.annexA&&inv.annexA.length&&inv.annexB&&inv.annexB.length?`<button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexC';gP('history')">&#8595; Ann.C</button>`:""}<button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></div>`;});
+        invs.forEach(inv=>{tree+=`<div style="padding:5px 14px 5px 58px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px"><span class="mono" style="color:var(--nvtx);font-weight:600">${ec(inv.invNo)}</span><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="hsPDF('${inv.id}')">&#8595; Invoice</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexA';gP('history')">&#8595; Ann.A</button><button class="btn btn-g btn-sm" onclick="opIM('${inv.id}');HS.vTab='annexB';gP('history')">&#8595; Ann.B</button><button class="btn btn-g btn-sm" onclick="histOpenDocument('${inv.id}','annexC')">&#8595; Ann.C</button><button class="btn btn-g btn-sm" onclick="shrInv('${inv.id}')">Share</button></div></div>`;});
       });
     });
   });
@@ -8068,8 +8158,57 @@ function setShareBusy(id,busy,label){
 }
 
 let _sharePrepBusy=false;
+// Batch PDFs are prepared while the dialog is visible, before the user taps a share action.
+// This preserves transient user activation required by Android/Web Share APIs.
+const _batchPdfReady = new Map();
+const _batchPdfPending = new Map();
+function warmBatchShareFiles(invoices){
+  const list=(Array.isArray(invoices)?invoices:[]).filter(Boolean);
+  const tasks=[];
+  list.forEach(inv=>{
+    const key=String(inv.id);
+    if(_batchPdfReady.has(key))return;
+    if(_batchPdfPending.has(key)){tasks.push(_batchPdfPending.get(key));return;}
+    const task=prepareInvoicePdf(inv.id).then(file=>{
+      if(!fileMatchesInvoice(file,inv))throw new Error("Prepared PDF does not match "+inv.invNo);
+      _batchPdfReady.set(key,file);return file;
+    }).catch(err=>{console.warn("Batch PDF prewarm failed",inv.invNo,err);return null;}).finally(()=>{
+      _batchPdfPending.delete(key);
+      updateBatchShareReadiness();
+    });
+    _batchPdfPending.set(key,task);tasks.push(task);
+  });
+  updateBatchShareReadiness();
+  return Promise.all(tasks);
+}
+function batchFilesReady(invoices){
+  return (Array.isArray(invoices)?invoices:[]).length>0 && invoices.every(inv=>_batchPdfReady.has(String(inv.id)));
+}
+function updateBatchShareReadiness(){
+  const s=_batchShareState;
+  if(!s)return;
+  const selected=batchSelectedInvoices();
+  const ready=batchFilesReady(selected);
+  document.querySelectorAll('#batch-share-dlg .batch-share-action[data-needs-files="1"]').forEach(b=>{
+    b.disabled=!selected.length||!ready;
+    b.style.opacity=b.disabled?'.48':'';
+    b.title=!selected.length?'Select at least one invoice':(!ready?'Preparing selected PDF files…':'Ready to share selected invoice files');
+  });
+  const status=document.getElementById('batch-file-ready-status');
+  if(status){
+    const waiting=selected.filter(inv=>!_batchPdfReady.has(String(inv.id))).length;
+    status.textContent=!selected.length?'Select invoices to begin':waiting?`Preparing ${waiting} selected PDF${waiting===1?'':'s'}…`:`${selected.length} selected PDF${selected.length===1?' is':'s are'} ready to share`;
+    status.style.color=waiting?'var(--am)':'var(--gn)';
+  }
+}
+function getBatchShareFilesNow(invoices){
+  const list=Array.isArray(invoices)?invoices:[];
+  const files=[];
+  for(const inv of list){const f=_batchPdfReady.get(String(inv.id));if(!f)return null;files.push(f);}
+  return files;
+}
 
-// v4.64 — Batch Invoice Share orchestration.
+// v4.65 — Batch Invoice Share orchestration and UX.
 // Existing single-invoice share functions remain unchanged and are reused.
 let _batchShareState=null;
 
@@ -8091,7 +8230,11 @@ function batchSchoolName(schoolId){
   return sch?.name||inv?.schoolName||"Selected School";
 }
 function batchInvoiceShared(inv){
-  return String(inv?.deliveryStatus||"").toUpperCase()==="SENT" || String(inv?.delivery?.status||"").toUpperCase()==="SENT";
+  // For batch selection purposes this means a previous share attempt exists,
+  // not verified delivery. Re-share remains available through Select All / Re-share.
+  return (Array.isArray(inv?.shareAttempts)&&inv.shareAttempts.length>0) ||
+    String(inv?.deliveryStatus||"").toUpperCase()==="SENT" ||
+    String(inv?.delivery?.status||"").toUpperCase()==="SENT";
 }
 function batchMonthYear(inv){
   const raw=String(inv?.month||"—").trim();
@@ -8127,17 +8270,18 @@ function buildBatchShareMessage(invoices,schoolName){
   const list=sortInvoicesChronologically(invoices);
   const contact=resolveSchoolContact(_batchShareState?.schoolId || list[0]?.schoolId || "");
   const school=String(schoolName||"Selected School");
-  // Use the same active template resolver as single-invoice sharing. This keeps
-  // original/revised templates and invoice snapshot placeholders consistent.
-  const rendered=list.map((inv,n)=>{
-    const tpl=currentShareMsgTemplate(inv);
-    const msg=renderMsgTemplate(tpl,inv);
+  // Render the active template once only. Repeating the full prose template for
+  // every invoice made the batch message excessively long and confusing.
+  const first=list[0]||{};
+  const templateOnce=first?renderMsgTemplate(currentShareMsgTemplate(first),first):"";
+  const invoiceLines=list.map((inv,n)=>{
     const revisionTag=invoiceIsRevisedForShare(inv)?" — 🔄 REVISED":"";
-    return `*• Invoice #${String(n+1).padStart(2,"0")} — ${String(inv.invNo||"—")}${revisionTag}*\n${msg}`;
+    const amount=Number(inv.net||inv.grand||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+    return `• Invoice #${String(n+1).padStart(2,"0")} — ${String(inv.invNo||"—")}${revisionTag} | ${String(inv.month||"—")} ${String(inv.year||"")} | ₹${amount}`;
   });
   const contactLine=contact?`\nContact No.: ${contact}`:"";
-  const udise=resolveMsgVars(list[0]||{}).UDISECode||"—";
-  return `📌 INVOICE UPDATE\n\n**${school}**\nUDISE Code: ${udise}${contactLine}\n\n${rendered.join("\n\n━━━━━━━━━━━━━━━━━━━━\n\n")}\n\nTotal Invoices: ${list.length}\n\nPlease use the attached invoice PDF file(s) for your records.\n\nThank you.\nMS Enterprises`;
+  const udise=resolveMsgVars(first).UDISECode||"—";
+  return `📌 INVOICE UPDATE\n\n**${school}**\nUDISE Code: ${udise}${contactLine}\n\n${templateOnce}\n\nSELECTED INVOICES\n${invoiceLines.join("\n")}\n\nTotal Invoices: ${list.length}\n\nPlease use the attached invoice PDF file(s) for your records.\n\nThank you.\nMS Enterprises`;
 }
 /* v4.72 Batch Share — reuse existing single-share delivery behavior.
    The batch layer only resolves the selected invoices and hands their
@@ -8207,6 +8351,11 @@ function selectBatchRemaining(){
   _batchShareState.selectedIds=_batchShareState.invoices.filter(i=>!batchInvoiceShared(i)).map(i=>String(i.id));
   renderBatchShareDialog();
 }
+function selectBatchAllIncludingShared(){
+  if(!_batchShareState)return;
+  _batchShareState.selectedIds=_batchShareState.invoices.map(i=>String(i.id));
+  renderBatchShareDialog();
+}
 function clearBatchSelection(){
   if(!_batchShareState)return;
   _batchShareState.selectedIds=[];
@@ -8216,7 +8365,7 @@ function renderBatchSelectionSummary(){
   const s=_batchShareState;if(!s)return;
   const selected=batchSelectedInvoices();
   const el=document.getElementById("batch-selection-summary");
-  if(el)el.textContent=`${selected.length} selected · ${selected.filter(batchInvoiceShared).length} already shared · ${selected.filter(i=>!batchInvoiceShared(i)).length} remaining to share`;
+  if(el)el.textContent=`${selected.length} selected · ${selected.filter(batchInvoiceShared).length} previously attempted · ${selected.filter(i=>!batchInvoiceShared(i)).length} not yet attempted`;
 }
 
 function openBatchShare(schoolId){
@@ -8230,68 +8379,270 @@ function openBatchShare(schoolId){
   };
   renderBatchShareDialog();
 }
+function shareModalPrefs(){
+  const st=A.sett||ST0;
+  return {theme:st.shareModalTheme==="minimalist"?"minimalist":"classic",size:["small","medium","large"].includes(st.shareModalSize)?st.shareModalSize:"medium"};
+}
+function saveShareModalPrefs(){
+  const theme=document.getElementById("st-share-modal-theme-select")?.value||"classic";
+  const size=document.getElementById("st-share-modal-size-select")?.value||"medium";
+  const settUpd={...(A.sett||ST0),shareModalTheme:theme==="minimalist"?"minimalist":"classic",shareModalSize:["small","medium","large"].includes(size)?size:"medium"};
+  sv("st",settUpd);A.sett=settUpd;
+  const status=document.getElementById("st-share-modal-prefs-status");if(status)status.textContent=`Saved: ${settUpd.shareModalTheme==="classic"?"Classic Colorful":"Minimalist Compact"} · ${settUpd.shareModalSize.charAt(0).toUpperCase()+settUpd.shareModalSize.slice(1)} popup`;
+  toast("Share popup appearance saved","ok");
+  if(_batchShareState)renderBatchShareDialog();
+}
+function resetShareModalPrefs(){
+  const settUpd={...(A.sett||ST0),shareModalTheme:"classic",shareModalSize:"medium"};sv("st",settUpd);A.sett=settUpd;
+  const th=document.getElementById("st-share-modal-theme-select");if(th)th.value="classic";
+  const sz=document.getElementById("st-share-modal-size-select");if(sz)sz.value="medium";
+  const status=document.getElementById("st-share-modal-prefs-status");if(status)status.textContent="Reset to Classic Colorful · Medium popup";
+  toast("Share popup reset to Classic / Medium","ok");
+  if(_batchShareState)renderBatchShareDialog();
+}
+
 function renderBatchShareDialog(){
   const s=_batchShareState;if(!s)return;
+  const modalPrefs=shareModalPrefs();
+  // v4.61.69: materially smaller width tiers; density scales inner controls as well as the shell.
+  const modalWidth=modalPrefs.size==="small"?340:modalPrefs.size==="large"?520:420;
+  const density=modalPrefs.size==="small"?"small":modalPrefs.size==="large"?"large":"medium";
+  const compact=modalPrefs.theme==="minimalist";
+  // Modal singleton: remove any previous instance before rendering to prevent stacked dim/blur overlays.
+  document.querySelectorAll('#batch-share-dlg').forEach(node=>node.remove());
   if(!Array.isArray(s.selectedIds))s.selectedIds=s.invoices.filter(i=>!batchInvoiceShared(i)).map(i=>String(i.id));
   const shared=s.invoices.filter(batchInvoiceShared).length, remaining=s.invoices.length-shared;
   const selected=batchSelectedInvoices();
   const msg=buildBatchShareMessage(selected,s.schoolName);
-  const dlg=document.createElement("div");dlg.className="ov";dlg.id="batch-share-dlg";
-  dlg.onclick=e=>{if(e.target===dlg){dlg.remove();_batchShareState=null;}};
-  dlg.innerHTML=`<div class="modal" style="max-width:470px">
-    <div class="mhd"><div><div class="mt">Share Invoice Pack</div><div style="font-size:11px;color:var(--txl);margin-top:2px">${ec(s.schoolName)} · ${s.invoices.length} invoices</div></div>
-      <button class="btn btn-g btn-sm" onclick="document.getElementById('batch-share-dlg')?.remove();_batchShareState=null">&#10005;</button></div>
-    <div class="mbd">
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
-        <div style="padding:8px;border:1px solid var(--bd);border-radius:8px;text-align:center"><b style="display:block;font-size:16px;color:var(--tx)">${s.invoices.length}</b><span style="font-size:9px;color:var(--txl)">Invoices</span></div>
-        <div style="padding:8px;border:1px solid #86EFAC;border-radius:8px;text-align:center"><b style="display:block;font-size:16px;color:var(--gn)">${shared}</b><span style="font-size:9px;color:var(--txl)">Shared</span></div>
-        <div style="padding:8px;border:1px solid #FCD34D;border-radius:8px;text-align:center"><b style="display:block;font-size:16px;color:var(--am)">${remaining}</b><span style="font-size:9px;color:var(--txl)">Remaining</span></div>
+  const dlg=document.createElement('div');dlg.className='ov ov-niv';dlg.id='batch-share-dlg';
+  dlg.style.cssText='background:rgba(7,15,31,.62);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:12000;padding:12px;';
+  dlg.onclick=e=>{if(e.target===dlg)closeBatchShareDialog();};
+  dlg.innerHTML=`<style>
+    #batch-share-dlg{--bs-font:${density==="small"?'0.86':density==="medium"?'0.92':'1'};--bs-pad:${density==="small"?'0.72':density==="medium"?'0.86':'1'};}
+    #batch-share-dlg .batch-share-modal{width:min(calc(100vw - 20px),${modalWidth}px);max-width:${modalWidth}px;max-height:84vh;display:flex;flex-direction:column;}
+    #batch-share-dlg .batch-share-body{min-height:0;overflow:auto;max-height:calc(84vh - 52px);padding:${density==="small"?'6px 7px':density==="medium"?'8px 9px':'10px 11px'}!important;}
+    #batch-share-dlg .batch-share-body > div{margin-bottom:calc(7px * var(--bs-pad))!important;}
+    #batch-share-dlg .batch-share-actions{gap:${density==="small"?'5px':density==="medium"?'6px':'7px'}!important;margin:5px 0 7px!important;}
+    #batch-share-dlg .batch-share-action{min-width:0;padding:${density==="small"?'6px 4px':density==="medium"?'7px 5px':'9px 6px'}!important;border-radius:${density==="small"?'7px':'9px'}!important;font-size:${density==="small"?'11px':density==="medium"?'11.5px':'12.5px'}!important;line-height:1.2!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 2px 7px rgba(0,0,0,.2)!important;text-shadow:0 1px 1px rgba(0,0,0,.22);}
+    #batch-share-dlg .batch-share-action small{font-size:${density==="small"?'9px':density==="medium"?'9.5px':'10px'}!important;line-height:1.2!important;}
+    #batch-share-dlg .brand-icon{width:20px;height:20px;flex:0 0 20px;display:inline-block;vertical-align:middle;margin-right:6px;}
+    #batch-share-dlg .batch-share-action{text-align:center;}
+    #batch-share-dlg .batch-share-action small{display:block;}
+    #batch-share-dlg .batch-stat{padding:${density==="small"?'5px 3px':density==="medium"?'6px 4px':'8px 6px'}!important;}
+    #batch-share-dlg .batch-share-message{padding:${density==="small"?'8px':'9px'}!important;font-size:${density==="small"?'11px':density==="medium"?'11.5px':'12px'}!important;line-height:1.42!important;}
+    #batch-share-dlg .batch-message-heading{width:100%;box-sizing:border-box;overflow:hidden;}
+    #batch-share-dlg .batch-message-heading label{font-size:${density==="small"?'11px':density==="medium"?'12px':'13px'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    #batch-share-dlg .batch-message-heading-actions button{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:27px;min-height:27px;box-sizing:border-box;border:1px solid #526d95;background:#172842;color:#dceaff;border-radius:7px;padding:0 7px;font-size:10px;font-weight:700;line-height:1;cursor:pointer;white-space:nowrap;}
+    #batch-share-dlg .batch-message-heading-actions .batch-message-edit-btn svg{width:13px;height:13px;display:block;}
+    #batch-share-dlg .batch-message-heading-actions .batch-message-expand-btn{width:28px;min-width:28px;padding:0;}
+    #batch-share-dlg .batch-message-heading-actions .batch-message-expand-btn svg{width:15px;height:15px;display:block;}
+    #batch-share-dlg .batch-message-heading-actions button:hover{background:#203a5d;border-color:#6b91c2;}
+    #batch-share-dlg .batch-share-message{resize:none!important;}
+    #batch-share-dlg .batch-select-btn{font-size:${density==="small"?'10px':density==="medium"?'10.5px':'11px'}!important;padding:${density==="small"?'6px 3px':'7px 4px'}!important;}
+    #batch-share-dlg .batch-share-modal .mhd{padding:${density==="small"?'6px 8px':density==="medium"?'8px 9px':'9px 11px'}!important;}
+    #batch-share-dlg .batch-share-modal .mhd .mt{font-size:${density==="small"?'13px':density==="medium"?'14px':'15px'}!important;}
+    #batch-share-dlg .batch-share-modal .mhd button{width:29px!important;height:29px!important;flex-basis:29px!important;font-size:21px!important;}
+    #batch-share-dlg .batch-share-modal button:not(.batch-share-action):not(.batch-select-btn){box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 1px 4px rgba(0,0,0,.18);}
+    #batch-share-dlg .batch-share-action:disabled{filter:saturate(.62) brightness(.8);box-shadow:none!important;}
+    @media(max-width:600px){#batch-share-dlg .batch-share-modal{width:calc(100vw - 16px);max-width:none;max-height:88dvh;border-radius:11px;}#batch-share-dlg .batch-share-body{max-height:calc(88dvh - 48px);padding:7px!important;}#batch-share-dlg .batch-share-actions{gap:5px!important;}#batch-share-dlg .batch-share-action{padding:7px 4px!important;font-size:11px!important;}#batch-share-dlg .batch-share-action small{font-size:9px!important;}#batch-share-dlg .batch-stat{padding:5px 3px!important;}}
+    ${compact?`/* Theme 2 is a real structural layout: message on the left, share controls on the right. */
+      #batch-share-dlg .batch-share-body{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(220px,.8fr);column-gap:12px;row-gap:0;align-content:start;}
+      #batch-share-dlg .batch-share-body>div:nth-child(1),#batch-share-dlg .batch-share-body>div:nth-child(2),#batch-share-dlg .batch-share-body>div:nth-child(3),#batch-share-dlg .batch-share-body>div:nth-child(9),#batch-share-dlg .batch-share-body>div:nth-child(10),#batch-share-dlg .batch-share-body>div:nth-child(11){grid-column:1/-1;}
+      #batch-share-dlg .batch-share-body>div:nth-child(4){grid-column:1;grid-row:4;align-self:end;}
+      #batch-share-dlg .batch-share-body>textarea:nth-child(5){grid-column:1;grid-row:5 / span 3;min-height:210px;max-height:330px;}
+      #batch-share-dlg .batch-share-body>div:nth-child(6){grid-column:2;grid-row:4;align-self:end;}
+      #batch-share-dlg .batch-share-body>div:nth-child(7){grid-column:2;grid-row:5;}
+      #batch-share-dlg .batch-share-body>.batch-share-actions{grid-column:2;grid-row:6 / span 2;grid-template-columns:minmax(0,1fr)!important;align-content:start;}
+      #batch-share-dlg .batch-share-body>.batch-share-actions .batch-share-action{min-height:40px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:7px 6px!important;}
+      #batch-share-dlg .batch-share-message{font-family:inherit!important;resize:both!important;max-width:none!important;max-height:70vh!important;min-width:0;}
+      /* One-time expanded-message mode: enlarge the dialog to fit the message and collapse share actions to an icon rail. */
+      #batch-share-dlg .batch-share-modal.batch-message-expanded{width:min(calc(100vw - 24px),var(--batch-expanded-width,760px))!important;max-width:calc(100vw - 24px)!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body{grid-template-columns:minmax(0,1fr) 46px!important;column-gap:10px!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions{grid-column:2!important;grid-row:6 / span 2!important;display:flex!important;flex-direction:column!important;gap:6px!important;align-self:start!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions .batch-share-action{width:42px!important;min-width:42px!important;min-height:42px!important;height:42px!important;padding:7px!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:0!important;line-height:0!important;overflow:hidden!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions .batch-share-action small{display:none!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions .batch-share-action .brand-icon{width:22px!important;height:22px!important;flex:0 0 22px!important;margin:0!important;display:block!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>textarea.batch-share-message{grid-column:1!important;grid-row:5 / span 3!important;resize:none!important;width:100%!important;max-width:100%!important;min-height:140px!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>div:nth-child(4){grid-column:1!important;grid-row:4!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body>div:nth-child(6){grid-column:2!important;grid-row:4!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body{display:grid!important;grid-template-columns:minmax(0,1fr) 42px!important;column-gap:7px!important;}
+      @media(max-width:720px){#batch-share-dlg .batch-share-body{display:block;}#batch-share-dlg .batch-share-body>div,#batch-share-dlg .batch-share-body>textarea{grid-column:auto!important;grid-row:auto!important;}#batch-share-dlg .batch-share-body>textarea{min-height:130px;max-height:220px;}#batch-share-dlg .batch-share-body>.batch-share-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))!important;}#batch-share-dlg .batch-share-body>.batch-share-actions .batch-share-action{min-height:38px;}}
+    `:''}
+    /* Reference color theory: flat, readable brand colors. No gradients, glass, neon glow or glossy button fills. */
+    #batch-share-dlg .batch-share-action{box-shadow:none!important;text-shadow:none!important;filter:none;}
+    #batch-share-dlg .batch-share-action[onclick*="telegram"]{background:#2CA5E0!important;border-color:#2CA5E0!important;color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="telegram"] .brand-icon{color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="WhatsAppCombined"],#batch-share-dlg .batch-share-action[onclick*="WhatsAppPdfs"]{background:#25A85A!important;border-color:#25A85A!important;color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="WhatsAppCombined"] .brand-icon,#batch-share-dlg .batch-share-action[onclick*="WhatsAppPdfs"] .brand-icon,#batch-share-dlg .batch-share-action[onclick*="WhatsAppText"] .brand-icon{color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="WhatsAppText"]{background:#128C7E!important;border-color:#128C7E!important;color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="email"]{background:#EA4335!important;border-color:#EA4335!important;color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="email"] .brand-icon{color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="device"]{background:#24466F!important;border-color:#24466F!important;color:#fff!important;}
+    #batch-share-dlg .batch-share-action[onclick*="copyBatchShareMessage"]{background:#23466F!important;border-color:#23466F!important;color:#fff!important;}
+    #batch-share-dlg #batch-download-toggle{background:#23466F!important;border-color:#23466F!important;color:#fff!important;}
+    #batch-share-dlg .batch-share-modal{box-shadow:0 12px 30px rgba(0,0,0,.30)!important;}
+    #batch-share-dlg .batch-share-modal .mhd{background:#132742!important;}
+    #batch-share-dlg .batch-share-modal .batch-share-message{box-shadow:none!important;}
+    /* Single-invoice share popup uses the same reference palette and brand SVG icons. */
+    #shr-dlg .shr-brand-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:38px;border-radius:8px!important;font-weight:750!important;box-shadow:none!important;text-shadow:none!important;background-image:none!important;}
+    #shr-dlg .shr-brand-btn svg{width:19px;height:19px;flex:0 0 19px;display:block;}
+    #shr-dlg .shr-prep-btn{background:#5145E5!important;border-color:#5145E5!important;color:#fff!important;}
+    #shr-dlg .shr-wa-text{background:#25A85A!important;border-color:#25A85A!important;color:#fff!important;}
+    #shr-dlg .shr-wa-pdf{background:#128C7E!important;border-color:#128C7E!important;color:#fff!important;}
+    #shr-dlg .shr-wa-combined{background:#168C4A!important;border-color:#168C4A!important;color:#fff!important;}
+    #shr-dlg .shr-email{background:#EA4335!important;border-color:#EA4335!important;color:#fff!important;}
+    #shr-dlg .shr-telegram{background:#2CA5E0!important;border-color:#2CA5E0!important;color:#fff!important;}
+    #shr-dlg .shr-print{background:#17243A!important;border-color:#34445F!important;color:#D9E4F5!important;}
+    #shr-dlg .shr-download{background:#23466F!important;border-color:#23466F!important;color:#fff!important;}
+    #shr-dlg .shr-copy{background:#23466F!important;border-color:#23466F!important;color:#fff!important;}
+    #shr-dlg .shr-device{background:#17243A!important;border-color:#34445F!important;color:#D9E4F5!important;}
+  </style><div class="modal batch-share-modal" role="dialog" aria-modal="true" aria-label="Share Invoice Pack" style="background:#101c31;color:#edf4ff;border:1px solid #2b4264;border-radius:14px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.30);">
+    <div class="mhd" style="background:#132742;border-bottom:1px solid #2a4264;padding:${compact?'8px 10px':'10px 12px'};display:flex;align-items:center;gap:9px">
+      <div style="width:${compact?'32px':'36px'};height:${compact?'32px':'36px'};flex:0 0 auto;border-radius:9px;background:#2357a8;display:flex;align-items:center;justify-content:center;font-size:21px">📄</div>
+      <div style="flex:1;min-width:0"><div class="mt" style="color:#f4f8ff;font-size:${compact?'15px':'16px'}">Share Invoice Pack</div><div style="font-size:12px;color:#b4c8e6;margin-top:3px">${ec(s.schoolName)} · ${s.invoices.length} invoices</div></div>
+      <button type="button" aria-label="Close Share Invoice Pack" title="Close" onclick="closeBatchShareDialog()" style="flex:0 0 34px;width:34px;height:34px;border-radius:8px;border:1px solid #526d95;background:#172842;color:#fff;font-size:24px;line-height:1;cursor:pointer">×</button>
+    </div>
+    <div class="mbd batch-share-body" style="background:#101c31;color:#edf4ff;overflow:auto">
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px">
+        <div class="batch-stat" style="padding:10px;border:1px solid #3768b6;background:#172b49;border-radius:10px;text-align:center"><div style="font-size:20px">📄 <b>${s.invoices.length}</b></div><span style="font-size:11px;color:#b9cce8">Invoices</span></div>
+        <div class="batch-stat" style="padding:10px;border:1px solid #00b981;background:#10362f;border-radius:10px;text-align:center"><div style="font-size:20px;color:#42dfa8">↗ <b>${shared}</b></div><span style="font-size:11px;color:#b9cce8">Attempted</span></div>
+        <div class="batch-stat" style="padding:10px;border:1px solid #f59e0b;background:#352b1c;border-radius:10px;text-align:center"><div style="font-size:20px;color:#ffc35a">◷ <b>${remaining}</b></div><span style="font-size:11px;color:#b9cce8">Remaining</span></div>
       </div>
-
-      <div id="batch-selection-summary" style="font-size:10px;font-weight:800;color:var(--tx);margin-bottom:6px">${selected.length} selected · ${selected.filter(batchInvoiceShared).length} already shared · ${selected.filter(i=>!batchInvoiceShared(i)).length} remaining to share</div>
-      <div style="display:flex;gap:6px;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap">
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-g btn-sm" style="font-size:9px;padding:5px 7px" onclick="selectBatchRemaining()">Select Remaining</button>
-          <button class="btn btn-g btn-sm" style="font-size:9px;padding:5px 7px" onclick="clearBatchSelection()">Clear</button>
+      <div id="batch-selection-summary" style="font-size:12px;font-weight:800;color:#f0f5ff;margin-bottom:8px">${selected.length} selected · ${selected.filter(batchInvoiceShared).length} already shared · ${selected.filter(i=>!batchInvoiceShared(i)).length} remaining to share</div>
+      <div style="padding:10px;background:#14243c;border:1px solid #2b4264;border-radius:12px;margin-bottom:11px">
+        <div style="font-size:12px;font-weight:800;color:#dceaff;margin-bottom:8px">1. Choose invoices</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px">
+          <button type="button" class="batch-select-btn" title="Select invoices with no previous share attempt" onclick="selectBatchRemaining()" style="border:1px solid #3978d2;background:#19345a;color:#eaf3ff;border-radius:9px;padding:9px 5px;font-weight:750;cursor:pointer">◷ Remaining</button>
+          <button type="button" class="batch-select-btn" title="Select every invoice, including previously attempted invoices" onclick="selectBatchAllIncludingShared()" style="border:1px solid #3978d2;background:#19345a;color:#eaf3ff;border-radius:9px;padding:9px 5px;font-weight:750;cursor:pointer">☑ All / Re-share</button>
+          <button type="button" class="batch-select-btn" title="Clear all invoice selections" onclick="clearBatchSelection()" style="border:1px solid #a83a50;background:#38202d;color:#ffdce2;border-radius:9px;padding:9px 5px;font-weight:750;cursor:pointer">✕ Clear</button>
+        </div><div id="batch-selected-count" style="font-size:11px;color:#a9c0e2;margin-top:7px">${selected.length} selected</div>
+      </div>
+      <div class="batch-message-heading" style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin:3px 0 7px;min-width:0"><label for="batch-share-msg" style="font-weight:800;color:#e5efff;min-width:0">🖊 Consolidated Message</label><div class="batch-message-heading-actions" style="display:flex;align-items:center;gap:5px;flex:0 0 auto"><button type="button" class="batch-message-edit-btn" title="Edit message" aria-label="Edit message" onclick="document.getElementById('batch-share-msg')?.focus()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5ZM20.7 6.8a1 1 0 0 0 0-1.4l-2.1-2.1a1 1 0 0 0-1.4 0l-1.7 1.7 3.5 3.5 1.7-1.7Z" fill="currentColor"/></svg><span>Edit</span></button><button type="button" class="batch-message-expand-btn" title="Expand message" aria-label="Expand message" aria-pressed="false"><svg class="batch-expand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div></div>
+      <textarea id="batch-share-msg" class="fi batch-share-message" rows="${compact?5:6}" style="width:100%;box-sizing:border-box;background:#0c1729!important;color:#edf4ff!important;border:1px solid #35527a!important;border-radius:11px;padding:12px;font-size:12px;line-height:1.5;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:none!important;min-width:0;max-width:100%">${ec(msg)}</textarea>
+      <div style="font-size:12px;font-weight:800;color:#dceaff;margin:12px 0 6px">2. Share selected invoices</div>
+      <div id="batch-file-ready-status" role="status" aria-live="polite" style="font-size:11px;font-weight:700;color:#9ebce5;margin-bottom:8px">${selected.length?'Preparing selected PDF files…':'Select invoices to begin'}</div>
+      <div class="batch-share-actions" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:7px 0 10px">
+        <button type="button" class="batch-share-action" data-needs-files="1" disabled onclick="sendBatchShareChannel('telegram')" style="background:#229ED9;color:white;border:1px solid #55BDF0;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.7 3.4 18.5 20c-.24 1.17-.87 1.46-1.76.91l-4.88-3.6-2.35 2.26c-.26.26-.48.48-.98.48l.35-4.97 9.05-8.18c.39-.35-.08-.55-.6-.2L6.15 13.78l-4.8-1.5c-1.04-.33-1.06-1.04.22-1.55L20.35 3.2c.87-.32 1.63.21 1.35.2Z"/></svg> <small style="display:block;font-weight:500;opacity:.88;margin-top:3px">Share message + PDFs</small></button>
+        <button type="button" class="batch-share-action" data-needs-files="1" disabled onclick="sendBatchWhatsAppCombined()" style="background:#128C4A;color:white;border:1px solid #39B96D;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.8 9.8 0 0 0-8.4 14.85L2.3 22l5.3-1.39A9.9 9.9 0 1 0 12.04 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-3.14.82.84-3.06-.2-.32A8.08 8.08 0 1 1 12.04 19.9Zm4.43-6.05c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.02-.37.1-.49.1-.1.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.46-.4-.4-.54-.4h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.1.15 1.51.09.46-.07 1.43-.58 1.63-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg> <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">Combined share, if supported</small></button>
+        <button type="button" class="batch-share-action" data-needs-files="1" disabled onclick="sendBatchWhatsAppPdfs()" style="background:#128C4A;color:white;border:1px solid #39B96D;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.8 9.8 0 0 0-8.4 14.85L2.3 22l5.3-1.39A9.9 9.9 0 1 0 12.04 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-3.14.82.84-3.06-.2-.32A8.08 8.08 0 1 1 12.04 19.9Zm4.43-6.05c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.02-.37.1-.49.1-.1.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.46-.4-.4-.54-.4h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.1.15 1.51.09.46-.07 1.43-.58 1.63-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.16-.46-.28Z"/></svg> <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">PDF files only</small></button>
+        <button type="button" class="batch-share-action" ${selected.length?'':'disabled'} onclick="sendBatchWhatsAppText()" style="background:#087E8B;color:white;border:1px solid #2EBFC6;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.8 9.8 0 0 0-8.4 14.85L2.3 22l5.3-1.39A9.9 9.9 0 1 0 12.04 2Zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-3.14.82.84-3.06-.2-.32A8.08 8.08 0 1 1 12.04 19.9Z"/><path fill="currentColor" d="M8.1 10.2h7.9v1.4H8.1zm0 2.8h5.6v1.4H8.1z"/></svg> <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">Message only</small></button>
+        <button type="button" class="batch-share-action" data-needs-files="1" disabled onclick="sendBatchShareChannel('email')" style="background:#D93025;color:white;border:1px solid #F28B82;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2.5 5.5A2.5 2.5 0 0 1 5 3h14a2.5 2.5 0 0 1 2.5 2.5v13A2.5 2.5 0 0 1 19 21H5a2.5 2.5 0 0 1-2.5-2.5v-13Zm2.1-.2 7.4 6.1 7.4-6.1H4.6Zm14.9 2.5-7 5.75a.8.8 0 0 1-1 0l-7-5.75v10.7c0 .3.2.5.5.5H19c.3 0 .5-.2.5-.5V7.8Z"/></svg> <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">Share message + PDFs</small></button>
+        <button type="button" class="batch-share-action" data-needs-files="1" disabled onclick="sendBatchShareChannel('device')" aria-label="All Share" title="All Share" style="background:#24466F;color:white;border:1px solid #6F98C8;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3" fill="currentColor"/><circle cx="6" cy="12" r="3" fill="currentColor"/><circle cx="18" cy="19" r="3" fill="currentColor"/><path d="M8.7 10.7 15.3 6.3M8.7 13.3l6.6 4.4" stroke="currentColor" stroke-width="2" fill="none"/></svg> All Share <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">Open device share menu</small></button>
+        <button type="button" class="batch-share-action" onclick="copyBatchShareMessage()" aria-label="Copy Message" title="Copy Message" style="background:#1b3f85;color:#fff;border:1px solid #4e83ee;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="7" width="12" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 7V4a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v13a1 1 0 0 0 1 1h3" fill="none" stroke="currentColor" stroke-width="2"/></svg> Copy Message</button>
+        <button type="button" id="batch-download-toggle" class="batch-share-action" onclick="toggleBatchDownloadOptions()" aria-label="Download Options" title="Download Options" style="background:#087EE8;color:white;border:1px solid #61B4FF;border-radius:10px;padding:12px 8px;font-weight:800;cursor:pointer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg> Download Options ▾ <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">Invoices / Annexures / Full Package</small></button>
+      </div>
+      <div id="batch-download-options" style="display:none;border:1px solid #35527a;background:#14243c;border-radius:12px;padding:10px;margin:8px 0 12px">
+        <div style="font-weight:800;color:#dceaff;margin-bottom:8px">⬇ Download selected documents</div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px">
+          <button type="button" onclick="downloadBatchSelection('invoices')" style="background:#173f79;color:#fff;border:1px solid #3978d2;border-radius:9px;padding:10px 6px;cursor:pointer">📄 Invoices Only<small style="display:block;color:#c5dcff;margin-top:3px">Selected invoices</small></button>
+          <button type="button" onclick="downloadBatchSelection('annexures')" style="background:#164e46;color:#fff;border:1px solid #1eaa8d;border-radius:9px;padding:10px 6px;cursor:pointer">🧾 Annexures Only<small style="display:block;color:#c5dcff;margin-top:3px">A + B + C</small></button>
+          <button type="button" onclick="downloadBatchSelection('full')" style="background:#44351c;color:#fff;border:1px solid #d59a31;border-radius:9px;padding:10px 6px;cursor:pointer">📦 Full Package<small style="display:block;color:#f9dfad;margin-top:3px">Invoices + annexures + GST</small></button>
+          <button type="button" onclick="downloadBatchSelection('gst')" style="background:#482b60;color:#fff;border:1px solid #a46bd0;border-radius:9px;padding:10px 6px;cursor:pointer">📊 GST Summary<small style="display:block;color:#ead7ff;margin-top:3px">GST PDF only</small></button>
         </div>
-        <span id="batch-selected-count" style="font-size:9px;color:var(--txl)">${selected.length} selected</span>
+        <div style="font-size:10px;color:#a9c0e2;margin-top:8px">Selected documents are downloaded individually; Full Package is not a ZIP archive.</div>
       </div>
-
-      <label class="flbl">Consolidated Message</label>
-      <textarea id="batch-share-msg" class="fi" rows="9" style="font-size:11.5px;line-height:1.45;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">${ec(msg)}</textarea>
-      <div class="batch-share-actions" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin:7px 0 10px">
-        <button class="btn btn-p btn-sm batch-share-action" onclick="copyBatchShareMessage()">&#128203; Text Copy</button>
-        <button class="btn btn-g btn-sm batch-share-action" ${selected.length?"":"disabled"} onclick="sendBatchWhatsAppText()">&#128172; WhatsApp Text</button>
-        <button class="btn btn-p btn-sm batch-share-action" ${selected.length?"":"disabled"} onclick="sendBatchWhatsAppPdfs()">&#128196; WhatsApp PDFs</button>
-        <button class="btn btn-p btn-sm batch-share-action" ${selected.length?"":"disabled"} onclick="sendBatchShareChannel('telegram')">&#9992; Telegram</button>
-        <button class="btn btn-p btn-sm batch-share-action" ${selected.length?"":"disabled"} onclick="sendBatchShareChannel('email')">&#9993; Email</button>
-        <button class="btn btn-g btn-sm batch-share-action" ${selected.length?"":"disabled"} onclick="sendBatchShareChannel('device')">&#8599; All Share</button>
-      </div>
-      <div style="font-size:10px;color:var(--txl);margin-bottom:7px">Only selected invoices are included. Existing single-share delivery behavior is reused for each channel; WhatsApp remains text-first, while attachment-capable channels receive the selected PDFs.</div>
-
-      <div style="border:1px solid var(--bd);border-radius:9px;overflow:hidden">
-        ${s.invoices.map(inv=>{
-          const done=batchInvoiceShared(inv);
-          const checked=selected.some(x=>String(x.id)===String(inv.id));
-          return `<div style="padding:8px 9px;border-bottom:1px solid var(--bd);display:grid;grid-template-columns:24px 1fr auto;gap:7px;align-items:center">
-            <div style="display:flex;align-items:center;justify-content:center">
-              <input type="checkbox" ${checked?"checked":""} aria-label="Select ${ec(inv.invNo)}" onchange="toggleBatchInvoiceSelection('${ec(inv.id)}',this.checked)" style="width:17px;height:17px;accent-color:#5B3BE8">
-            </div>
-            <div style="min-width:0"><div style="font-size:10px;font-weight:800;color:var(--tx)">${ec(inv.invNo)}</div><div style="font-size:9px;color:var(--txl)">${ec(batchMonthYear(inv))} · ₹${Number(inv.net||0).toLocaleString("en-IN",{minimumFractionDigits:2})}</div></div>
-            <div style="text-align:right"><div style="font-size:9px;font-weight:800;color:${done?"var(--gn)":"var(--am)"}">${done?"✓ Shared":"Not Shared"}</div>
-              <div style="display:flex;gap:4px;margin-top:4px;justify-content:flex-end">
-                ${done?`<button class="btn btn-g btn-sm" style="font-size:9px;padding:5px 7px" onclick="shrInv('${ec(inv.id)}')">Share Again</button>`:
-                `<button class="btn btn-p btn-sm" style="font-size:9px;padding:5px 7px" onclick="sendBatchWhatsAppPdf('${ec(inv.id)}')">PDF</button>`}
-                <button class="btn btn-g btn-sm" style="font-size:9px;padding:5px 7px" onclick="shrInv('${ec(inv.id)}')">Other</button>
-              </div>
-            </div>
-          </div>`;
-        }).join("")}
+      <div style="font-size:10px;color:#a9c0e2;margin-bottom:9px">Only selected invoices are included. Share attempts are recorded, not recipient delivery. Your last three share attempts are shown for each invoice.</div>
+      <div style="border:1px solid #2b4264;border-radius:10px;overflow:hidden;background:#111e32">
+        ${s.invoices.map(inv=>{const done=batchInvoiceShared(inv);const checked=selected.some(x=>String(x.id)===String(inv.id));return `<div style="padding:10px; border-bottom:1px solid #2b4264;display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center">
+          <input type="checkbox" ${checked?'checked':''} aria-label="Select ${ec(inv.invNo)}" onchange="toggleBatchInvoiceSelection('${ec(inv.id)}',this.checked)" style="width:18px;height:18px;accent-color:#5b3be8">
+          <div style="min-width:0"><div style="font-size:12px;font-weight:800;color:#edf4ff">${ec(inv.invNo)}</div><div style="font-size:10px;color:#a9c0e2;margin-top:2px">${ec(batchMonthYear(inv))} · ₹${Number(inv.net||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</div><div style="font-size:9px;color:#91acd1;margin-top:4px">${(Array.isArray(inv.shareAttempts)?inv.shareAttempts:[]).slice(-3).reverse().map(a=>{const d=a?.at?new Date(a.at):null;return d&&!isNaN(d)?`${ec(a.method||'SHARE')} · ${d.toLocaleString()}`:''}).filter(Boolean).join('<br>')||'No previous attempts'}</div></div>
+          <div style="text-align:right"><div style="font-size:10px;font-weight:800;color:${done?'#42dfa8':'#ffc35a'}">${done?'✓ Attempted':'Not attempted'}</div><button type="button" style="margin-top:5px;border:1px solid #526d95;background:#172842;color:#e5efff;border-radius:7px;padding:5px 7px;font-size:10px;cursor:pointer" onclick="shrInv('${ec(inv.id)}')">${done?'Share Again':'Other Share'}</button></div>
+        </div>`}).join('')}
       </div>
     </div>
   </div>`;
   document.body.appendChild(dlg);
+  setupBatchMessageResizeBehavior(dlg,compact);
+  // Lock background scrolling only once; close always removes this one overlay and restores prior state.
+  if(!window._batchShareOverflowCaptured){window._batchSharePreviousOverflow=document.body.style.overflow||'';window._batchShareOverflowCaptured=true;}
+  document.body.style.overflow='hidden';
+  warmBatchShareFiles(s.invoices);
+  updateBatchShareReadiness();
 }
+function setupBatchMessageResizeBehavior(dlg, isMinimalist){
+  if(!dlg || !isMinimalist) return; // Theme 1 remains unchanged.
+  const modal=dlg.querySelector('.batch-share-modal');
+  const body=dlg.querySelector('.batch-share-body');
+  const message=dlg.querySelector('#batch-share-msg');
+  const heading=dlg.querySelector('.batch-message-heading');
+  const toggle=dlg.querySelector('.batch-message-expand-btn');
+  if(!modal||!body||!message||!heading||!toggle) return;
+  let expanded=false;
+  const originalHeight=message.getBoundingClientRect().height;
+  const originalModalWidth=modal.style.width;
+  const originalModalMaxWidth=modal.style.maxWidth;
+  const originalModalMaxHeight=modal.style.maxHeight;
+  const iconExpand='<path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+  const iconRestore='<path d="M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
+  const updateToggle=()=>{
+    toggle.title=expanded?'Restore message layout':'Expand message';
+    toggle.setAttribute('aria-label',toggle.title);
+    toggle.setAttribute('aria-pressed',String(expanded));
+    const svg=toggle.querySelector('svg');if(svg)svg.innerHTML=expanded?iconRestore:iconExpand;
+  };
+  const collapse=()=>{
+    if(!expanded||!dlg.isConnected)return;
+    expanded=false;
+    modal.classList.remove('batch-message-expanded');
+    body.classList.remove('batch-message-expanded-body');
+    modal.style.width=originalModalWidth;modal.style.maxWidth=originalModalMaxWidth;modal.style.maxHeight=originalModalMaxHeight;
+    message.style.width='100%';message.style.height='';message.style.setProperty('resize','none','important');message.style.maxWidth='100%';
+    message.setAttribute('aria-label','Consolidated invoice message. Use Expand to view larger.');
+    updateToggle();
+  };
+  const expand=()=>{
+    if(expanded||!dlg.isConnected)return;
+    expanded=true;
+    const maxW=Math.max(320,window.innerWidth-24);
+    // Expand only by a modest amount (roughly one status-card/button width), never to a viewport-wide window.
+    const currentW=modal.getBoundingClientRect().width || parseFloat(modal.style.width) || 420;
+    const desiredW=Math.min(maxW,currentW+148);
+    modal.style.setProperty('--batch-expanded-width',desiredW+'px');
+    modal.style.width=desiredW+'px';modal.style.maxWidth=maxW+'px';modal.style.maxHeight='88vh';
+    modal.classList.add('batch-message-expanded');
+    body.classList.add('batch-message-expanded-body');
+    message.style.width='100%';message.style.height=Math.min(Math.max(originalHeight,window.innerHeight*.52),window.innerHeight*.62)+'px';
+    message.style.setProperty('resize','none','important');message.style.maxWidth='100%';
+    message.setAttribute('aria-label','Expanded consolidated invoice message. Use Restore to return to the normal layout.');
+    updateToggle();
+  };
+  toggle.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();expanded?collapse():expand();});
+  // Expanded view is intentionally persistent: outside clicks and other controls must not collapse it.
+  // The user exits expanded mode only with the Restore toggle or closes the entire dialog with X.
+  window.addEventListener('resize',()=>{
+    if(!expanded||!dlg.isConnected)return;
+    const maxW=Math.max(300,window.innerWidth-24);
+    const targetW=Math.min(maxW,Math.max(300,(modal.getBoundingClientRect().width||420)));
+    modal.style.width=targetW+'px';modal.style.maxWidth=maxW+'px';
+    message.style.height=Math.min(window.innerHeight*.62,Math.max(originalHeight,window.innerHeight*.52))+'px';
+  },{passive:true});
+  updateToggle();
+}
+function closeBatchShareDialog(){
+  document.querySelectorAll('#batch-share-dlg').forEach(node=>node.remove());
+  _batchShareState=null;
+  document.body.style.overflow=window._batchSharePreviousOverflow||'';
+  window._batchSharePreviousOverflow='';window._batchShareOverflowCaptured=false;
+}
+function toggleBatchDownloadOptions(){
+  const panel=document.getElementById('batch-download-options');if(!panel)return;
+  const opening=panel.style.display==='none';panel.style.display=opening?'block':'none';
+  const btn=document.getElementById('batch-download-toggle');if(btn)btn.innerHTML=`⬇ Download Options ${opening?'▴':'▾'} <small style="display:block;font-weight:500;opacity:.9;margin-top:3px">Invoices / Annexures / Full Package</small>`;
+}
+async function downloadBatchSelection(kind){
+  const selected=batchSelectedInvoices();if(!selected.length){toast('Select at least one invoice first.','err');return;}
+  const tabs=kind==='invoices'?['merged']:kind==='annexures'?['annexA','annexB','annexC']:kind==='gst'?['gst']:['merged','annexA','annexB','annexC','gst'];
+  const jobs=[];selected.forEach(inv=>tabs.forEach(tab=>jobs.push({id:inv.id,tab,inv})));
+  if(!jobs.length)return;
+  toast(`Starting ${jobs.length} document download${jobs.length===1?'':'s'}…`,'ok');
+  for(let i=0;i<jobs.length;i++){
+    const j=jobs[i];
+    try{await hsDownloadDocument(j.id,j.tab);}catch(e){console.warn('Batch document download failed',j.inv?.invNo,j.tab,e);}
+    if(i<jobs.length-1)await new Promise(resolve=>setTimeout(resolve,350));
+  }
+  auditLog('EXPORT','school',_batchShareState?.schoolId||selected[0]?.schoolId||null,`Batch document download: ${kind}; ${selected.length} invoices`,{invoiceIds:selected.map(i=>i.id),kind});
+}
+
 function copyBatchShareMessage(){
   const ta=document.getElementById("batch-share-msg");if(!ta)return;
   navigator.clipboard?.writeText(ta.value).then(()=>toast("Batch message copied","ok")).catch(()=>toast("Copy failed","err"));
@@ -8302,38 +8653,78 @@ function sendBatchWhatsAppText(){
   // Preserve the user's edits in the visible batch-message editor; only render a
   // fresh template when the editor is missing or genuinely blank.
   const ta=document.getElementById("batch-share-msg");
+  const reShareReason=confirmBatchReShare(selected,"WHATSAPP_TEXT");
+  if(reShareReason===null)return;
   const msg=ta&&String(ta.value||"").trim()
     ? ta.value
     : buildBatchShareMessage(selected,_batchShareState?.schoolName||"Selected School");
   if(ta)ta.value=msg;
   try{const cp=navigator.clipboard?.writeText(msg);if(cp&&typeof cp.catch==="function")cp.catch(()=>{});}catch(_){}
   window.location.href=getWhatsAppTextUrl(msg);
-  selected.forEach(inv=>recordShareAttempt(inv.id,"WHATSAPP_TEXT"));
+  selected.forEach(inv=>recordShareAttempt(inv.id,"WHATSAPP_TEXT",reShareReason));
   if(_batchShareState)auditLog("SHARE_ATTEMPT","school",_batchShareState.schoolId,`Batch WhatsApp text opened for ${selected.length} selected invoices`,{invoiceIds:selected.map(i=>i.id)});
 }
 async function sendBatchWhatsAppPdfs(){
   const selected=batchSelectedInvoices();
   if(!selected.length){toast("Select at least one invoice to share.","err");return;}
   if(_sharePrepBusy)return;
+  const reShareReason=confirmBatchReShare(selected,"WHATSAPP_PDF");
+  if(reShareReason===null)return;
   _sharePrepBusy=true;
   try{
-    for(const inv of selected){
-      const file=await prepareInvoicePdf(inv.id);
-      if(!fileMatchesInvoice(file,inv))throw new Error("Prepared PDF does not match "+inv.invNo);
-      if(!navigator.share||!navigator.canShare||!navigator.canShare({files:[file]}))
-        throw new Error("This device cannot share PDF files.");
-      recordShareAttempt(inv.id,"WHATSAPP_PDF");
-      await navigator.share({files:[file],title:"MDM Invoice "+inv.invNo});
-      markDeliveryState(inv.id,"WHATSAPP_PDF");
-    }
+    const files=getBatchShareFilesNow(selected);
+    if(!files){warmBatchShareFiles(selected);throw new Error("Selected PDFs are still being prepared. Please wait a moment and tap Share again; no files were sent.");}
+    if(!navigator.share||!navigator.canShare||!navigator.canShare({files}))
+      throw new Error("This device cannot share multiple PDF files in one action. No files were sent; use All Share or download the PDFs individually.");
+    selected.forEach(inv=>recordShareAttempt(inv.id,"WHATSAPP_PDF",reShareReason));
+    await navigator.share({files,title:"MDM Invoice Pack — "+(_batchShareState?.schoolName||"Selected School")});
+    selected.forEach(inv=>markDeliveryState(inv.id,"WHATSAPP_PDF",undefined,reShareReason));
     auditLog("SHARE","school",_batchShareState?.schoolId||selected[0]?.schoolId||null,
-      "Batch WhatsApp PDFs shared for "+selected.length+" selected invoices.",
-      {invoiceIds:selected.map(i=>i.id)});
-    toast("Selected WhatsApp PDFs shared","ok");
+      "Multi-file WhatsApp PDF share sheet opened for "+selected.length+" selected invoices.",{invoiceIds:selected.map(i=>i.id),reShareReason});
+    toast("Multi-invoice PDF share sheet opened","ok");
     if(_batchShareState)renderBatchShareDialog();
   }catch(err){
     if(err?.name!=="AbortError")toast("Batch PDF share failed: "+(err.message||"Unknown error"),"err");
   }finally{_sharePrepBusy=false;}
+}
+
+async function sendBatchWhatsAppCombined(){
+  const selected=batchSelectedInvoices();
+  if(!selected.length){toast("Select at least one invoice to share.","err");return;}
+  if(_sharePrepBusy)return;
+  const reShareReason=confirmBatchReShare(selected,"WHATSAPP_TEXT_PDF");
+  if(reShareReason===null)return;
+  const msg=document.getElementById("batch-share-msg")?.value||buildBatchShareMessage(selected,_batchShareState?.schoolName||"Selected School");
+  _sharePrepBusy=true;
+  try{
+    const files=getBatchShareFilesNow(selected);
+    if(!files){warmBatchShareFiles(selected);throw new Error("Selected PDFs are still being prepared. Please wait a moment and tap Share again; no files were sent.");}
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files,text:msg})){
+      selected.forEach(inv=>recordShareAttempt(inv.id,"WHATSAPP_TEXT_PDF",reShareReason));
+      await navigator.share({files,text:msg,title:"MDM Invoice Pack — "+(_batchShareState?.schoolName||"Selected School")});
+      selected.forEach(inv=>markDeliveryState(inv.id,"WHATSAPP_TEXT_PDF",undefined,reShareReason));
+      auditLog("SHARE","school",_batchShareState?.schoolId||selected[0]?.schoolId||null,"Combined text + PDF share sheet opened for "+selected.length+" invoices",{invoiceIds:selected.map(i=>i.id),reShareReason});
+      toast("Combined text + PDF share sheet opened. Choose WhatsApp in the device share sheet.","ok");
+      if(_batchShareState)renderBatchShareDialog();
+      return;
+    }
+    if(window.AndroidShare&&typeof window.AndroidShare.shareFilesWithText==="function"){
+      const payload=files.map(file=>({name:file.name||"invoice.pdf",type:file.type||"application/pdf",file}));
+      selected.forEach(inv=>recordShareAttempt(inv.id,"WHATSAPP_TEXT_PDF",reShareReason));
+      await window.AndroidShare.shareFilesWithText(payload,msg);
+      selected.forEach(inv=>markDeliveryState(inv.id,"WHATSAPP_TEXT_PDF",undefined,reShareReason));
+      toast("Combined share interface opened","ok");
+      return;
+    }
+    throw new Error("This device/browser cannot share text and multiple PDFs together. Nothing was sent. Use WhatsApp Text and WhatsApp PDFs separately, or All Share.");
+  }catch(err){if(err?.name!=="AbortError")toast("Combined share unavailable: "+(err.message||"Unknown error"),"err");}
+  finally{_sharePrepBusy=false;}
+}
+
+function confirmBatchReShare(invoices,channel){
+  // Re-sharing is intentionally unrestricted. Keep a short audit reason only when
+  // the caller has supplied one; never block the share flow with a mandatory prompt.
+  return "";
 }
 
 async function sendBatchShareChannel(channel){
@@ -8342,6 +8733,8 @@ async function sendBatchShareChannel(channel){
   if(_sharePrepBusy)return;
 
   const normalized=String(channel||"device").toLowerCase();
+  const reShareReason=confirmBatchReShare(selected,normalized.toUpperCase());
+  if(reShareReason===null)return;
   const msg=document.getElementById("batch-share-msg")?.value || buildBatchShareMessage(
     selected,_batchShareState?.schoolName||"Selected School"
   );
@@ -8349,18 +8742,14 @@ async function sendBatchShareChannel(channel){
   _sharePrepBusy=true;
   try{
     // Always prepare the exact selected PDFs in the same order as the batch list.
-    const files=[];
-    for(const inv of selected){
-      const file=await prepareInvoicePdf(inv.id);
-      if(!fileMatchesInvoice(file,inv))throw new Error("Prepared PDF does not match "+inv.invNo);
-      files.push(file);
-    }
+    const files=getBatchShareFilesNow(selected);
+    if(!files){warmBatchShareFiles(selected);throw new Error("Selected PDFs are still being prepared. Please wait a moment and tap Share again; no files were sent.");}
 
     // Reuse the existing single-share Web Share/native path whenever possible.
     // Batch only changes the payload from one invoice to the selected invoice pack.
     if(normalized==="telegram" || normalized==="email" || normalized==="device"){
       const attemptMethod=normalized==="telegram"?"TELEGRAM":normalized==="email"?"EMAIL":"DEVICE_SHARE";
-      selected.forEach(inv=>recordShareAttempt(inv.id,attemptMethod));
+      selected.forEach(inv=>recordShareAttempt(inv.id,attemptMethod,reShareReason));
       if(!(navigator.share && navigator.canShare && navigator.canShare({files,text:msg}))){
         // Fall back to the native/device share bridge if the project exposes it.
         if(window.AndroidShare?.shareFilesWithText){
@@ -8385,13 +8774,13 @@ async function sendBatchShareChannel(channel){
       }
 
       const method=normalized==="telegram"?"TELEGRAM":normalized==="email"?"EMAIL":"DEVICE_SHARE";
-      selected.forEach(inv=>markDeliveryState(inv.id,method));
+      selected.forEach(inv=>markDeliveryState(inv.id,method,undefined,reShareReason));
       auditLog("SHARE","school",_batchShareState?.schoolId||selected[0]?.schoolId||null,
         `Batch ${method} share completed for ${selected.length} selected invoices.`,
         {invoiceIds:selected.map(i=>i.id),channel:normalized});
-      toast(`Batch ${normalized==="device"?"share":normalized+" share"} opened`,"ok");
-      document.getElementById("batch-share-dlg")?.remove();
-      _batchShareState=null;
+      toast(`Batch ${normalized==="device"?"share":normalized+" share"} interface opened. Delivery is not confirmed.`,"ok");
+      // Keep the same selection/dialog available so the user can review or re-share.
+      if(_batchShareState)renderBatchShareDialog();
       return;
     }
 
@@ -8422,15 +8811,37 @@ async function sendBatchWhatsAppPdf(id){
   }finally{_sharePrepBusy=false;}
 }
 
-function markDeliveryState(id,method,revisionNo){
-  // Preserve the existing delivery history, and independently record the channel attempt.
+function shareConfirmTrialEnabled(){
+  try{return localStorage.getItem("mdm_share_completion_trial_v1")==="1";}catch(_){return false;}
+}
+function setShareConfirmTrial(enabled){
+  try{localStorage.setItem("mdm_share_completion_trial_v1",enabled?"1":"0");}
+  catch(_){toast("Could not save this browser preference.","err");return;}
+  toast(enabled?"Experimental share completion status enabled":"Experimental share completion status disabled","ok");
+}
+function markDeliveryState(id,method,revisionNo,reShareReason){
+  // Always record an attempt. Optional experimental mode additionally writes the legacy
+  // SHARE/RE-SHARE state, but it never claims recipient delivery or read confirmation.
   const inv=A.invoices.find(i=>i.id===id);if(!inv)return;
-  const at=new Date().toISOString(),updated=mrWithDeliveryRecord(inv,method,revisionNo??(inv.revisions||[]).length,at);
+  const at=new Date().toISOString();
+  const rev=revisionNo??(inv.revisions||[]).length;
+  let updated;
+  if(shareConfirmTrialEnabled()){
+    updated=mrWithDeliveryRecord(inv,method,rev,at);
+  }else{
+    updated={...inv};
+  }
   const attempts=Array.isArray(updated.shareAttempts)?updated.shareAttempts.slice():[];
-  attempts.push({method:method||"DEVICE_SHARE",at,status:"ATTEMPTED",by:A.currentUser?.name||"Administrator"});
-  updated.shareAttempts=attempts;updated.lastShareAttemptAt=at;updated.lastShareAttemptMethod=method||"DEVICE_SHARE";
+  const last=attempts[attempts.length-1];
+  const sameRecentAttempt=!!(last&&String(last.method||"").toUpperCase()===String(method||"DEVICE_SHARE").toUpperCase()&&Math.abs(Date.now()-new Date(last.at).getTime())<15000);
+  if(sameRecentAttempt){
+    attempts[attempts.length-1]={...last,revisionNo:Number(rev)||0,reShareReason:reShareReason||last.reShareReason||""};
+  }else{
+    attempts.push({method:method||"DEVICE_SHARE",at,status:"ATTEMPTED",by:A.currentUser?.name||"Administrator",revisionNo:Number(rev)||0,reShareReason:reShareReason||""});
+  }
+  updated.shareAttempts=attempts;updated.lastShareAttemptAt=sameRecentAttempt?(last.at||at):at;updated.lastShareAttemptMethod=method||"DEVICE_SHARE";
   sv("iv",A.invoices.map(i=>i.id===id?updated:i));
-  auditLog("SHARE","invoice",id,`${updated.shareStatus} recorded: ${inv.invNo}`,{at,method,revisionNo:revisionNo??(inv.revisions||[]).length});
+  auditLog("SHARE","invoice",id,`${shareConfirmTrialEnabled()?updated.shareStatus+" (experimental status)":"Share attempt recorded"}: ${inv.invNo}`,{at,method,revisionNo:rev,experimentalStatusEnabled:shareConfirmTrialEnabled()});
 }
 
 async function preparePdfUI(id){
@@ -8654,36 +9065,20 @@ function shrInv(id) {
       <div style="font-size:10px;color:var(--txl);margin-top:6px">&#8505; WhatsApp doesn't always keep the caption alongside an attached PDF \u2014 the message is copied to your clipboard automatically so you can paste it if needed.</div>
       <div id="shr-status-${id}" style="font-size:11.5px;color:var(--sf);font-weight:700;margin-top:8px;min-height:18px"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
-        <button id="shr-prep-${id}" class="btn btn-p" style="padding:10px;font-size:12px" onclick="preparePdfUI('${id}')">
-          &#128196; Prepare PDF
-        </button>
+        <button id="shr-prep-${id}" class="btn btn-p shr-brand-btn shr-prep-btn" style="padding:10px;font-size:12px" onclick="preparePdfUI('${id}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.8V9h5.2zM7 13h10v1.7H7zm0 4h10v1.7H7z"/></svg> Prepare PDF</button>
         <div style="grid-column:1/-1;border:1px solid rgba(37,211,102,.35);background:rgba(37,211,102,.07);border-radius:10px;padding:9px;display:grid;grid-template-columns:1fr 1fr;gap:7px">
           <div style="grid-column:1/-1;font-size:11px;font-weight:800;color:#128C7E">WhatsApp — 2-Step Share</div>
-          <button id="shr-wa-text-${id}" class="btn btn-p" style="padding:10px;font-size:12px;background:#25D366;border-color:#25D366" onclick="sendWhatsAppTextStep('${id}')">
-            &#128172; 1. Send Text
-          </button>
-          <button id="shr-wa-pdf-${id}" class="btn btn-p" style="padding:10px;font-size:12px;background:#128C7E;border-color:#128C7E" onclick="sendWhatsAppPdfStep('${id}')">
-            &#128196; 2. Send PDF
-          </button>
+          <button id="shr-wa-text-${id}" class="btn btn-p shr-brand-btn shr-wa-text" style="padding:10px;font-size:12px" onclick="sendWhatsAppTextStep('${id}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.8 9.8 0 0 0-8.4 14.85L2.3 22l5.3-1.39A9.9 9.9 0 1 0 12.04 2zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-3.14.82.84-3.06-.2-.32A8.08 8.08 0 1 1 12.04 19.9zm4.43-6.05c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.02-.37.1-.49.1-.1.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.46-.4-.4-.54-.4h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.7 2.6 4.12 3.64.58.25 1.03.4 1.38.51.58.18 1.1.15 1.51.09.46-.07 1.43-.58 1.63-1.14.2-.56.2-1.04.14-1.14-.06-.1-.22-.22-.46-.28z"/></svg> 1. Send Text</button>
+          <button id="shr-wa-pdf-${id}" class="btn btn-p shr-brand-btn shr-wa-pdf" style="padding:10px;font-size:12px" onclick="sendWhatsAppPdfStep('${id}')"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h8l6 6v14H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.8V9h5.2zM7 13h10v1.7H7zm0 4h10v1.7H7z"/></svg> 2. Send PDF</button>
           <div style="grid-column:1/-1;font-size:9.5px;color:var(--txl);line-height:1.35">Step 1 opens WhatsApp with the invoice message. Send it, return here, then use Step 2 to share the already-prepared PDF.</div>
         </div>
-        <button id="shr-wa-combined-${id}" class="btn btn-p" style="grid-column:1/-1;padding:10px;font-size:12px;background:#128C4A;border-color:#128C4A;color:#FFFFFF" onclick="shareWithPdf('${id}','whatsapp')">&#128172; WhatsApp + Message + PDF (Combined)</button>
-        <button id="shr-email-${id}" class="btn btn-p" style="padding:10px;font-size:12px;background:#EA4335;border-color:#EA4335" onclick="shareWithPdf('${id}','email')">
-          &#9993; Email
-        </button>
-        <button id="shr-tg-${id}" class="btn btn-p" style="padding:10px;font-size:12px;background:#2CA5E0;border-color:#2CA5E0" onclick="shareWithPdf('${id}','telegram')">
-          &#9992; Telegram
-        </button>
-        <button class="btn btn-g" style="padding:10px;font-size:12px" onclick="hsPDF('${id}');document.getElementById('shr-dlg').remove()">
-          &#128438; Print / Save PDF
-        </button>
-        <button class="btn btn-n" style="padding:10px;font-size:12px" onclick="hsDL('${id}');document.getElementById('shr-dlg').remove()">
-          &#8595; Download File
-        </button>
-        <button class="btn btn-n" style="padding:10px;font-size:12px" onclick="copyInvText('${id}');document.getElementById('shr-dlg').remove()">
-          &#128203; Copy Details
-        </button>
-        ${navigator.share?`<button class="btn btn-g" style="padding:10px;font-size:12px;grid-column:1/-1" onclick="nativeShare('${id}');document.getElementById('shr-dlg').remove()">&#127482; Share via Device</button>`:""}
+        <button id="shr-wa-combined-${id}" class="btn btn-p shr-brand-btn shr-wa-combined" style="grid-column:1/-1;padding:10px;font-size:12px" onclick="shareWithPdf('${id}','whatsapp')"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.04 2a9.8 9.8 0 0 0-8.4 14.85L2.3 22l5.3-1.39A9.9 9.9 0 1 0 12.04 2zm0 17.9a8 8 0 0 1-4.08-1.12l-.3-.18-3.14.82.84-3.06-.2-.32A8.08 8.08 0 1 1 12.04 19.9z"/></svg> WhatsApp + Message + PDF (Combined)</button>
+        <button id="shr-email-${id}" class="btn btn-p shr-brand-btn shr-email" style="padding:10px;font-size:12px" onclick="shareWithPdf('${id}','email')"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm9 7L3.5 6.8v1.8L12 14l8.5-5.4V6.8z"/></svg> Email</button>
+        <button id="shr-tg-${id}" class="btn btn-p shr-brand-btn shr-telegram" style="padding:10px;font-size:12px" onclick="shareWithPdf('${id}','telegram')"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M21.7 3.4 18.5 20c-.24 1.17-.87 1.46-1.76.91l-4.88-3.6-2.35 2.26c-.26.26-.48.48-.98.48l.35-4.97 9.05-8.18c.39-.35-.08-.55-.6-.2L6.15 13.78l-4.8-1.5c-1.04-.33-1.06-1.04.22-1.55L20.35 3.2c.87-.32 1.63.21 1.35.2Z"/></svg> Telegram</button>
+        <button class="btn btn-g shr-brand-btn shr-print" style="padding:10px;font-size:12px" onclick="hsPDF('${id}');document.getElementById('shr-dlg').remove()"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M6 2h12v5H6zm-2 7h16a2 2 0 0 1 2 2v6h-4v5H6v-5H2v-6a2 2 0 0 1 2-2zm4 9v2h8v-5H8z"/></svg> Print / Save PDF</button>
+        <button class="btn btn-n shr-brand-btn shr-download" style="padding:10px;font-size:12px" onclick="hsDL('${id}');document.getElementById('shr-dlg').remove()"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 3h2v10l3.5-3.5 1.4 1.4-5.9 5.9-5.9-5.9 1.4-1.4L11 13zM4 18h16v3H4z"/></svg> Download File</button>
+        <button class="btn btn-n shr-brand-btn shr-copy" style="padding:10px;font-size:12px" onclick="copyInvText('${id}');document.getElementById('shr-dlg').remove()"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M8 3h11a2 2 0 0 1 2 2v15H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM4 7H3v15h14v-1H4zM10 7h7v1.5h-7zm0 4h7v1.5h-7z"/></svg> Copy Details</button>
+        ${navigator.share?`<button class="btn btn-g shr-brand-btn shr-device" style="padding:10px;font-size:12px;grid-column:1/-1" onclick="nativeShare('${id}');document.getElementById('shr-dlg').remove()"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18 16a3 3 0 0 0-2.6 1.5l-6.8-3.9a3.2 3.2 0 0 0 0-3.2l6.8-3.9A3 3 0 1 0 14.5 5c0 .2 0 .4.1.6L7.8 9.5a3.5 3.5 0 1 0 0 5l6.8 3.9a3 3 0 1 0 3.4-2.4z"/></svg> Share via Device</button>`:""}
       </div>
     </div>
   </div>`;
@@ -9290,6 +9685,36 @@ function pgSett() {
     </div>
   </div>
 
+  <!-- SHARE MODAL THEME ENGINE -->
+  <div class="card" id="st-share-modal-theme" style="margin-bottom:14px">
+    <div class="chd"><span class="cht">🎨 Invoice Share Message Template Theme</span><span class="bdg bn">Responsive</span></div>
+    <div class="cbd">
+      <div style="font-size:11.5px;color:var(--txl);margin-bottom:12px">Choose the Share Invoice Pack visual theme and popup size. These settings affect only the invoice-sharing popup, not invoice PDF design.</div>
+      <div class="fg fg2" style="gap:12px">
+        <div><label class="flbl" for="st-share-modal-theme-select">Popup Theme</label>
+          <select class="fi" id="st-share-modal-theme-select" onchange="saveShareModalPrefs()">
+            <option value="classic" ${(S.shareModalTheme||"classic")==="classic"?"selected":""}>Theme 1 — Classic Colorful</option>
+            <option value="minimalist" ${(S.shareModalTheme||"classic")==="minimalist"?"selected":""}>Theme 2 — Minimalist Compact</option>
+          </select>
+          <div style="font-size:10.5px;color:var(--txl);margin-top:5px">Classic: detailed layout with message and actions stacked. Minimalist: message editor on the left, share actions in a vertical right-side rail; responsive single-column on mobile.</div>
+        </div>
+        <div><label class="flbl" for="st-share-modal-size-select">Popup Size</label>
+          <select class="fi" id="st-share-modal-size-select" onchange="saveShareModalPrefs()">
+            <option value="small" ${(S.shareModalSize||"medium")==="small"?"selected":""}>Small — compact</option>
+            <option value="medium" ${(S.shareModalSize||"medium")==="medium"?"selected":""}>Medium — recommended</option>
+            <option value="large" ${(S.shareModalSize||"medium")==="large"?"selected":""}>Large — more workspace</option>
+          </select>
+          <div style="font-size:10.5px;color:var(--txl);margin-top:5px">Medium is the default. On phones, the popup automatically fits the screen width.</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        <button type="button" class="btn btn-p" style="padding:8px 12px;font-size:12px" onclick="saveShareModalPrefs()">Save Popup Theme</button>
+        <button type="button" class="btn btn-n" style="padding:8px 12px;font-size:12px" onclick="resetShareModalPrefs()">Reset to Classic / Medium</button>
+      </div>
+      <div id="st-share-modal-prefs-status" style="font-size:10.5px;color:var(--txl);margin-top:8px">Saved locally in this browser.</div>
+    </div>
+  </div>
+
   <!-- BULK ORIGINAL INVOICE MESSAGE TEMPLATE v4.61.55 -->
   <div class="card" id="bulk-original-template-manager" style="margin-bottom:14px">
     <div class="chd"><span class="cht">📚 Bulk Invoice Share Template</span><span class="bdg bn">Original / Mixed Batch</span></div>
@@ -9335,6 +9760,22 @@ function pgSett() {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn btn-p" style="padding:9px;font-size:12px" onclick="saveBulkMsgTemplate('revision')">Save Bulk Template</button><button class="btn btn-n" style="padding:9px;font-size:12px" onclick="resetBulkMsgTemplate('revision')">Reset to Default</button></div>
     </div>
   </div>
+
+  <!-- SHARE STATUS CONTROL CARD — grouped with message templates -->
+  <!-- SHARE STATUS CONTROL CARD — grouped with message templates -->
+  <div class="card" id="st-share-status-control" style="margin-bottom:14px;border:1px dashed var(--bd)">
+    <div class="chd"><span class="cht">⚙ Share Attempt History & Status Control</span><span class="bdg bo">Experimental</span></div>
+    <div class="cbd">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-weight:700;color:var(--tx)">
+        <input id="st-share-confirm-trial" type="checkbox" style="margin-top:3px;transform:scale(1.1)" ${shareConfirmTrialEnabled()?"checked":""} onchange="setShareConfirmTrial(this.checked)" />
+        <span>Enable experimental share status
+          <small style="display:block;font-weight:400;color:var(--txl);line-height:1.5;margin-top:4px">OFF (default): record only the share attempt / handoff action. ON: also record the existing experimental SHARE / RE-SHARE status after the share handoff. This does not verify recipient delivery, receipt, or read status. Turn it off if any status issues occur.</small>
+        </span>
+      </label>
+      <div style="font-size:10px;color:var(--txl);margin-top:8px">Saved on this browser/device. This is an experimental control only; it does not change WhatsApp, Telegram, or email delivery behavior.</div>
+    </div>
+  </div>
+
 
   <!-- LPG SETTINGS -->
   <div class="card" style="margin-bottom:14px">
@@ -9443,6 +9884,8 @@ function saveAllSettings() {
     pdfFooter:(document.getElementById("st-pft")||{}).value||"",
     showAmtWords:document.getElementById("st-aw")?.checked!==false,
     shareMsgTemplate: msgTplVal!==undefined ? msgTplVal : (A.sett||ST0).shareMsgTemplate,
+    shareModalTheme: document.getElementById("st-share-modal-theme-select")?.value || (A.sett||ST0).shareModalTheme || "classic",
+    shareModalSize: document.getElementById("st-share-modal-size-select")?.value || (A.sett||ST0).shareModalSize || "medium",
   };
   sv("st", settUpd);
   A.sett = settUpd;
@@ -9820,6 +10263,9 @@ function buildPrintHTML(bodyContent, title, pageSize, orientation) {
   box-shadow:none !important;
 }
 
+/* v4.61.60: history preview tab hit-target and document actions */
+.hist-preview-tabs{position:relative;z-index:5;pointer-events:auto!important;}
+.hist-preview-tabs .tab{cursor:pointer;pointer-events:auto!important;appearance:none;font:inherit;}
 /* INVOICE HISTORY */
 .hist-grid-head{
   background-color:#F0F6FC !important;
@@ -10410,16 +10856,24 @@ function downloadHTML(htmlContent, filename) {
 }
 
 // ── Main PDF download function (replaces hsPDF) ──────────
-async function hsPDF(id, tab) {
+async function hsPDF(id, tab, mode) {
   const inv=A.invoices.find(i=>i.id===id);if(!inv||!inv.mergedItems){toast("No invoice data found","err");return;}
   if(!tab||tab==="merged"){
     try{
       const file=await prepareInvoicePdf(id);
-      const title=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net}).replace(/\.pdf$/i,"");
-      const orig=document.title;document.title=title;
-      toast("Opening print dialog — choose 'Save as PDF' to save the locked invoice","ok");
-      await printMasterInvoiceFile(file,title,()=>{document.title=orig;});
-      auditLog("PRINT","invoice",id,"Printed/saved Master Invoice: "+inv.invNo,null);
+      if(mode==="print"){
+        const title=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net}).replace(/\.pdf$/i,"");
+        const orig=document.title;document.title=title;
+        toast("Opening print dialog","ok");
+        await printMasterInvoiceFile(file,title,()=>{document.title=orig;});
+        auditLog("PRINT","invoice",id,"Printed Master Invoice: "+inv.invNo,null);
+      }else{
+        const a=document.createElement("a"),url=URL.createObjectURL(file);
+        a.href=url;a.download=String(fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net})||"Invoice.pdf").replace(/[\\/:*?"<>|]+/g,"-");
+        a.style.display="none";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+        toast("Invoice PDF downloaded: "+a.download,"ok");
+        auditLog("EXPORT","invoice",id,"Directly downloaded Master Invoice PDF: "+a.download,null);
+      }
       setTimeout(()=>trackPrint(id),800);
       return;
     }catch(e){toast("Invoice PDF failed: "+(e.message||"Unknown error"),"err");return;}
@@ -14353,7 +14807,15 @@ v2.8 — Definitive flat-light header + school category correction
     const mode=allRevised?'revision':'original';
     const contact=typeof window.resolveSchoolContact==='function'?resolveSchoolContact(window._batchShareState?.schoolId||list[0]?.schoolId||''):'';
     const vars=typeof window.resolveMsgVars==='function'?resolveMsgVars(list[0]):{};
-    const items=list.map((inv,n)=>{const tpl=typeof window.currentShareMsgTemplate==='function'?currentShareMsgTemplate(inv):'';const msg=typeof window.getRenderedShareMessage==='function'?getRenderedShareMessage(inv):(typeof window.renderMsgTemplate==='function'?renderMsgTemplate(tpl,inv):tpl);const rev=(typeof window.invoiceIsRevisedForShare==='function'?invoiceIsRevisedForShare(inv):false);return `*• Invoice #${String(n+1).padStart(2,'0')} — ${String(inv.invNo||'—')}${rev?' — 🔄 REVISED':''}*\n${String(msg||'').trim()}`}).join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
+    // Batch list items contain invoice facts only; all shared prose stays in the outer template.
+    const items=list.map((inv,n)=>{
+      const rev=(typeof window.invoiceIsRevisedForShare==='function'?invoiceIsRevisedForShare(inv):false);
+      const monthYear=[String(inv.month||'').trim(),String(inv.year||'').trim()].filter(Boolean).join(' ');
+      const rawAmount=inv.net ?? inv.grand ?? inv.total ?? 0;
+      const amount=Number(rawAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const monthLine=monthYear?`\\n  Month: ${monthYear}`:'';
+      return `*• Invoice #${String(n+1).padStart(2,'0')}${rev?' — 🔄 REVISED':''}*\\n  Invoice No.: ${String(inv.invNo||'—')}${monthLine}\\n  Invoice Amount: ₹${amount}`;
+    }).join('\\n\\n');
     const revisedCount=list.filter(inv=>typeof window.invoiceIsRevisedForShare==='function'?invoiceIsRevisedForShare(inv):!!(inv&&(inv.revisionNo>0||inv.status==='revised'||inv.revisionStatus==='REVISED'))).length;
     const normalCount=list.length-revisedCount;
     const revisionSummary=revisedCount>0&&normalCount>0?`Revised Invoices: ${revisedCount}\nOriginal Invoices: ${normalCount}`:revisedCount>0&&normalCount===0?`Revised Invoices: ${revisedCount}`:'';
@@ -14369,3 +14831,7 @@ v2.8 — Definitive flat-light header + school category correction
 </script>
 </body>
 </html>
+
+<!-- v4.61.72: restore screenshot reference color theory across both share dialogs: solid flat brand colors, recognizable inline SVG icons, no gradients/glass/neon effects on share buttons. -->
+
+<!-- v4.61.75: constrain minimalist message expansion to current modal + 148px and keep expanded view persistent until Restore or Close. -->
