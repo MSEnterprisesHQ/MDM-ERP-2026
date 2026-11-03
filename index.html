@@ -3130,6 +3130,7 @@ function hybridEnsureSnapshot(inv){
   revisions.push(snap);
   inv.hybridModel={...old,schema:"MDM-HYBRID-MODEL",schemaVersion:1,activeRevision:snap.revisionNo,revisions,createdAt:old.createdAt||snap.createdAt,updatedAt:snap.createdAt};
   inv.billingModeAtCreation="hybrid";
+  inv.hybridDisplayItems=hybridProjectRows(inv.mergedItems,snap);
   return inv;
 }
 
@@ -4014,11 +4015,24 @@ function niSyncGenerateButton(){
   b.setAttribute("aria-label",stage==="generated"?"Generated — verify and save":(stage==="generate"?"Generate invoice":"Fetch / recalculate"));
   b.innerHTML=calcFresh&&!generated?"&#10003; Generate Invoice":generated?"&#10003; Generated":"&#8635; Fetch / Recalculate";
 }
+function hybridProjectRows(sourceRows,snap){
+  if(!Array.isArray(sourceRows)||!snap||!Array.isArray(snap.rows))return sourceRows||[];
+  const byId=new Map(snap.rows.map(r=>[String(r.id),r]));
+  return sourceRows.map(src=>{const h=byId.get(String(src.id||""));if(!h)return {...src};return {...src,qty:h.normalizedQuantity,unit:h.normalizedUnit,rate:h.displayRate,taxable:h.displayTaxable,hybridDisplay:{sourceQuantity:h.sourceQuantity,sourceUnit:h.sourceUnit,sourceRate:h.sourceRate,sourceTaxable:h.sourceTaxable,ruleId:h.ruleId,eligible:h.eligible,adjustment:h.autoAdjustment?h.autoAdjustmentAmount:0,displayOnly:true}};});
+}
+function hybridPresentationItems(sourceRows, invoiceMeta={}){
+  if(activeBillingMode()!=="hybrid"||!Array.isArray(sourceRows))return sourceRows||[];
+  const snap=hybridMakeSnapshot({id:invoiceMeta.id||"LIVE-PREVIEW",invNo:invoiceMeta.invNo||"Draft",savedAt:invoiceMeta.savedAt||null,net:Number(invoiceMeta.net)||0,mergedItems:sourceRows});
+  // Presentation-only copy. Never mutate NI.calc, saved source rows, GST or totals.
+  return hybridProjectRows(sourceRows,snap);
+}
 function niDraftMasterInvoice(){
   if(!NI.calc)return null;
   const sch=A.schools.find(s=>s.id===NI.schoolId)||{};
   const t=NI.calc.mTot||{};
   const nxt=niCurrentInvoiceNo(false);
+  const sourceRows=NI.calc.merged||[];
+  const displayRows=hybridPresentationItems(sourceRows,{id:"__new_invoice_preview__",invNo:nxt,net:t.net||0});
   return {
     id:"__new_invoice_preview__",
     invNo:nxt,
@@ -4031,8 +4045,10 @@ function niDraftMasterInvoice(){
     buyerRef:"",
     invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",
     net:t.net||0,
-    mergedItems:NI.calc.merged||[],
-    mergedTotals:t
+    mergedItems:displayRows,
+    mergedTotals:t,
+    billingModeAtCreation:activeBillingMode(),
+    hybridDisplayOnly:activeBillingMode()==="hybrid"
   };
 }
 let _niMasterPreviewUrl="";
@@ -4593,7 +4609,9 @@ function hybridMakeSnapshot(inv){
         target.displayTaxable=adjustedTaxable;
         // Keep sufficient precision so the displayed rate explains the
         // reconciled taxable amount for the source quantity.
-        target.displayRate=Number((adjustedTaxable/Number(target.sourceQuantity)).toFixed(4));
+        const rateBasis=Number(target.normalizedQuantity);
+        if(!Number.isFinite(rateBasis)||rateBasis<=0)throw new Error("Selected reconciliation item has no valid Hybrid display quantity");
+        target.displayRate=Number((adjustedTaxable/rateBasis).toFixed(4));
         target.rateRoundingMode="AUTO_RECONCILED_DISPLAY_ONLY";
         target.taxableRoundingMode="AUTO_RECONCILED_DISPLAY_ONLY";
         target.autoAdjustmentAmount=differenceCents/100;
@@ -8004,7 +8022,7 @@ async function buildInvoicePdfFile(inv,opts={}){
   // screenshot is used.
   // ══════════════════════════════════════════════════════════════════
   const sch=opts.historicalSnapshot?{name:inv.schoolName||"",udise:inv.schoolUdise||"",address:inv.schoolAddress||"",mobile:inv.schoolMobile||""}:(A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:inv.schoolUdise||"",address:inv.schoolAddress||"",mobile:inv.schoolMobile||""});
-  const rows=inv.mergedItems||[], t=inv.mergedTotals||{}, f=A.firm||{}, S=A.sett||ST0;
+  const rows=(inv.billingModeAtCreation==="hybrid"&&Array.isArray(inv.hybridDisplayItems)?inv.hybridDisplayItems:(inv.mergedItems||[])), t=inv.mergedTotals||{}, f=A.firm||{}, S=A.sett||ST0;
   const invType=inv.invoiceType||S.invoiceType||"tax_invoice";
   const filename=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net});
   const {jsPDF}=window.jspdf;
