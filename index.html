@@ -2484,7 +2484,7 @@ const ST0={
     border:"#CCD6E3",
     highlight:"#D6E2F0",
     borderMode:"black", // black = fixed black outer borders; theme = darkest active theme color
-    dataFontSize:6.65,
+    dataFontSize:7.25,
     loginCardBg:null,     // null = use default theme card color; else a hex string the user picked
     loginPattern:"glow"   // none | glow | dots | waves | geometric
   },
@@ -3167,7 +3167,7 @@ function renderShell(){
     <div class="ah-right">
       ${syChip}
       <div class="hyb-mode-switch" style="display:flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid rgba(255,255,255,.28);border-radius:9px;background:rgba(255,255,255,.10);white-space:nowrap" title="Switch the active billing model">
-        <span style="font-size:10px;font-weight:800;letter-spacing:.35px;color:#fff">BILLING</span>
+        <span style="font-size:10px;font-weight:800;letter-spacing:.35px;color:#fff">BILLING MODE</span>
         <button type="button" onclick="setBillingMode('original')" aria-pressed="${activeBillingMode()==="original"?"true":"false"}" style="border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;background:${activeBillingMode()==="original"?"#fff":"transparent"};color:${activeBillingMode()==="original"?"#17365d":"#fff"}">ORIGINAL</button>
         <button type="button" onclick="setBillingMode('hybrid')" aria-pressed="${activeBillingMode()==="hybrid"?"true":"false"}" style="border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;background:${activeBillingMode()==="hybrid"?"#fff":"transparent"};color:${activeBillingMode()==="hybrid"?"#17365d":"#fff"}">HYBRID</button>
       </div>
@@ -4018,12 +4018,12 @@ function niSyncGenerateButton(){
 function hybridProjectRows(sourceRows,snap){
   if(!Array.isArray(sourceRows)||!snap||!Array.isArray(snap.rows))return sourceRows||[];
   const byId=new Map(snap.rows.map(r=>[String(r.id),r]));
-  return sourceRows.map(src=>{const h=byId.get(String(src.id||""));if(!h)return {...src};return {...src,qty:h.normalizedQuantity,unit:h.normalizedUnit,rate:h.displayRate,taxable:h.displayTaxable,hybridDisplay:{sourceQuantity:h.sourceQuantity,sourceUnit:h.sourceUnit,sourceRate:h.sourceRate,sourceTaxable:h.sourceTaxable,ruleId:h.ruleId,eligible:h.eligible,adjustment:h.autoAdjustment?h.autoAdjustmentAmount:0,displayOnly:true}};});
+  return sourceRows.map(src=>{const h=byId.get(String(src.id||""));if(!h)return {...src};return {...src,qty:h.normalizedQuantity,unit:h.normalizedUnit,rate:h.displayRate,taxable:h.displayTaxable,hybridDisplay:{sourceQuantity:h.sourceQuantity,sourceUnit:h.sourceUnit,sourceRate:h.sourceRate,sourceTaxable:h.sourceTaxable,ruleId:h.ruleId,eligible:h.eligible,adjustment:h.autoAdjustment?h.autoAdjustmentAmount:0,displayOnly:false,rateBasisUnit:h.rateBasisUnit,ratePrecision:h.ratePrecision,rateReconciliation:"ITEM_WISE"}};});
 }
 function hybridPresentationItems(sourceRows, invoiceMeta={}){
   if(activeBillingMode()!=="hybrid"||!Array.isArray(sourceRows))return sourceRows||[];
   const snap=hybridMakeSnapshot({id:invoiceMeta.id||"LIVE-PREVIEW",invNo:invoiceMeta.invNo||"Draft",savedAt:invoiceMeta.savedAt||null,net:Number(invoiceMeta.net)||0,mergedItems:sourceRows});
-  // Presentation-only copy. Never mutate NI.calc, saved source rows, GST or totals.
+  // Hybrid billing copy. Never mutate NI.calc or saved Original source rows; source GST/totals are carried through unchanged.
   return hybridProjectRows(sourceRows,snap);
 }
 function niDraftMasterInvoice(){
@@ -4048,7 +4048,8 @@ function niDraftMasterInvoice(){
     mergedItems:displayRows,
     mergedTotals:t,
     billingModeAtCreation:activeBillingMode(),
-    hybridDisplayOnly:activeBillingMode()==="hybrid"
+    hybridDisplayOnly:false,
+    hybridRateReconciled:activeBillingMode()==="hybrid"
   };
 }
 let _niMasterPreviewUrl="";
@@ -4571,7 +4572,7 @@ function openBatchSharePrompt(){
   document.body.appendChild(dlg);
 }
 
-/* HYB-1.1.0 — independent Hybrid invoice disclosure layer.
+/* HYB-1.2.0 — global item-wise Hybrid rate reconciliation layer.
    Reads saved invoice quantities; never calls or modifies calc(), NI.calc, rates or totals. */
 const HYB_STATE={invoiceId:null};
 function hybridEsc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -4579,73 +4580,69 @@ function hybridUnitFor(row){const u=String(row.unit||"KG").toUpperCase();if(u===
 function hybridMakeSnapshot(inv){
   const eng=window.MDMHybridQuantityEngine;if(!eng)throw new Error("Hybrid engine unavailable");
   if(!Array.isArray(inv.mergedItems))throw new Error("Original invoice item snapshot is missing");
+  const moneyCents=v=>Math.round((Number(v)||0)*100);
+  const money=v=>moneyCents(v)/100;
+  const ratePrecision=8;
   const rows=inv.mergedItems.map(r=>{
     const qty=Number(r.qty);if(!Number.isFinite(qty)||qty<0)throw new Error("Invalid quantity for "+(r.name||r.id));
-    const unit=hybridUnitFor(r);const result=eng.normalize({itemId:String(r.id||""),actualQuantity:qty,unit,displayMode:"SMART"});
-    const sourceRate=Number(r.rate)||0,sourceTaxable=Number(r.taxable)||0;
-    // Display-only rupee rounding: nearest whole rupee. These values are NEVER
-    // written back to the source invoice and NEVER used for GST/total math.
-    const displayRate=Math.round(sourceRate),displayTaxable=Math.round(sourceTaxable);
-    return {id:String(r.id||""),name:String(r.name||r.id||"Item"),sourceQuantity:qty,sourceUnit:unit,eligible:!!result.eligible,ruleId:result.ruleId||"excluded",normalizedGrams:result.normalizedGrams??null,normalizedQuantity:result.normalizedQuantity??qty,normalizedUnit:result.normalizedUnit||unit,adjustmentGrams:result.adjustmentGrams??0,display:result.eligible?(result.ruleId==="oil"?(result.normalizedGrams<1000?(result.normalizedGrams+" ML"):((result.normalizedGrams/1000).toFixed(3).replace(/\.000$/,""))+" L"):eng.formatWeight(result.normalizedGrams,(result.ruleId==="lpg"?"KG_ONLY":"SMART"))):(qty+" "+unit),sourceRate,displayRate,rateRoundingDelta:displayRate-sourceRate,sourceTaxable,displayTaxable,taxableRoundingDelta:displayTaxable-sourceTaxable,rateRoundingMode:"NEAREST_RUPEE_DISPLAY_ONLY",taxableRoundingMode:"NEAREST_RUPEE_DISPLAY_ONLY",billingQuantity:qty,billingUnit:unit,billingRate:sourceRate,billingTaxable:sourceTaxable,netPayableImpact:0,reason:result.reason||""};
+    const unit=hybridUnitFor(r);
+    const result=eng.normalize({itemId:String(r.id||""),actualQuantity:qty,unit,displayMode:"SMART"});
+    const sourceRate=Number(r.rate)||0;
+    const sourceTaxable=money(r.taxable??(qty*sourceRate));
+    const sourceCgst=money(r.cgst),sourceSgst=money(r.sgst);
+    const normalizedQuantity=Number(result.normalizedQuantity??qty);
+    const normalizedUnit=result.normalizedUnit||unit;
+    if(!Number.isFinite(normalizedQuantity)||normalizedQuantity<0)throw new Error("Invalid Hybrid quantity for "+(r.name||r.id));
+    // Global item-wise reconciliation: retain the exact saved Original item taxable,
+    // then derive the Hybrid rate from the normalized quantity for EVERY row.
+    // No whole-rupee rate rounding and no difference transfer to another item.
+    const displayTaxable=sourceTaxable;
+    const displayRate=normalizedQuantity>0?Number((displayTaxable/normalizedQuantity).toFixed(ratePrecision)):0;
+    const multiplication=money(normalizedQuantity*displayRate);
+    if(Math.abs(multiplication-displayTaxable)>0.01)throw new Error("Hybrid rate precision cannot reconcile "+(r.name||r.id)+": "+multiplication+" vs "+displayTaxable);
+    const sourceQtyAmount=money(qty*sourceRate);
+    let comparableSourceRate=sourceRate;
+    if(unit==="KG"&&normalizedUnit==="GM")comparableSourceRate=sourceRate/1000;
+    else if(unit==="GM"&&normalizedUnit==="KG")comparableSourceRate=sourceRate*1000;
+    else if(unit==="LTR"&&normalizedUnit==="ML")comparableSourceRate=sourceRate/1000;
+    else if(unit==="ML"&&normalizedUnit==="LTR")comparableSourceRate=sourceRate*1000;
+    const rateAdjustment=Number((displayRate-comparableSourceRate).toFixed(ratePrecision));
+    const qtyDisplay=result.eligible?(result.ruleId==="oil"?((result.normalizedGrams/1000).toFixed(3).replace(/\.000$/,""))+" LTR":eng.formatWeight(result.normalizedGrams,(result.ruleId==="lpg"?"KG_ONLY":"SMART"))):(qty+" "+unit);
+    return {id:String(r.id||""),name:String(r.name||r.id||"Item"),sourceQuantity:qty,sourceUnit:unit,eligible:!!result.eligible,ruleId:result.ruleId||"excluded",normalizedGrams:result.normalizedGrams??null,normalizedQuantity,normalizedUnit,adjustmentGrams:result.adjustmentGrams??0,display:qtyDisplay,sourceRate,sourceRateInHybridUnit:comparableSourceRate,displayRate,rateRoundingDelta:rateAdjustment,sourceTaxable,displayTaxable,taxableRoundingDelta:0,sourceCgst,sourceSgst,displayCgst:sourceCgst,displaySgst:sourceSgst,rateRoundingMode:"ITEM_WISE_AUTOMATIC_RECONCILIATION",taxableRoundingMode:"EXACT_ORIGINAL_ITEM_TAXABLE",billingQuantity:normalizedQuantity,billingUnit:normalizedUnit,billingRate:displayRate,billingTaxable:displayTaxable,rateBasisUnit:normalizedUnit,ratePrecision,sourceQuantityTimesRate:sourceQtyAmount,hybridQuantityTimesRate:multiplication,autoAdjustmentAmount:Number((displayTaxable-sourceQtyAmount).toFixed(2)),autoAdjustment:true,netPayableImpact:0,reason:result.reason||""};
   });
-  // HYB display reconciliation: align the sum of displayed taxable values to
-  // the original taxable total without touching source invoice / GST / totals.
-  const toCents=v=>Math.round((Number(v)||0)*100);
-  const sourceTaxableCents=rows.reduce((a,r)=>a+toCents(r.sourceTaxable),0);
-  const roundedTaxableCents=rows.reduce((a,r)=>a+toCents(r.displayTaxable),0);
-  const differenceCents=sourceTaxableCents-roundedTaxableCents;
-  let reconciliation={status:"NOT_REQUIRED",differenceBefore:differenceCents/100,differenceAfter:differenceCents/100,adjustmentItemId:null,adjustmentItemName:null,adjustmentAmount:0,adjustedDisplayRate:null,method:"AUTO_SUITABLE_ITEM",limit:2,financialImpact:0};
-  if(differenceCents!==0){
-    if(Math.abs(differenceCents)<=200){
-      // Select the item requiring the smallest per-unit rate movement; prefer
-      // larger quantities on ties. Only positive-quantity/value rows qualify.
-      const candidates=rows.filter(r=>Number(r.sourceQuantity)>0&&Number(r.sourceTaxable)>0&&Number(r.sourceRate)>0)
-        .sort((a,b)=>Math.abs(differenceCents/100/Number(a.sourceQuantity))-Math.abs(differenceCents/100/Number(b.sourceQuantity))||Number(b.sourceQuantity)-Number(a.sourceQuantity));
-      if(candidates.length){
-        const target=candidates[0],adjustedCents=toCents(target.displayTaxable)+differenceCents;
-        const adjustedTaxable=adjustedCents/100;
-        target.preAdjustmentDisplayRate=target.displayRate;
-        target.preAdjustmentDisplayTaxable=target.displayTaxable;
-        target.displayTaxable=adjustedTaxable;
-        // Keep sufficient precision so the displayed rate explains the
-        // reconciled taxable amount for the source quantity.
-        const rateBasis=Number(target.normalizedQuantity);
-        if(!Number.isFinite(rateBasis)||rateBasis<=0)throw new Error("Selected reconciliation item has no valid Hybrid display quantity");
-        target.displayRate=Number((adjustedTaxable/rateBasis).toFixed(4));
-        target.rateRoundingMode="AUTO_RECONCILED_DISPLAY_ONLY";
-        target.taxableRoundingMode="AUTO_RECONCILED_DISPLAY_ONLY";
-        target.autoAdjustmentAmount=differenceCents/100;
-        target.autoAdjustment=true;
-        rows.forEach(r=>{r.taxableRoundingDelta=Number((r.displayTaxable-r.sourceTaxable).toFixed(2));r.rateRoundingDelta=Number((r.displayRate-r.sourceRate).toFixed(4));});
-        reconciliation={status:"AUTO_ADJUSTED",differenceBefore:differenceCents/100,differenceAfter:0,adjustmentItemId:target.id,adjustmentItemName:target.name,adjustmentAmount:differenceCents/100,adjustedDisplayRate:target.displayRate,method:"MINIMUM_PER_UNIT_RATE_MOVEMENT",limit:2,financialImpact:0};
-      }else reconciliation.status="REVIEW_REQUIRED_NO_SUITABLE_ITEM";
-    }else reconciliation.status="REVIEW_REQUIRED_OVER_LIMIT";
-  }
-  const at=new Date().toISOString();return {schema:"MDM-HYBRID-SNAPSHOT",schemaVersion:3,engineVersion:eng.VERSION,revisionNo:((inv.hybridModel?.revisions||[]).length+1),createdAt:at,sourceInvoiceId:inv.id,sourceInvoiceNo:inv.invNo,sourceSavedAt:inv.savedAt||null,selectedModel:"HYBRID",displayMode:"SMART",financialImpact:0,sourceNet:Number(inv.net)||0,sourceTaxableTotal:sourceTaxableCents/100,roundedTaxableTotal:roundedTaxableCents/100,reconciledDisplayTaxableTotal:rows.reduce((a,r)=>a+toCents(r.displayTaxable),0)/100,reconciliation,rows};
+  const sourceTaxableCents=rows.reduce((a,r)=>a+moneyCents(r.sourceTaxable),0);
+  const hybridTaxableCents=rows.reduce((a,r)=>a+moneyCents(r.displayTaxable),0);
+  const sourceCgstCents=rows.reduce((a,r)=>a+moneyCents(r.sourceCgst),0);
+  const sourceSgstCents=rows.reduce((a,r)=>a+moneyCents(r.sourceSgst),0);
+  const rateFailures=rows.filter(r=>Math.abs(money(r.normalizedQuantity*r.displayRate)-r.displayTaxable)>0.01);
+  if(rateFailures.length)throw new Error("Hybrid item reconciliation failed for: "+rateFailures.map(r=>r.name).join(", "));
+  const reconciliation={status:sourceTaxableCents===hybridTaxableCents?"RECONCILED":"ERROR",differenceBefore:0,differenceAfter:0,adjustmentItemId:null,adjustmentItemName:null,adjustmentAmount:0,method:"GLOBAL_ITEM_WISE_RATE_DERIVATION",scope:"ALL_ITEMS",ratePrecision,financialImpact:0,rowsChecked:rows.length,rowsPassed:rows.length-rateFailures.length};
+  const at=new Date().toISOString();
+  return {schema:"MDM-HYBRID-SNAPSHOT",schemaVersion:4,engineVersion:eng.VERSION,revisionNo:((inv.hybridModel?.revisions||[]).length+1),createdAt:at,sourceInvoiceId:inv.id,sourceInvoiceNo:inv.invNo,sourceSavedAt:inv.savedAt||null,selectedModel:"HYBRID",displayMode:"SMART",financialImpact:0,sourceNet:Number(inv.net)||0,sourceTaxableTotal:sourceTaxableCents/100,roundedTaxableTotal:hybridTaxableCents/100,reconciledDisplayTaxableTotal:hybridTaxableCents/100,sourceCgstTotal:sourceCgstCents/100,sourceSgstTotal:sourceSgstCents/100,hybridCgstTotal:sourceCgstCents/100,hybridSgstTotal:sourceSgstCents/100,reconciliation,rows};
 }
 function hybridLivePreviewHTML(calc){
   if(activeBillingMode()!=="hybrid"||!calc||!Array.isArray(calc.merged))return "";
   try{
     const snap=hybridMakeSnapshot({id:"LIVE-PREVIEW",invNo:niResolvedInvNo(false)||"Draft",schoolName:A.schools.find(x=>x.id===NI.schoolId)?.name||"",savedAt:null,net:Number(calc.mTot?.net)||0,mergedItems:calc.merged});
-    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">Read-only · No financial impact</span></div><div class="cbd"><div class="info inf-b" style="margin-bottom:9px">Hybrid display rounds Quantity by the approved item rule and Rate + Taxable Value to the nearest ₹1. A suitable item is automatically selected to reconcile display taxable totals when the difference is within ₹2. This is display-only: source values, GST, totals, allocation and Net Payable are never recalculated or changed.</div><div class="info ${snap.reconciliation.status==="AUTO_ADJUSTED"?"inf-g":snap.reconciliation.status.startsWith("REVIEW")?"inf-w":"inf-b"}" style="margin-bottom:9px">${snap.reconciliation.status==="AUTO_ADJUSTED"?`Auto display adjustment: ${hybridEsc(snap.reconciliation.adjustmentItemName)} · ${snap.reconciliation.adjustmentAmount>0?"+":""}₹${snap.reconciliation.adjustmentAmount.toFixed(2)} · reconciled difference ₹0.00`:snap.reconciliation.status.startsWith("REVIEW")?`Manual review required: display taxable difference ₹${snap.reconciliation.differenceBefore.toFixed(2)} exceeds the automatic adjustment conditions or no suitable item exists.`:"Display taxable totals already reconcile; no adjustment required."}</div><div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Original Qty</th><th class="num">Hybrid Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Nearest ₹1</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Nearest ₹1</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td class="num"><b>${hybridEsc(r.display)}</b></td><td>${hybridEsc(r.sourceUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.sourceUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??Math.round(Number(r.sourceRate)||0)).toFixed(0)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??Math.round(Number(r.sourceTaxable)||0)).toFixed(0)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Financial Impact: <b>₹0.00</b></span></div></div></div>`;
+    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">Hybrid rate-reconciled calculation</span></div><div class="cbd"><div class="info inf-b" style="margin-bottom:9px">Hybrid Quantity follows the approved item rule. Every item rate is automatically recalculated from its saved Original item Taxable ÷ Hybrid Quantity. This applies to all items, including items without quantity rounding; no adjustment is shifted to another item. Original invoice, Market Rate Control, GST and Net Payable remain unchanged.</div><div class="info inf-g" style="margin-bottom:9px">All ${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹0.00.</div><div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Original Qty</th><th class="num">Hybrid Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td class="num"><b>${hybridEsc(r.display)}</b></td><td>${hybridEsc(r.sourceUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.sourceUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(8)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
   }catch(e){return `<div class="info inf-r" style="margin:10px 0"><b>Hybrid preview unavailable:</b> ${hybridEsc(e.message||e)}. Existing Original calculation is unaffected.</div>`;}
 }
 
 function hybridOpen(id){
   const inv=A.invoices.find(x=>x.id===id);if(!inv){toast("Invoice not found","err");return;}
   if(!Array.isArray(inv.mergedItems)){toast("This invoice has no saved item snapshot. Hybrid cannot be generated.","err");return;}
-  try{if(!inv.hybridModel||!Array.isArray(inv.hybridModel.revisions)||!inv.hybridModel.revisions.length){const snap=hybridMakeSnapshot(inv);inv.hybridModel={schema:"MDM-HYBRID-MODEL",schemaVersion:1,activeRevision:1,revisions:[snap],createdAt:snap.createdAt,updatedAt:snap.createdAt};sv("iv",A.invoices);}HYB_STATE.invoiceId=id;hybridRenderModal();}catch(e){console.error("Hybrid generation failed",e);toast("Hybrid generation failed: "+(e.message||e),"err");}
+  try{const revs=inv.hybridModel?.revisions||[];const latest=revs[revs.length-1];if(!latest||latest.engineVersion!==window.MDMHybridQuantityEngine.VERSION){const snap=hybridMakeSnapshot(inv);snap.revisionNo=revs.reduce((m,r)=>Math.max(m,Number(r.revisionNo)||0),0)+1;const next=[...revs,snap];inv.hybridModel={...(inv.hybridModel||{}),schema:"MDM-HYBRID-MODEL",schemaVersion:2,activeRevision:snap.revisionNo,revisions:next,createdAt:inv.hybridModel?.createdAt||snap.createdAt,updatedAt:snap.createdAt};sv("iv",A.invoices);}HYB_STATE.invoiceId=id;hybridRenderModal();}catch(e){console.error("Hybrid generation failed",e);toast("Hybrid generation failed: "+(e.message||e),"err");}
 }
 function hybridRenderModal(){
  const inv=A.invoices.find(x=>x.id===HYB_STATE.invoiceId);if(!inv)return;const model=inv.hybridModel;const revs=model.revisions||[];const active=revs.find(x=>x.revisionNo===model.activeRevision)||revs[revs.length-1];if(!active)return;
  const old=document.getElementById("mdm-hybrid-modal");if(old)old.remove();
- const rows=active.rows||[];const body=`<div class="ov" id="mdm-hybrid-modal" style="z-index:10050"><div class="modal mxl"><div class="mhd"><div><div class="mt">Hybrid Invoice — ${hybridEsc(inv.invNo)}</div><div style="font-size:11px;color:var(--txl)">${hybridEsc(inv.schoolName)} · Hybrid Rev ${active.revisionNo} · ${hybridEsc(active.engineVersion)}</div></div><button class="btn btn-g btn-sm" onclick="hybridClose()">✕</button></div><div class="mbd"><div class="info inf-b"><b>Independent Hybrid layer.</b> Original invoice and Net Payable remain unchanged. Source quantity is read from the saved invoice; rounded quantity is disclosure-only.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','original')">Print Original Annexure</button><button class="btn btn-p btn-sm" onclick="hybridPrint('${inv.id}','adjustment')">Print Hybrid Adjustment Annexure</button><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','audit')">Print Model & Audit Annexure</button><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','combined')">Print Combined Hybrid Pack</button><button class="btn btn-am btn-sm" onclick="hybridNewRevision('${inv.id}')">Create Hybrid Revision</button></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b>Hybrid revision history</b><select class="fi" style="max-width:180px" onchange="hybridSelectRevision('${inv.id}',Number(this.value))">${revs.map(r=>`<option value="${r.revisionNo}" ${r.revisionNo===active.revisionNo?"selected":""}>Hybrid Rev ${r.revisionNo}</option>`).join("")}</select><span style="font-size:11px;color:var(--txl)">Independent from Pre-Approved revisions</span></div><details style="border:1px solid var(--bd);border-radius:8px;padding:9px;margin-bottom:10px"><summary style="font-weight:700;cursor:pointer">Combined Revision Timeline · Normal + Hybrid</summary><div style="margin-top:8px;font-size:11px">${[{kind:"Pre-Approved / Normal",no:0,at:inv.savedAt||inv.date,label:"Original"},...(inv.revisions||[]).map((r,i)=>({kind:"Pre-Approved / Normal",no:Number(r.revisionNo)||i+1,at:r.at,label:"Revision"})),...revs.map(r=>({kind:"Hybrid",no:r.revisionNo,at:r.createdAt,label:"Hybrid Revision"}))].sort((a,b)=>String(a.at||"").localeCompare(String(b.at||""))).map(e=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)"><span><b>${hybridEsc(e.kind)}</b> · ${hybridEsc(e.label)} ${e.no}</span><span>${e.at?new Date(e.at).toLocaleString("en-IN"):"—"}</span></div>`).join("")}</div><div style="font-size:10px;color:var(--txl);margin-top:6px">Separate model numbering is preserved. Each model's saved snapshot remains independent.</div></details><div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Item</th><th>Original Qty</th><th>Hybrid Qty</th><th>Unit<br><small style="font-size:9px">KG / GM / LTR</small></th><th>Original Rate</th><th>Hybrid Rate<br><small>₹1</small></th><th>Original Taxable</th><th>Hybrid Taxable<br><small>₹1</small></th><th>Adjustment</th><th>Rule / Status</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td>${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td><b>${hybridEsc(r.display)}</b></td><td>${hybridEsc(r.sourceUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.sourceUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td>₹${Number(r.sourceRate||0).toFixed(2)}</td><td><b>₹${Number(r.displayRate??Math.round(Number(r.sourceRate)||0)).toFixed(0)}</b></td><td>₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td><b>₹${Number(r.displayTaxable??Math.round(Number(r.sourceTaxable)||0)).toFixed(0)}</b></td><td>${r.eligible?hybridEsc((r.adjustmentGrams>0?"+":"")+r.adjustmentGrams+" g"):"—"}</td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="margin-top:12px;padding:10px;border:1px solid var(--bd);border-radius:8px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>Original Net Payable: <b>${R(active.sourceNet)}</b></span><span>Hybrid Financial Impact: <b>₹0.00</b></span><span>Invoice Net Payable: <b>${R(inv.net)}</b></span></div></div></div></div>`;
+ const rows=active.rows||[];const body=`<div class="ov" id="mdm-hybrid-modal" style="z-index:10050"><div class="modal mxl"><div class="mhd"><div><div class="mt">Hybrid Invoice — ${hybridEsc(inv.invNo)}</div><div style="font-size:11px;color:var(--txl)">${hybridEsc(inv.schoolName)} · Hybrid Rev ${active.revisionNo} · ${hybridEsc(active.engineVersion)}</div></div><button class="btn btn-g btn-sm" onclick="hybridClose()">✕</button></div><div class="mbd"><div class="info inf-b"><b>Independent Hybrid billing layer.</b> All item rows use Hybrid Quantity × Auto-reconciled Hybrid Rate = Original saved item Taxable. Original invoice, Market Rate Control and Net Payable remain unchanged.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','original')">Print Original Annexure</button><button class="btn btn-p btn-sm" onclick="hybridPrint('${inv.id}','adjustment')">Print Hybrid Adjustment Annexure</button><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','audit')">Print Model & Audit Annexure</button><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','combined')">Print Combined Hybrid Pack</button><button class="btn btn-am btn-sm" onclick="hybridNewRevision('${inv.id}')">Create Hybrid Revision</button></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b>Hybrid revision history</b><select class="fi" style="max-width:180px" onchange="hybridSelectRevision('${inv.id}',Number(this.value))">${revs.map(r=>`<option value="${r.revisionNo}" ${r.revisionNo===active.revisionNo?"selected":""}>Hybrid Rev ${r.revisionNo}</option>`).join("")}</select><span style="font-size:11px;color:var(--txl)">Independent from Pre-Approved revisions</span></div><details style="border:1px solid var(--bd);border-radius:8px;padding:9px;margin-bottom:10px"><summary style="font-weight:700;cursor:pointer">Combined Revision Timeline · Normal + Hybrid</summary><div style="margin-top:8px;font-size:11px">${[{kind:"Pre-Approved / Normal",no:0,at:inv.savedAt||inv.date,label:"Original"},...(inv.revisions||[]).map((r,i)=>({kind:"Pre-Approved / Normal",no:Number(r.revisionNo)||i+1,at:r.at,label:"Revision"})),...revs.map(r=>({kind:"Hybrid",no:r.revisionNo,at:r.createdAt,label:"Hybrid Revision"}))].sort((a,b)=>String(a.at||"").localeCompare(String(b.at||""))).map(e=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)"><span><b>${hybridEsc(e.kind)}</b> · ${hybridEsc(e.label)} ${e.no}</span><span>${e.at?new Date(e.at).toLocaleString("en-IN"):"—"}</span></div>`).join("")}</div><div style="font-size:10px;color:var(--txl);margin-top:6px">Separate model numbering is preserved. Each model's saved snapshot remains independent.</div></details><div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Item</th><th>Original Qty</th><th>Hybrid Qty</th><th>Unit<br><small style="font-size:9px">KG / GM / LTR</small></th><th>Original Rate</th><th>Hybrid Rate<br><small>Per displayed unit</small></th><th>Original Taxable</th><th>Hybrid Taxable<br><small>Exact</small></th><th>Rate Adjustment</th><th>Rule / Status</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td>${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td><b>${hybridEsc(r.display)}</b></td><td>${hybridEsc(r.sourceUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.sourceUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td>₹${Number(r.sourceRate||0).toFixed(2)}</td><td><b>₹${Number(r.displayRate??0).toFixed(8)}</b></td><td>₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${(r.rateRoundingDelta>=0?"+":"")+Number(r.rateRoundingDelta||0).toFixed(8)}</td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="margin-top:12px;padding:10px;border:1px solid var(--bd);border-radius:8px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>Original Net Payable: <b>${R(active.sourceNet)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(active.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span><span>Invoice Net Payable: <b>${R(inv.net)}</b></span></div></div></div></div>`;
  document.body.insertAdjacentHTML("beforeend",body);document.getElementById("mdm-hybrid-modal").addEventListener("click",e=>{if(e.target.id==="mdm-hybrid-modal")hybridClose();});
 }
 function hybridClose(){const el=document.getElementById("mdm-hybrid-modal");if(el)el.remove();HYB_STATE.invoiceId=null;}
 function hybridSelectRevision(id,n){const inv=A.invoices.find(x=>x.id===id);if(!inv?.hybridModel?.revisions?.some(x=>x.revisionNo===n))return;inv.hybridModel.activeRevision=n;sv("iv",A.invoices);hybridRenderModal();}
 function hybridNewRevision(id){const inv=A.invoices.find(x=>x.id===id);if(!inv)return;if(!confirm("Create a new immutable Hybrid snapshot from the current saved original invoice quantities? Existing Hybrid revisions will remain unchanged."))return;try{const snap=hybridMakeSnapshot(inv);snap.revisionNo=(inv.hybridModel.revisions.reduce((m,r)=>Math.max(m,Number(r.revisionNo)||0),0)+1);inv.hybridModel.revisions.push(snap);inv.hybridModel.activeRevision=snap.revisionNo;inv.hybridModel.updatedAt=snap.createdAt;sv("iv",A.invoices);auditLog("CREATE","hybridInvoice",inv.id,"Created Hybrid revision "+snap.revisionNo,{sourceInvoiceNo:inv.invNo});hybridRenderModal();toast("Hybrid revision saved independently","ok");}catch(e){toast("Hybrid revision failed: "+e.message,"err");}}
-function hybridPrint(id,kind){const inv=A.invoices.find(x=>x.id===id);const model=inv?.hybridModel;if(!inv||!model)return;const snap=model.revisions.find(x=>x.revisionNo===model.activeRevision)||model.revisions[model.revisions.length-1];if(!snap)return;const rows=snap.rows||[];const title=kind==="original"?"Original / Pre-Approved Annexure":kind==="adjustment"?"Hybrid Adjustment Annexure":kind==="audit"?"Calculation Model & Adjustment Disclosure": "Hybrid Invoice — Combined Pack";const tbl=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #999;padding:6px">Item</th><th style="border:1px solid #999;padding:6px">Original Quantity</th><th style="border:1px solid #999;padding:6px">Rounded Quantity</th><th style="border:1px solid #999;padding:6px">Unit<br><small>KG / GM / LTR</small></th><th style="border:1px solid #999;padding:6px">Original Rate</th><th style="border:1px solid #999;padding:6px">Hybrid Rate<br><small>Nearest ₹1</small></th><th style="border:1px solid #999;padding:6px">Original Taxable</th><th style="border:1px solid #999;padding:6px">Hybrid Taxable<br><small>Nearest ₹1</small></th><th style="border:1px solid #999;padding:6px">Adjustment</th><th style="border:1px solid #999;padding:6px">Rule</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="border:1px solid #999;padding:6px">${hybridEsc(r.name)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.display)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.sourceUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.sourceUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.sourceRate||0).toFixed(2)}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.displayRate??Math.round(Number(r.sourceRate)||0)).toFixed(0)}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.displayTaxable??Math.round(Number(r.sourceTaxable)||0)).toFixed(0)}</td><td style="border:1px solid #999;padding:6px">${r.eligible?hybridEsc(r.adjustmentGrams+" g"):"—"}</td><td style="border:1px solid #999;padding:6px">${r.eligible?hybridEsc(r.ruleId):"Excluded"}</td></tr>`).join("")}</tbody></table>`;const header=`<div style="font-family:Arial,sans-serif;color:#111"><h2>${title}</h2><p>Invoice: ${hybridEsc(inv.invNo)} · School: ${hybridEsc(inv.schoolName)} · Date: ${hybridEsc(inv.date)}</p><p>Hybrid Revision: ${snap.revisionNo} · Engine: ${hybridEsc(snap.engineVersion)} · Generated: ${new Date(snap.createdAt).toLocaleString("en-IN")}</p>`;const rec=snap.reconciliation||{status:"NOT_AVAILABLE",differenceBefore:0,adjustmentAmount:0,adjustmentItemName:null};const recText=rec.status==="AUTO_ADJUSTED"?`Automatic display-only reconciliation: ${hybridEsc(rec.adjustmentItemName)} adjusted by ${rec.adjustmentAmount>0?"+":""}₹${Number(rec.adjustmentAmount).toFixed(2)}. Display taxable difference after adjustment: ₹0.00.`:rec.status.startsWith("REVIEW")?`Automatic adjustment not applied. Review required; display taxable difference: ₹${Number(rec.differenceBefore||0).toFixed(2)}.`:"No display reconciliation adjustment required.";const disclosure=`<p><b>Disclosure:</b> Hybrid quantity, Rate and Taxable Value are display-only disclosures. Rate and Taxable Value are rounded to the nearest ₹1 for display; where the total display taxable difference is within ₹2, the system selects a suitable item and adjusts only its displayed rate/taxable value to reconcile the display total. This does not alter source values, GST, totals or Net Payable.</p><p>${recText}</p><p>Original Net Payable: ${R(snap.sourceNet)} · Hybrid Financial Impact: ₹0.00 · Invoice Net Payable: ${R(inv.net)}</p>`;const original=inv.originalSnapshot||inv;const originalTable=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #999;padding:6px">Original Item</th><th style="border:1px solid #999;padding:6px">Original Quantity</th><th style="border:1px solid #999;padding:6px">Rate</th><th style="border:1px solid #999;padding:6px">Amount</th></tr></thead><tbody>${(original.mergedItems||inv.mergedItems||[]).map(r=>`<tr><td style="border:1px solid #999;padding:6px">${hybridEsc(r.name)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.qty)} ${hybridEsc(r.unit)}</td><td style="border:1px solid #999;padding:6px">${R(r.rate)}</td><td style="border:1px solid #999;padding:6px">${R(r.gross)}</td></tr>`).join("")}</tbody></table>`;const originalAnnex=`<h3>Original / Pre-Approved Invoice Snapshot</h3><p>Original invoice reference: ${hybridEsc(inv.invNo)} · Net Payable: ${R(original.net??inv.net)}</p>${originalTable}`;let html=header+(kind==="audit"?`<h3>Calculation Model & Audit Disclosure</h3>${disclosure}<p>Source: immutable saved invoice item quantities. Ruleset: ${hybridEsc(snap.engineVersion)}.</p>`:kind==="adjustment"?`<h3>Hybrid Adjustment Annexure</h3>${tbl}${disclosure}`:kind==="original"?originalAnnex:`${originalAnnex}<h3>Hybrid Adjustment Annexure</h3>${tbl}<h3>Calculation Model & Audit Disclosure</h3>${disclosure}`)+`</div>`;const w=window.open("","_blank");if(!w){toast("Allow pop-ups to print Hybrid PDF","warn");return;}w.document.write(`<!doctype html><html><head><title>${title}</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px}h2{margin:0 0 12px}th{background:#eee}@media print{body{padding:0}}</style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();}
+function hybridPrint(id,kind){const inv=A.invoices.find(x=>x.id===id);const model=inv?.hybridModel;if(!inv||!model)return;const snap=model.revisions.find(x=>x.revisionNo===model.activeRevision)||model.revisions[model.revisions.length-1];if(!snap)return;const rows=snap.rows||[];const title=kind==="original"?"Original / Pre-Approved Annexure":kind==="adjustment"?"Hybrid Adjustment Annexure":kind==="audit"?"Calculation Model & Adjustment Disclosure": "Hybrid Invoice — Combined Pack";const tbl=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #999;padding:6px">Item</th><th style="border:1px solid #999;padding:6px">Original Quantity</th><th style="border:1px solid #999;padding:6px">Rounded Quantity</th><th style="border:1px solid #999;padding:6px">Unit<br><small>KG / GM / LTR</small></th><th style="border:1px solid #999;padding:6px">Original Rate</th><th style="border:1px solid #999;padding:6px">Hybrid Rate<br><small>Per displayed unit</small></th><th style="border:1px solid #999;padding:6px">Original Taxable</th><th style="border:1px solid #999;padding:6px">Hybrid Taxable<br><small>Exact item taxable</small></th><th style="border:1px solid #999;padding:6px">Rate Adjustment</th><th style="border:1px solid #999;padding:6px">Rule</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="border:1px solid #999;padding:6px">${hybridEsc(r.name)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.display)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.sourceUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.sourceUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.sourceRate||0).toFixed(2)}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.displayRate??0).toFixed(8)}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td style="border:1px solid #999;padding:6px">₹${Number(r.displayTaxable??0).toFixed(2)}</td><td style="border:1px solid #999;padding:6px">${(r.rateRoundingDelta>=0?"+":"")+Number(r.rateRoundingDelta||0).toFixed(8)}</td><td style="border:1px solid #999;padding:6px">${r.eligible?hybridEsc(r.ruleId):"Excluded"}</td></tr>`).join("")}</tbody></table>`;const header=`<div style="font-family:Arial,sans-serif;color:#111"><h2>${title}</h2><p>Invoice: ${hybridEsc(inv.invNo)} · School: ${hybridEsc(inv.schoolName)} · Date: ${hybridEsc(inv.date)}</p><p>Hybrid Revision: ${snap.revisionNo} · Engine: ${hybridEsc(snap.engineVersion)} · Generated: ${new Date(snap.createdAt).toLocaleString("en-IN")}</p>`;const rec=snap.reconciliation||{status:"NOT_AVAILABLE",rowsChecked:0,rowsPassed:0};const recText=`Global item-wise rate reconciliation: ${Number(rec.rowsPassed||0)} / ${Number(rec.rowsChecked||0)} rows passed. Hybrid quantity × Hybrid rate equals each item’s saved Original taxable (currency precision 2 decimals).`;const disclosure=`<p><b>Calculation rule:</b> For every item, Hybrid Rate = Original saved item Taxable ÷ Hybrid Quantity. No whole-rupee rate rounding, no cross-item adjustment and no change to Market Rate Control or Original invoice values. GST and Net Payable are carried from the Original invoice.</p><p>${recText}</p><p>Original Net Payable: ${R(snap.sourceNet)} · Hybrid Financial Impact: ₹0.00 · Invoice Net Payable: ${R(inv.net)}</p>`;const original=inv.originalSnapshot||inv;const originalTable=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #999;padding:6px">Original Item</th><th style="border:1px solid #999;padding:6px">Original Quantity</th><th style="border:1px solid #999;padding:6px">Rate</th><th style="border:1px solid #999;padding:6px">Amount</th></tr></thead><tbody>${(original.mergedItems||inv.mergedItems||[]).map(r=>`<tr><td style="border:1px solid #999;padding:6px">${hybridEsc(r.name)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.qty)} ${hybridEsc(r.unit)}</td><td style="border:1px solid #999;padding:6px">${R(r.rate)}</td><td style="border:1px solid #999;padding:6px">${R(r.gross)}</td></tr>`).join("")}</tbody></table>`;const originalAnnex=`<h3>Original / Pre-Approved Invoice Snapshot</h3><p>Original invoice reference: ${hybridEsc(inv.invNo)} · Net Payable: ${R(original.net??inv.net)}</p>${originalTable}`;let html=header+(kind==="audit"?`<h3>Calculation Model & Audit Disclosure</h3>${disclosure}<p>Source: immutable saved invoice item quantities. Ruleset: ${hybridEsc(snap.engineVersion)}.</p>`:kind==="adjustment"?`<h3>Hybrid Adjustment Annexure</h3>${tbl}${disclosure}`:kind==="original"?originalAnnex:`${originalAnnex}<h3>Hybrid Adjustment Annexure</h3>${tbl}<h3>Calculation Model & Audit Disclosure</h3>${disclosure}`)+`</div>`;const w=window.open("","_blank");if(!w){toast("Allow pop-ups to print Hybrid PDF","warn");return;}w.document.write(`<!doctype html><html><head><title>${title}</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px}h2{margin:0 0 12px}th{background:#eee}@media print{body{padding:0}}</style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();}
 
 
 function pgHist(){
@@ -8040,7 +8037,9 @@ async function buildInvoicePdfFile(inv,opts={}){
     BAND=invoiceThemeDarkest(TH),
     MAJOR_HEADER_FILL=BAND,
     MEDIUM=invoiceThemeMedium(TH), LIGHT=hexToRgb(TH.highlight)||[214,226,240], GRID=hexToRgb(TH.border)||[204,214,227], OUTER_BORDER=(TH.borderMode||"black")==="black"?[0,0,0]:invoiceThemeDarkest(TH), TEXT=hexToRgb(smartHeaderText(TH.headerBg,TH.headerText))||[22,31,42], HEADER_TEXT=hexToRgb(smartHeaderText(rgbToHex(BAND),TH.headerText))||[255,255,255], WHITE=[255,255,255];
-  const DATA_FONT=clampFontSize(TH.dataFontSize||6.65);
+  const DATA_FONT=clampFontSize(TH.dataFontSize||7.25);
+  const TABLE_FONT_SCALE=DATA_FONT/6.65;
+  const TABLE_HEADER_FONT=7*TABLE_FONT_SCALE;
   const font="helvetica";
   const setText=(c=TEXT)=>doc.setTextColor(c[0],c[1],c[2]);
   const setFill=(c)=>doc.setFillColor(c[0],c[1],c[2]);
@@ -8123,10 +8122,10 @@ async function buildInvoicePdfFile(inv,opts={}){
     if(i===4){
       // Unit legend is deliberately confined to the existing fifth-column header cell.
       // No column edges, row heights, invoice calculations or financial values change.
-      text("Unit",x+w/2,262.8,6.2,true,"center",HEADER_TEXT);
-      text("KG/GM/LTR",x+w/2,270.0,4.05,true,"center",HEADER_TEXT);
-    } else if(parts.length===1)text(parts[0],x+w/2,265.15,7,true,"center",HEADER_TEXT);
-    else {text(parts[0],x+w/2,262.65,7,true,"center",HEADER_TEXT);text(parts[1],x+w/2,269.65,7,true,"center",HEADER_TEXT);}
+      text("Unit",x+w/2,262.8,6.2*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
+      text("KG/GM/LTR",x+w/2,270.0,4.05*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
+    } else if(parts.length===1)text(parts[0],x+w/2,265.15,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);
+    else {text(parts[0],x+w/2,262.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);text(parts[1],x+w/2,269.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);}
   }
   // Table vertical borders and horizontal row lines.
   xEdges.forEach(x=>line(x,261,x,totalY+totalH,.42,GRID));
@@ -9492,6 +9491,9 @@ function customThemeFamily(primary,secondary,tertiary){
 }
 function invoiceTheme(){
   const base={...ST0.themeDesign,...(A.sett?.themeDesign||{})};
+  // One-time compatibility migration: the former untouched master default was 6.65pt.
+  // Raise only that legacy default; preserve any genuinely customized user value.
+  if(Number(base.dataFontSize)===6.65)base.dataFontSize=7.25;
   const p=INVOICE_THEME_PRESETS[base.invoicePreset];
   if(base.invoicePreset&&base.invoicePreset!=="custom"&&p){
     const fam=invoiceThemeFamily(p.seed);
@@ -9563,7 +9565,7 @@ function fontSafeRange(){
   // Fixed master row geometry: 12.45pt row, 5pt horizontal padding.
   // The range is derived from the narrowest cells and current invoice data,
   // with explicit vertical and horizontal safety margins; geometry never moves.
-  const min=5.25,max=7.65,current=6.65;
+  const min=5.25,max=7.65,current=7.25;
   return {min,max,current};
 }
 function setLoginPattern(id){
@@ -9646,8 +9648,8 @@ function renderThemeDesignCard(){
     </div>
 
     <div style="height:1px;background:var(--bd);margin:18px 0"></div>
-    <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Product Table — Data Font Size</div>
-    <div class="font-range-card"><div><input id="td-font" type="range" min="${r.min}" max="${r.max}" step="0.05" value="${Math.max(r.min,Math.min(r.max,t.dataFontSize||r.current))}" style="width:100%" oninput="document.getElementById('td-font-val').textContent=Number(this.value).toFixed(2)+' pt'"><div class="font-meter"><span>${r.min.toFixed(2)} pt</span><strong id="td-font-val">${Number(t.dataFontSize||r.current).toFixed(2)} pt</strong><span style="text-align:right">${r.max.toFixed(2)} pt</span></div><div class="safe-note">Only product data rows are affected. Table headers, column boundaries, row height, vertical grid and one-page A4 geometry remain locked. Values outside the safe range cannot be saved.</div></div><div style="padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--slx);text-align:center"><div style="font-size:10px;color:var(--txl)">Master</div><div style="font-size:20px;font-weight:900;color:var(--tx);margin:3px 0">6.65 pt</div><div style="font-size:9.5px;color:var(--txl)">Safe range calculated for the locked table geometry</div></div></div>
+    <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Printable Product Table — Font Size</div>
+    <div class="font-range-card"><div><input id="td-font" type="range" min="${r.min}" max="${r.max}" step="0.05" value="${Math.max(r.min,Math.min(r.max,t.dataFontSize||r.current))}" style="width:100%" oninput="document.getElementById('td-font-val').textContent=Number(this.value).toFixed(2)+' pt'"><div class="font-meter"><span>${r.min.toFixed(2)} pt</span><strong id="td-font-val">${Number(t.dataFontSize||r.current).toFixed(2)} pt</strong><span style="text-align:right">${r.max.toFixed(2)} pt</span></div><div class="safe-note">Applies to product data rows AND column headers in PDF and browser print. Column widths, row heights, vertical grid and A4 page geometry remain locked. Values outside the safe range cannot be saved.</div></div><div style="padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--slx);text-align:center"><div style="font-size:10px;color:var(--txl)">Recommended</div><div style="font-size:20px;font-weight:900;color:var(--tx);margin:3px 0">7.25 pt</div><div style="font-size:9.5px;color:var(--txl)">Safe range calculated for the locked table geometry</div></div></div>
   </div></div>`;
 }
 function bindThemePicker(){
@@ -10106,6 +10108,10 @@ function buildPrintHTML(bodyContent, title, pageSize, orientation) {
     html, body { font-family: Arial, sans-serif; font-size: 9.5px; margin: 0; padding: 0; background: #fff; }
     .no-print, .topbar, .sidebar, .shell > aside { display: none !important; }
     ${css}
+    /* Settings-driven product-table print typography; geometry remains locked. */
+    .print-scale-wrap .itbl{font-size:${(clampFontSize(invoiceTheme().dataFontSize||7.25)*1.075).toFixed(2)}px!important;}
+    .print-scale-wrap .itbl .ith{font-size:${(6.55*(clampFontSize(invoiceTheme().dataFontSize||7.25)/6.65)).toFixed(2)}px!important;}
+    .print-scale-wrap .itbl .itd{font-size:${(clampFontSize(invoiceTheme().dataFontSize||7.25)*1.075).toFixed(2)}px!important;}
     /* ── Print-quality & pagination rules ── */
     .print-scale-wrap { zoom: ${zoom}; }
     table { border-collapse: collapse; }
@@ -14975,11 +14981,11 @@ v2.8 — Definitive flat-light header + school category correction
  */
 (function (root) {
   'use strict';
-  const VERSION = 'HYB-1.1.0';
+  const VERSION = 'HYB-1.2.1';
   const RULES = Object.freeze({
     dal_pulses: { id:'dal_pulses', label:'Dal / Pulses', method:'nearest', step:500, min:0, tie:'up' },
     aaloo: { id:'aaloo', label:'Aaloo', method:'ceil', step:500, min:500 },
-    oil: { id:'oil', label:'Oil', method:'ceil', step:500, min:500, sourceUnit:'ML', displayUnit:'L' },
+    oil: { id:'oil', label:'Oil', method:'ceil', step:500, min:500, sourceUnit:'ML', displayUnit:'LTR' },
     masala: { id:'masala', label:'Masala', method:'ceil', step:50, min:100, firstBand:100 },
     lahsoon: { id:'lahsoon', label:'Lahsoon / Garlic', method:'ceil', step:250, min:250 },
     lpg: { id:'lpg', label:'LPG Gas', method:'nearest', step:500, min:0, tie:'up', displayMode:'KG_ONLY' },
@@ -14992,11 +14998,11 @@ v2.8 — Definitive flat-light header + school category correction
   });
   const ITEM_RULE = Object.freeze({
     i01:'dal_pulses', i02:'dal_pulses', i03:'dal_pulses', i04:'dal_pulses',
-    i05:'three_band_halfkg', i07:'aaloo', i09:'oil',
+    i05:'three_band_halfkg', i07:'aaloo', i08:'three_band_halfkg', i09:'oil',
     i10:'masala', i11:'masala', i12:'masala', i13:'masala', i14:'masala',
     i15:'lahsoon', i16:'masala', i17:'masala', i18:'masala', i19:'masala', i20:'three_band_halfkg',
     i21:'lpg', i06:'green_veg_mix'
-    // i08 Chana remains on generic_small only below 500g; >=500g passes through unchanged.
+    // i08 Chana uses the same repeated three-boundary rule as Soyabean and Salt.
   });
   function finitePositive(n) { const x=Number(n); if(!Number.isFinite(x)||x<0) throw new TypeError('Quantity must be a finite non-negative number'); return x; }
   function nearestStep(value, step) { return Math.floor(value/step + 0.5) * step; }
@@ -15034,7 +15040,7 @@ v2.8 — Definitive flat-light header + school category correction
       actualGrams=actual*1000; // oil quantity is expressed as ml-equivalent for its dedicated 500ml rule
     } else return {eligible:false,reason:'Unit is outside the approved weight normalization scope',ruleId,actualQuantity:actual,normalizedQuantity:actual,unit};
     const normalizedGrams=normalizeGrams(actualGrams,ruleId);
-    const outUnit=(ruleId==='oil'?'L':(input.displayMode==='KG_ONLY'||ruleId==='lpg'?'KG':(normalizedGrams<1000?'GM':'KG')));
+    const outUnit=(ruleId==='oil'?'LTR':(input.displayMode==='KG_ONLY'||ruleId==='lpg'?'KG':(normalizedGrams<1000?'GM':'KG')));
     const actualInUnit=(unit==='L'||unit==='LTR')?actual:(unit==='KG'?actual:actual/1000);
     const normalizedInUnit=ruleId==='oil'?normalizedGrams/1000:(outUnit==='KG'?normalizedGrams/1000:normalizedGrams);
     return {
@@ -15059,6 +15065,7 @@ v2.8 — Definitive flat-light header + school category correction
     check('Green mix 1.3kg',normalizeGrams(1300,'green_veg_mix'),1500);
     check('Aaloo 287g minimum',normalizeGrams(287,'aaloo'),500);
     check('Oil 700ml',normalizeGrams(700,'oil'),1000);
+    check('Oil normalized unit label',normalize({itemId:'i09',actualQuantity:0.7,unit:'LTR'}).normalizedUnit,'LTR');
     check('Masala 119g',normalizeGrams(119,'masala'),150);
     check('Lahsoon 119g',normalizeGrams(119,'lahsoon'),250);
     check('LPG 16.249kg',normalizeGrams(16249,'lpg'),16000);
@@ -15085,7 +15092,14 @@ v2.8 — Definitive flat-light header + school category correction
     check('Salt 2.35kg half-KG band repeats',normalizeGrams(2350,'three_band_halfkg'),2500);
     check('Soyabean positive sub-1kg minimum',normalizeGrams(800,'three_band_halfkg'),1000);
     check('Salt zero remains zero',normalizeGrams(0,'three_band_halfkg'),0);
-    check('Chana generic 1.56kg pass-through',normalizeGrams(1560,'generic_small'),1560);
+    check('Chana 1.30kg lower band',normalizeGrams(1300,'three_band_halfkg'),1000);
+    check('Chana 1.35kg lower boundary',normalizeGrams(1350,'three_band_halfkg'),1500);
+    check('Chana 1.65kg upper boundary',normalizeGrams(1650,'three_band_halfkg'),1500);
+    check('Chana 1.66kg upper band',normalizeGrams(1660,'three_band_halfkg'),2000);
+    check('Chana 2.30kg repeated lower band',normalizeGrams(2300,'three_band_halfkg'),2000);
+    check('Chana item mapping',normalize({itemId:'i08',actualQuantity:1.56,unit:'KG'}).normalizedQuantity,1.5);
+    check('Soyabean item mapping',normalize({itemId:'i05',actualQuantity:1.56,unit:'KG'}).normalizedQuantity,1.5);
+    check('Salt item mapping',normalize({itemId:'i20',actualQuantity:1.56,unit:'KG'}).normalizedQuantity,1.5);
     return {version:VERSION,total:tests.length,passed:tests.filter(t=>t.pass).length,failed:tests.filter(t=>!t.pass),tests};
   }
   root.MDMHybridQuantityEngine=Object.freeze({VERSION,RULES,ITEM_RULE,normalize,normalizeGrams,formatWeight,selfTest});
