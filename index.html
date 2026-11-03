@@ -4517,6 +4517,38 @@ function openBatchSharePrompt(){
   document.body.appendChild(dlg);
 }
 
+/* HYB-1.1.0 — independent Hybrid invoice disclosure layer.
+   Reads saved invoice quantities; never calls or modifies calc(), NI.calc, rates or totals. */
+const HYB_STATE={invoiceId:null};
+function hybridEsc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function hybridUnitFor(row){const u=String(row.unit||"KG").toUpperCase();if(u==="KG"||u==="KGS")return "KG";if(u==="GM"||u==="G")return "GM";if(u==="L"||u==="LTR"||u==="LITRE"||u==="LITER")return "LTR";return u;}
+function hybridMakeSnapshot(inv){
+  const eng=window.MDMHybridQuantityEngine;if(!eng)throw new Error("Hybrid engine unavailable");
+  if(!Array.isArray(inv.mergedItems))throw new Error("Original invoice item snapshot is missing");
+  const rows=inv.mergedItems.map(r=>{
+    const qty=Number(r.qty);if(!Number.isFinite(qty)||qty<0)throw new Error("Invalid quantity for "+(r.name||r.id));
+    const unit=hybridUnitFor(r);const result=eng.normalize({itemId:String(r.id||""),actualQuantity:qty,unit,displayMode:"SMART"});
+    return {id:String(r.id||""),name:String(r.name||r.id||"Item"),sourceQuantity:qty,sourceUnit:unit,eligible:!!result.eligible,ruleId:result.ruleId||"excluded",normalizedGrams:result.normalizedGrams??null,normalizedQuantity:result.normalizedQuantity??qty,normalizedUnit:result.normalizedUnit||unit,adjustmentGrams:result.adjustmentGrams??0,display:result.eligible?(result.ruleId==="oil"?(result.normalizedGrams<1000?(result.normalizedGrams+" ML"):((result.normalizedGrams/1000).toFixed(3).replace(/\.000$/,""))+" L"):eng.formatWeight(result.normalizedGrams,(result.ruleId==="lpg"?"KG_ONLY":"SMART"))):(qty+" "+unit),billingQuantity:qty,billingUnit:unit,netPayableImpact:0,reason:result.reason||""};
+  });
+  const at=new Date().toISOString();return {schema:"MDM-HYBRID-SNAPSHOT",schemaVersion:1,engineVersion:eng.VERSION,revisionNo:((inv.hybridModel?.revisions||[]).length+1),createdAt:at,sourceInvoiceId:inv.id,sourceInvoiceNo:inv.invNo,sourceSavedAt:inv.savedAt||null,selectedModel:"HYBRID",displayMode:"SMART",financialImpact:0,sourceNet:Number(inv.net)||0,rows};
+}
+function hybridOpen(id){
+  const inv=A.invoices.find(x=>x.id===id);if(!inv){toast("Invoice not found","err");return;}
+  if(!Array.isArray(inv.mergedItems)){toast("This invoice has no saved item snapshot. Hybrid cannot be generated.","err");return;}
+  try{if(!inv.hybridModel||!Array.isArray(inv.hybridModel.revisions)||!inv.hybridModel.revisions.length){const snap=hybridMakeSnapshot(inv);inv.hybridModel={schema:"MDM-HYBRID-MODEL",schemaVersion:1,activeRevision:1,revisions:[snap],createdAt:snap.createdAt,updatedAt:snap.createdAt};sv("iv",A.invoices);}HYB_STATE.invoiceId=id;hybridRenderModal();}catch(e){console.error("Hybrid generation failed",e);toast("Hybrid generation failed: "+(e.message||e),"err");}
+}
+function hybridRenderModal(){
+ const inv=A.invoices.find(x=>x.id===HYB_STATE.invoiceId);if(!inv)return;const model=inv.hybridModel;const revs=model.revisions||[];const active=revs.find(x=>x.revisionNo===model.activeRevision)||revs[revs.length-1];if(!active)return;
+ const old=document.getElementById("mdm-hybrid-modal");if(old)old.remove();
+ const rows=active.rows||[];const body=`<div class="ov" id="mdm-hybrid-modal" style="z-index:10050"><div class="modal mxl"><div class="mhd"><div><div class="mt">Hybrid Invoice — ${hybridEsc(inv.invNo)}</div><div style="font-size:11px;color:var(--txl)">${hybridEsc(inv.schoolName)} · Hybrid Rev ${active.revisionNo} · ${hybridEsc(active.engineVersion)}</div></div><button class="btn btn-g btn-sm" onclick="hybridClose()">✕</button></div><div class="mbd"><div class="info inf-b"><b>Independent Hybrid layer.</b> Original invoice and Net Payable remain unchanged. Source quantity is read from the saved invoice; rounded quantity is disclosure-only.</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0"><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','original')">Print Original Annexure</button><button class="btn btn-p btn-sm" onclick="hybridPrint('${inv.id}','adjustment')">Print Hybrid Adjustment Annexure</button><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','audit')">Print Model & Audit Annexure</button><button class="btn btn-g btn-sm" onclick="hybridPrint('${inv.id}','combined')">Print Combined Hybrid Pack</button><button class="btn btn-am btn-sm" onclick="hybridNewRevision('${inv.id}')">Create Hybrid Revision</button></div><div style="display:flex;gap:8px;align-items:center;margin-bottom:10px"><b>Hybrid revision history</b><select class="fi" style="max-width:180px" onchange="hybridSelectRevision('${inv.id}',Number(this.value))">${revs.map(r=>`<option value="${r.revisionNo}" ${r.revisionNo===active.revisionNo?"selected":""}>Hybrid Rev ${r.revisionNo}</option>`).join("")}</select><span style="font-size:11px;color:var(--txl)">Independent from Pre-Approved revisions</span></div><details style="border:1px solid var(--bd);border-radius:8px;padding:9px;margin-bottom:10px"><summary style="font-weight:700;cursor:pointer">Combined Revision Timeline · Normal + Hybrid</summary><div style="margin-top:8px;font-size:11px">${[{kind:"Pre-Approved / Normal",no:0,at:inv.savedAt||inv.date,label:"Original"},...(inv.revisions||[]).map((r,i)=>({kind:"Pre-Approved / Normal",no:Number(r.revisionNo)||i+1,at:r.at,label:"Revision"})),...revs.map(r=>({kind:"Hybrid",no:r.revisionNo,at:r.createdAt,label:"Hybrid Revision"}))].sort((a,b)=>String(a.at||"").localeCompare(String(b.at||""))).map(e=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)"><span><b>${hybridEsc(e.kind)}</b> · ${hybridEsc(e.label)} ${e.no}</span><span>${e.at?new Date(e.at).toLocaleString("en-IN"):"—"}</span></div>`).join("")}</div><div style="font-size:10px;color:var(--txl);margin-top:6px">Separate model numbering is preserved. Each model's saved snapshot remains independent.</div></details><div style="overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Item</th><th>Original Qty</th><th>Rounded Qty</th><th>Adjustment</th><th>Rule / Status</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td>${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td><b>${hybridEsc(r.display)}</b></td><td>${r.eligible?hybridEsc((r.adjustmentGrams>0?"+":"")+r.adjustmentGrams+" g"):"—"}</td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="margin-top:12px;padding:10px;border:1px solid var(--bd);border-radius:8px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span>Original Net Payable: <b>${R(active.sourceNet)}</b></span><span>Hybrid Financial Impact: <b>₹0.00</b></span><span>Invoice Net Payable: <b>${R(inv.net)}</b></span></div></div></div></div>`;
+ document.body.insertAdjacentHTML("beforeend",body);document.getElementById("mdm-hybrid-modal").addEventListener("click",e=>{if(e.target.id==="mdm-hybrid-modal")hybridClose();});
+}
+function hybridClose(){const el=document.getElementById("mdm-hybrid-modal");if(el)el.remove();HYB_STATE.invoiceId=null;}
+function hybridSelectRevision(id,n){const inv=A.invoices.find(x=>x.id===id);if(!inv?.hybridModel?.revisions?.some(x=>x.revisionNo===n))return;inv.hybridModel.activeRevision=n;sv("iv",A.invoices);hybridRenderModal();}
+function hybridNewRevision(id){const inv=A.invoices.find(x=>x.id===id);if(!inv)return;if(!confirm("Create a new immutable Hybrid snapshot from the current saved original invoice quantities? Existing Hybrid revisions will remain unchanged."))return;try{const snap=hybridMakeSnapshot(inv);snap.revisionNo=(inv.hybridModel.revisions.reduce((m,r)=>Math.max(m,Number(r.revisionNo)||0),0)+1);inv.hybridModel.revisions.push(snap);inv.hybridModel.activeRevision=snap.revisionNo;inv.hybridModel.updatedAt=snap.createdAt;sv("iv",A.invoices);auditLog("CREATE","hybridInvoice",inv.id,"Created Hybrid revision "+snap.revisionNo,{sourceInvoiceNo:inv.invNo});hybridRenderModal();toast("Hybrid revision saved independently","ok");}catch(e){toast("Hybrid revision failed: "+e.message,"err");}}
+function hybridPrint(id,kind){const inv=A.invoices.find(x=>x.id===id);const model=inv?.hybridModel;if(!inv||!model)return;const snap=model.revisions.find(x=>x.revisionNo===model.activeRevision)||model.revisions[model.revisions.length-1];if(!snap)return;const rows=snap.rows||[];const title=kind==="original"?"Original / Pre-Approved Annexure":kind==="adjustment"?"Hybrid Adjustment Annexure":kind==="audit"?"Calculation Model & Adjustment Disclosure": "Hybrid Invoice — Combined Pack";const tbl=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #999;padding:6px">Item</th><th style="border:1px solid #999;padding:6px">Original Quantity</th><th style="border:1px solid #999;padding:6px">Rounded Quantity</th><th style="border:1px solid #999;padding:6px">Adjustment</th><th style="border:1px solid #999;padding:6px">Rule</th></tr></thead><tbody>${rows.map(r=>`<tr><td style="border:1px solid #999;padding:6px">${hybridEsc(r.name)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.sourceQuantity)} ${hybridEsc(r.sourceUnit)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.display)}</td><td style="border:1px solid #999;padding:6px">${r.eligible?hybridEsc(r.adjustmentGrams+" g"):"—"}</td><td style="border:1px solid #999;padding:6px">${r.eligible?hybridEsc(r.ruleId):"Excluded"}</td></tr>`).join("")}</tbody></table>`;const header=`<div style="font-family:Arial,sans-serif;color:#111"><h2>${title}</h2><p>Invoice: ${hybridEsc(inv.invNo)} · School: ${hybridEsc(inv.schoolName)} · Date: ${hybridEsc(inv.date)}</p><p>Hybrid Revision: ${snap.revisionNo} · Engine: ${hybridEsc(snap.engineVersion)} · Generated: ${new Date(snap.createdAt).toLocaleString("en-IN")}</p>`;const disclosure=`<p><b>Disclosure:</b> Hybrid rounding is a separate quantity disclosure layer. Existing invoice calculation and Net Payable are not recalculated or changed. Original saved quantity is retained as the source.</p><p>Original Net Payable: ${R(snap.sourceNet)} · Hybrid Financial Impact: ₹0.00 · Invoice Net Payable: ${R(inv.net)}</p>`;const original=inv.originalSnapshot||inv;const originalTable=`<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr><th style="border:1px solid #999;padding:6px">Original Item</th><th style="border:1px solid #999;padding:6px">Original Quantity</th><th style="border:1px solid #999;padding:6px">Rate</th><th style="border:1px solid #999;padding:6px">Amount</th></tr></thead><tbody>${(original.mergedItems||inv.mergedItems||[]).map(r=>`<tr><td style="border:1px solid #999;padding:6px">${hybridEsc(r.name)}</td><td style="border:1px solid #999;padding:6px">${hybridEsc(r.qty)} ${hybridEsc(r.unit)}</td><td style="border:1px solid #999;padding:6px">${R(r.rate)}</td><td style="border:1px solid #999;padding:6px">${R(r.gross)}</td></tr>`).join("")}</tbody></table>`;const originalAnnex=`<h3>Original / Pre-Approved Invoice Snapshot</h3><p>Original invoice reference: ${hybridEsc(inv.invNo)} · Net Payable: ${R(original.net??inv.net)}</p>${originalTable}`;let html=header+(kind==="audit"?`<h3>Calculation Model & Audit Disclosure</h3>${disclosure}<p>Source: immutable saved invoice item quantities. Ruleset: ${hybridEsc(snap.engineVersion)}.</p>`:kind==="adjustment"?`<h3>Hybrid Adjustment Annexure</h3>${tbl}${disclosure}`:kind==="original"?originalAnnex:`${originalAnnex}<h3>Hybrid Adjustment Annexure</h3>${tbl}<h3>Calculation Model & Audit Disclosure</h3>${disclosure}`)+`</div>`;const w=window.open("","_blank");if(!w){toast("Allow pop-ups to print Hybrid PDF","warn");return;}w.document.write(`<!doctype html><html><head><title>${title}</title><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;padding:24px}h2{margin:0 0 12px}th{background:#eee}@media print{body{padding:0}}</style></head><body>${html}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);w.document.close();}
+
+
 function pgHist(){
   const histOrder=[...A.invoices].sort((a,b)=>{
     const ak=a.savedAt||a.date||"", bk=b.savedAt||b.date||"";
@@ -4692,6 +4724,7 @@ function pgHist(){
           <div class="hist-actions-label">ACTIONS</div>
           <div class="hist-action-buttons">
             <button type="button" class="btn btn-g btn-sm" onclick="opIM('${inv.id}')">Open</button>
+            <button type="button" class="btn btn-p btn-sm" title="Open independent Hybrid invoice" onclick="hybridOpen('${ec(inv.id)}')">Hybrid</button>
             ${isInvoiceUndoAuthorized(inv)&&invoiceUndoAllowed(inv).ok?`<button type="button" class="btn btn-am btn-sm hist-undo-direct" title="Undo accidental invoice generation" onclick="openInvoiceUndo('${inv.id}')">&#8630; Undo</button>`:""}
             <button type="button" class="btn btn-g btn-sm hist-more-btn" aria-label="Invoice actions" aria-haspopup="menu" aria-expanded="${menuOpen?"true":"false"}" data-invoice-id="${ec(inv.id)}">&#8942;</button>
           </div>
@@ -8457,7 +8490,7 @@ function renderBatchShareDialog(){
       #batch-share-dlg .batch-share-message{font-family:inherit!important;resize:both!important;max-width:none!important;max-height:70vh!important;min-width:0;}
       /* One-time expanded-message mode: enlarge the dialog to fit the message and collapse share actions to an icon rail. */
       #batch-share-dlg .batch-share-modal.batch-message-expanded{width:min(calc(100vw - 24px),var(--batch-expanded-width,760px))!important;max-width:calc(100vw - 24px)!important;}
-      #batch-share-dlg .batch-share-body.batch-message-expanded-body{grid-template-columns:minmax(0,1fr) 46px!important;column-gap:10px!important;}
+      #batch-share-dlg .batch-share-body.batch-message-expanded-body{grid-template-columns:minmax(0,1fr) 42px!important;column-gap:7px!important;}
       #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions{grid-column:2!important;grid-row:6 / span 2!important;display:flex!important;flex-direction:column!important;gap:6px!important;align-self:start!important;}
       #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions .batch-share-action{width:42px!important;min-width:42px!important;min-height:42px!important;height:42px!important;padding:7px!important;display:flex!important;align-items:center!important;justify-content:center!important;font-size:0!important;line-height:0!important;overflow:hidden!important;}
       #batch-share-dlg .batch-share-body.batch-message-expanded-body>.batch-share-actions .batch-share-action small{display:none!important;}
@@ -8594,9 +8627,9 @@ function setupBatchMessageResizeBehavior(dlg, isMinimalist){
     if(expanded||!dlg.isConnected)return;
     expanded=true;
     const maxW=Math.max(320,window.innerWidth-24);
-    // Expand only by a modest amount (roughly one status-card/button width), never to a viewport-wide window.
+    // Expand only enough to accommodate the compact 42px action rail, its gap and modal padding; never widen by multiple button columns.
     const currentW=modal.getBoundingClientRect().width || parseFloat(modal.style.width) || 420;
-    const desiredW=Math.min(maxW,currentW+148);
+    const desiredW=Math.min(maxW,currentW+80);
     modal.style.setProperty('--batch-expanded-width',desiredW+'px');
     modal.style.width=desiredW+'px';modal.style.maxWidth=maxW+'px';modal.style.maxHeight='88vh';
     modal.classList.add('batch-message-expanded');
@@ -14828,6 +14861,100 @@ v2.8 — Definitive flat-light header + school category correction
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
   const oldGP=window.gP;if(typeof oldGP==='function'&&!oldGP.__bulkTplWrapped){window.gP=function(){const r=oldGP.apply(this,arguments);setTimeout(init,0);return r};window.gP.__bulkTplWrapped=true}
 })();
+</script>
+<script id="mdm-hybrid-quantity-engine-runtime">
+/* MDM ERP Hybrid Quantity Engine — experimental, opt-in, isolated from legacy billing.
+ * Version: HYB-1.0.0 | Base: MDM ERP v4.61.76
+ * No legacy invoice calculations are changed by loading this module.
+ */
+(function (root) {
+  'use strict';
+  const VERSION = 'HYB-1.0.0';
+  const RULES = Object.freeze({
+    dal_pulses: { id:'dal_pulses', label:'Dal / Pulses', method:'nearest', step:500, min:0, tie:'up' },
+    aaloo: { id:'aaloo', label:'Aaloo', method:'ceil', step:500, min:500 },
+    oil: { id:'oil', label:'Oil', method:'ceil', step:500, min:500, sourceUnit:'ML', displayUnit:'L' },
+    masala: { id:'masala', label:'Masala', method:'ceil', step:50, min:100, firstBand:100 },
+    lahsoon: { id:'lahsoon', label:'Lahsoon / Garlic', method:'ceil', step:250, min:250 },
+    lpg: { id:'lpg', label:'LPG Gas', method:'nearest', step:500, min:0, tie:'up', displayMode:'KG_ONLY' },
+    green_veg_mix: { id:'green_veg_mix', label:'Green Veg Mix', method:'nearest', step:500, min:0, tie:'up' },
+    generic_small: { id:'generic_small', label:'General Small Quantity', method:'nearest', step:50, min:0, maxInputExclusive:500, tie:'up' }
+  });
+  const ITEM_RULE = Object.freeze({
+    i01:'dal_pulses', i02:'dal_pulses', i03:'dal_pulses', i04:'dal_pulses',
+    i07:'aaloo', i09:'oil',
+    i10:'masala', i11:'masala', i12:'masala', i13:'masala', i14:'masala',
+    i16:'masala', i17:'masala', i18:'masala', i19:'masala', i20:'masala',
+    i15:'lahsoon', i21:'lpg', i06:'green_veg_mix'
+    // i05 Soyabean and i08 Chana intentionally remain Sabzi; no category rule was approved.
+    // They therefore use generic_small only below 500g and pass through unchanged at/above 500g.
+  });
+  function finitePositive(n) { const x=Number(n); if(!Number.isFinite(x)||x<0) throw new TypeError('Quantity must be a finite non-negative number'); return x; }
+  function nearestStep(value, step) { return Math.floor(value/step + 0.5) * step; }
+  function ceilStep(value, step, min) { return value===0 ? 0 : Math.max(min, Math.ceil(value/step)*step); }
+  function resolveRule(itemId, explicitRule) { return explicitRule || ITEM_RULE[itemId] || 'generic_small'; }
+  function normalizeGrams(actualGrams, ruleId) {
+    const actual=finitePositive(actualGrams); const rule=RULES[ruleId];
+    if(!rule) throw new Error('Unknown normalization rule: '+ruleId);
+    if(rule.maxInputExclusive && actual>=rule.maxInputExclusive) return actual;
+    let normalized;
+    if(rule.method==='nearest') normalized=nearestStep(actual,rule.step);
+    else if(rule.method==='ceil') normalized=ceilStep(actual,rule.step,rule.min||0);
+    else throw new Error('Unsupported normalization method: '+rule.method);
+    return Math.max(0, normalized);
+  }
+  function normalize(input) {
+    input=input||{};
+    const actual=finitePositive(input.actualQuantity);
+    const unit=String(input.unit||'KG').toUpperCase();
+    const ruleId=resolveRule(input.itemId, input.ruleId);
+    let actualGrams;
+    if(unit==='KG') actualGrams=actual*1000;
+    else if(unit==='GM'||unit==='G') actualGrams=actual;
+    else if(unit==='L' || unit==='LTR') {
+      if(ruleId!=='oil') return {eligible:false,reason:'No approved normalization for this unit',ruleId,actualQuantity:actual,normalizedQuantity:actual,unit};
+      actualGrams=actual*1000; // oil quantity is expressed as ml-equivalent for its dedicated 500ml rule
+    } else return {eligible:false,reason:'Unit is outside the approved weight normalization scope',ruleId,actualQuantity:actual,normalizedQuantity:actual,unit};
+    const normalizedGrams=normalizeGrams(actualGrams,ruleId);
+    const outUnit=(ruleId==='oil'?'L':(input.displayMode==='KG_ONLY'||ruleId==='lpg'?'KG':(normalizedGrams<1000?'GM':'KG')));
+    const actualInUnit=(unit==='L'||unit==='LTR')?actual:(unit==='KG'?actual:actual/1000);
+    const normalizedInUnit=ruleId==='oil'?normalizedGrams/1000:(outUnit==='KG'?normalizedGrams/1000:normalizedGrams);
+    return {
+      eligible:true, engineVersion:VERSION, ruleId, actualQuantity:actual, actualUnit:unit,
+      actualGrams, normalizedGrams, normalizedQuantity:normalizedInUnit, normalizedUnit:outUnit,
+      adjustmentGrams:normalizedGrams-actualGrams,
+      // Billing is deliberately not recalculated: hybrid adjustment is informational/annexure-only.
+      billingQuantity:actual, billingUnit:unit, netPayableImpact:0
+    };
+  }
+  function formatWeight(grams, mode) {
+    const g=finitePositive(grams);
+    if(mode==='KG_ONLY') return (g/1000).toFixed(3)+' KG';
+    if(g<1000) return (Math.round(g*1000)/1000)+' GM';
+    return (g/1000).toFixed(3).replace(/\.000$/,'')+' KG';
+  }
+  function selfTest() {
+    const tests=[];
+    const check=(name,got,want)=>tests.push({name,pass:got===want,got,want});
+    check('Dal 1.25kg tie-up',normalizeGrams(1250,'dal_pulses'),1500);
+    check('Dal 1.2kg',normalizeGrams(1200,'dal_pulses'),1000);
+    check('Green mix 1.3kg',normalizeGrams(1300,'green_veg_mix'),1500);
+    check('Aaloo 287g minimum',normalizeGrams(287,'aaloo'),500);
+    check('Oil 700ml',normalizeGrams(700,'oil'),1000);
+    check('Masala 119g',normalizeGrams(119,'masala'),150);
+    check('Lahsoon 119g',normalizeGrams(119,'lahsoon'),250);
+    check('LPG 16.249kg',normalizeGrams(16249,'lpg'),16000);
+    check('LPG 16.250kg',normalizeGrams(16250,'lpg'),16500);
+    check('LPG 16.749kg',normalizeGrams(16749,'lpg'),16500);
+    check('LPG 16.750kg',normalizeGrams(16750,'lpg'),17000);
+    check('Generic 39g',normalizeGrams(39,'generic_small'),50);
+    check('Generic 119g',normalizeGrams(119,'generic_small'),100);
+    check('Generic 287g',normalizeGrams(287,'generic_small'),300);
+    check('Generic 500g pass-through',normalizeGrams(500,'generic_small'),500);
+    return {version:VERSION,total:tests.length,passed:tests.filter(t=>t.pass).length,failed:tests.filter(t=>!t.pass),tests};
+  }
+  root.MDMHybridQuantityEngine=Object.freeze({VERSION,RULES,ITEM_RULE,normalize,normalizeGrams,formatWeight,selfTest});
+})(typeof window!=='undefined'?window:globalThis);
 </script>
 </body>
 </html>
