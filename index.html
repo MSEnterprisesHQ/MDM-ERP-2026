@@ -14975,7 +14975,7 @@ v2.8 — Definitive flat-light header + school category correction
  */
 (function (root) {
   'use strict';
-  const VERSION = 'HYB-1.0.0';
+  const VERSION = 'HYB-1.1.0';
   const RULES = Object.freeze({
     dal_pulses: { id:'dal_pulses', label:'Dal / Pulses', method:'nearest', step:500, min:0, tie:'up' },
     aaloo: { id:'aaloo', label:'Aaloo', method:'ceil', step:500, min:500 },
@@ -14984,16 +14984,19 @@ v2.8 — Definitive flat-light header + school category correction
     lahsoon: { id:'lahsoon', label:'Lahsoon / Garlic', method:'ceil', step:250, min:250 },
     lpg: { id:'lpg', label:'LPG Gas', method:'nearest', step:500, min:0, tie:'up', displayMode:'KG_ONLY' },
     green_veg_mix: { id:'green_veg_mix', label:'Green Veg Mix', method:'nearest', step:500, min:0, tie:'up' },
-    generic_small: { id:'generic_small', label:'General Small Quantity', method:'nearest', step:50, min:0, maxInputExclusive:500, tie:'up' }
+    generic_small: { id:'generic_small', label:'General Small Quantity', method:'nearest', step:50, min:0, maxInputExclusive:500, tie:'up' },
+    // Soyabean and Salt: threshold bands around each 0.5 KG step.
+    // Fraction < 0.350 KG -> lower whole KG; 0.350–0.650 KG -> half KG;
+    // fraction > 0.650 KG -> next whole KG. Positive quantities have a 1 KG floor.
+    three_band_halfkg: { id:'three_band_halfkg', label:'Soyabean / Salt · Three-Boundary Half-KG', method:'three_band_halfkg', step:500, min:1000, lowerThreshold:350, upperThreshold:650 }
   });
   const ITEM_RULE = Object.freeze({
     i01:'dal_pulses', i02:'dal_pulses', i03:'dal_pulses', i04:'dal_pulses',
-    i07:'aaloo', i09:'oil',
+    i05:'three_band_halfkg', i07:'aaloo', i09:'oil',
     i10:'masala', i11:'masala', i12:'masala', i13:'masala', i14:'masala',
-    i16:'masala', i17:'masala', i18:'masala', i19:'masala', i20:'masala',
-    i15:'lahsoon', i21:'lpg', i06:'green_veg_mix'
-    // i05 Soyabean and i08 Chana intentionally remain Sabzi; no category rule was approved.
-    // They therefore use generic_small only below 500g and pass through unchanged at/above 500g.
+    i15:'lahsoon', i16:'masala', i17:'masala', i18:'masala', i19:'masala', i20:'three_band_halfkg',
+    i21:'lpg', i06:'green_veg_mix'
+    // i08 Chana remains on generic_small only below 500g; >=500g passes through unchanged.
   });
   function finitePositive(n) { const x=Number(n); if(!Number.isFinite(x)||x<0) throw new TypeError('Quantity must be a finite non-negative number'); return x; }
   function nearestStep(value, step) { return Math.floor(value/step + 0.5) * step; }
@@ -15006,6 +15009,15 @@ v2.8 — Definitive flat-light header + school category correction
     let normalized;
     if(rule.method==='nearest') normalized=nearestStep(actual,rule.step);
     else if(rule.method==='ceil') normalized=ceilStep(actual,rule.step,rule.min||0);
+    else if(rule.method==='three_band_halfkg') {
+      if(actual===0) return 0;
+      const wholeKg=Math.floor(actual/1000);
+      const remainder=actual-(wholeKg*1000);
+      if(remainder<rule.lowerThreshold) normalized=wholeKg*1000;
+      else if(remainder<=rule.upperThreshold) normalized=(wholeKg*1000)+500;
+      else normalized=(wholeKg+1)*1000;
+      normalized=Math.max(rule.min||0,normalized);
+    }
     else throw new Error('Unsupported normalization method: '+rule.method);
     return Math.max(0, normalized);
   }
@@ -15057,6 +15069,23 @@ v2.8 — Definitive flat-light header + school category correction
     check('Generic 119g',normalizeGrams(119,'generic_small'),100);
     check('Generic 287g',normalizeGrams(287,'generic_small'),300);
     check('Generic 500g pass-through',normalizeGrams(500,'generic_small'),500);
+    // New Aaloo / Soyabean / Salt regression boundaries.
+    check('Aaloo 1.00kg exact',normalizeGrams(1000,'aaloo'),1000);
+    check('Aaloo 1.01kg upward slab',normalizeGrams(1010,'aaloo'),1500);
+    check('Aaloo 1.99kg upward slab',normalizeGrams(1990,'aaloo'),2000);
+    check('Soyabean 1.30kg lower band',normalizeGrams(1300,'three_band_halfkg'),1000);
+    check('Soyabean 1.35kg lower boundary',normalizeGrams(1350,'three_band_halfkg'),1500);
+    check('Soyabean 1.65kg upper boundary',normalizeGrams(1650,'three_band_halfkg'),1500);
+    check('Soyabean 1.66kg upper band',normalizeGrams(1660,'three_band_halfkg'),2000);
+    check('Salt 1.30kg lower band',normalizeGrams(1300,'three_band_halfkg'),1000);
+    check('Salt 1.35kg lower boundary',normalizeGrams(1350,'three_band_halfkg'),1500);
+    check('Salt 1.65kg upper boundary',normalizeGrams(1650,'three_band_halfkg'),1500);
+    check('Salt 1.66kg upper band',normalizeGrams(1660,'three_band_halfkg'),2000);
+    check('Soyabean 2.30kg lower band repeats',normalizeGrams(2300,'three_band_halfkg'),2000);
+    check('Salt 2.35kg half-KG band repeats',normalizeGrams(2350,'three_band_halfkg'),2500);
+    check('Soyabean positive sub-1kg minimum',normalizeGrams(800,'three_band_halfkg'),1000);
+    check('Salt zero remains zero',normalizeGrams(0,'three_band_halfkg'),0);
+    check('Chana generic 1.56kg pass-through',normalizeGrams(1560,'generic_small'),1560);
     return {version:VERSION,total:tests.length,passed:tests.filter(t=>t.pass).length,failed:tests.filter(t=>!t.pass),tests};
   }
   root.MDMHybridQuantityEngine=Object.freeze({VERSION,RULES,ITEM_RULE,normalize,normalizeGrams,formatWeight,selfTest});
