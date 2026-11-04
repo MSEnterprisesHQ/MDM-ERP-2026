@@ -5,11 +5,12 @@ BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
 Level 2 adds only application appearance controls, invoice header theme controls, and safe product-table data font controls.
 
 MDM PROJECT — VERSION HISTORY
-Update: v4.62.03 — Green Veg Mix primary absorption optimizer. Jointly searches permitted quantity slabs and variable daily billing rate, minimizing combined percentage movement before exact taxable/CGST/SGST/Gross/Net reconciliation. Other saved-allowlist categories remain fallback candidates; explicit approval, source-signature guard and fail-closed behavior retained.
+Update: v4.62.08 — Invoice table HSN/SAC and Qty column width correction; reclaimed space from Product Name without changing invoice data or calculations. Jointly searches permitted quantity slabs and variable daily billing rate, minimizing combined percentage movement before exact taxable/CGST/SGST/Gross/Net reconciliation. Other saved-allowlist categories remain fallback candidates; explicit approval, source-signature guard and fail-closed behavior retained.
 
 Update: v4.35 — Vector-safe Android Print Preview — Final surgical pass: Terms & Conditions left-aligned within its dedicated thin footer row; major invoice section outer borders use the active theme accent/darker color consistently. No other invoice geometry, data, calculations, sharing, or export logic changed.
 Update: v4.35 — Replaced the Android print bridge raster PNG with PDF.js SVG output. Native print sheet behavior is preserved, while saved PDFs retain vector text/lines; no canvas/PNG is used in the print document.
-Current Version: v4.62.03 — Green Veg Mix Joint Rate + Quantity Smart Absorption Optimizer
+Update: v4.62.10 — Four-category typography controls mapped across Original/Normal and Hybrid invoice engines; durable saved theme persistence across refresh and login/logout.
+Current Version: v4.62.10 — Header & Subheader Font Controls
 Update: v4.61.91 — Mode-switch transition fix with persistent, color-coded Original (blue) / Hybrid (green) active-state indicator. v4.61.87 — Final approved Hybrid rules and lifecycle wiring. Adds persistent Smart (KG + GM) / KG Only display modes; approved generic 500g+ threshold bands; separates Actual, Normalized and Billed quantities in immutable snapshots; stores the full Original invoice snapshot per Hybrid revision; records same-category-only/no-transfer policy; aligns Hybrid PDF rows to the current source revision. Original calc() remains byte-identical to Stable v4.61.76.
 
 Update: v4.57.4 — Corrects School Master ID/category resolution, includes inactive schools for historical lookup, and requires explicit historical rate/GST inputs. Original invoice, PDF, and print core paths are preserved where feasible; cloud end-to-end testing is still required.
@@ -346,6 +347,10 @@ a{color:inherit;text-decoration:none;}
 .id-st{position:absolute;top:0;right:0;font-size:8px;font-weight:700;border:1px solid #1E3A5F;color:#1E3A5F;padding:2px 7px;border-radius:2px;}
 .id-fn{font-size:16px;font-weight:900;letter-spacing:.4px;color:#1E3A5F;}
 .id-fa{font-size:8.5px;color:#444;margin-top:1px;}
+.id .id-gst,.id .id-meta,.id .id-bt{font-size:var(--td-hb-size,7.2pt);font-weight:var(--td-hb-weight,400);font-family:var(--td-hb-family,inherit);}
+.id .itbl{font-size:var(--td-table-size,7.6pt);font-family:var(--td-table-family,inherit);}
+.id .itbl .ith{font-size:var(--td-table-head-size,7.1pt);font-family:var(--td-table-family,inherit);font-weight:var(--td-table-weight,700)!important;}
+.id .itbl .itd{font-size:var(--td-table-size,7.6pt);font-family:var(--td-table-family,inherit);font-weight:var(--td-table-weight,400);}
 .id-gst{display:flex;justify-content:space-between;font-size:8.5px;margin-top:4px;font-weight:700;color:#1E3A5F;background:#EEF3FA;padding:3px 8px;border-radius:3px;}
 .id-meta{display:grid;grid-template-columns:1fr 1fr;gap:1px;font-size:8.5px;border:1px solid #C7D6EA;border-radius:3px;overflow:hidden;margin-bottom:5px;}
 .id-ml{padding:3px 9px;border-right:1px solid #C7D6EA;background:#fff;}
@@ -366,8 +371,15 @@ a{color:inherit;text-decoration:none;}
 .itbl th:nth-child(8),.itbl th:nth-child(9),.itbl th:nth-child(10),.itbl th:nth-child(11){white-space:nowrap;}
 .itbl th:nth-child(12){text-align:center;white-space:nowrap;}
 .itbl td:nth-child(8),.itbl td:nth-child(10){text-align:center;}
+.itbl th:nth-child(3),.itbl td:nth-child(3){white-space:nowrap!important;letter-spacing:.05px;}
+.itbl th:nth-child(4),.itbl td:nth-child(4){white-space:nowrap!important;}
+.itbl th:nth-child(2){padding-left:5px;padding-right:5px;}
+.itbl td:nth-child(2){padding-left:5px;padding-right:5px;}
 .itbl td:nth-child(9),.itbl td:nth-child(11),.itbl td:nth-child(12){text-align:right;white-space:nowrap;}
 .itd{padding:2.2px 4px;border:1px solid #D6E0EF;vertical-align:middle;}
+.id.data-style-normal .itbl tbody td{font-weight:var(--td-table-weight,400)!important;font-style:normal!important;}
+.id.data-style-bold .itbl tbody td{font-weight:700!important;font-style:normal!important;}
+.id.data-style-italic .itbl tbody td{font-weight:400!important;font-style:italic!important;}
 .ax-table{width:100%!important;table-layout:fixed!important;border-collapse:collapse!important;}
 .ax-table .ith{padding:3.4px 3px!important;font-size:7.1px!important;line-height:1.12!important;white-space:normal!important;overflow-wrap:anywhere!important;}
 .ax-table .itd{font-size:8px;line-height:1.18;vertical-align:middle;overflow-wrap:anywhere;padding:2.5px 4px!important;}
@@ -1216,9 +1228,9 @@ html[data-theme="dark"] .ni-school-picker-option.selected:focus-visible{backgrou
 .print-scale-wrap .itbl .ith{font-size:6.55px!important;line-height:1.05!important;padding:2.5px 1.5px!important;white-space:normal!important;overflow-wrap:anywhere!important;word-break:normal!important;overflow:hidden!important;}
 .print-scale-wrap .itbl .itd{padding:2px 2px!important;min-width:0!important;line-height:1.1!important;white-space:nowrap!important;overflow-wrap:anywhere!important;word-break:normal!important;overflow:hidden!important;}
 .print-scale-wrap .itbl col:nth-child(1){width:4%!important;}
-.print-scale-wrap .itbl col:nth-child(2){width:18%!important;}
-.print-scale-wrap .itbl col:nth-child(3){width:7%!important;}
-.print-scale-wrap .itbl col:nth-child(4){width:6%!important;}
+.print-scale-wrap .itbl col:nth-child(2){width:16%!important;}
+.print-scale-wrap .itbl col:nth-child(3){width:8%!important;}
+.print-scale-wrap .itbl col:nth-child(4){width:7%!important;}
 .print-scale-wrap .itbl col:nth-child(5){width:5.5%!important;}
 .print-scale-wrap .itbl col:nth-child(6){width:7%!important;}
 .print-scale-wrap .itbl col:nth-child(7){width:11%!important;}
@@ -2489,6 +2501,7 @@ const ST0={
     highlight:"#D6E2F0",
     borderMode:"black", // black = fixed black outer borders; theme = darkest active theme color
     dataFontSize:7.60,
+    headerFontSize:15, headerFontBold:true, subheaderFontSize:7.2, subheaderFontBold:false, headerBodyFontSize:7.2, headerBodyFontBold:false, tableFontBold:false, headerFontFamily:"helvetica", subheaderFontFamily:"helvetica", headerBodyFontFamily:"helvetica", tableFontFamily:"helvetica", customHeaderFont:null, customHeaderFontName:"", customFonts:{header:null,subheader:null,headerBody:null,table:null},
     loginCardBg:null,     // null = use default theme card color; else a hex string the user picked
     loginPattern:"glow"   // none | glow | dots | waves | geometric
   },
@@ -2959,12 +2972,24 @@ function invDoc(c,form,sch,invNo){
   const metaRow=([l,v])=>`<div style="display:flex;padding:2px 0"><span class="id-mll" style="width:84px;flex-shrink:0">${l}</span><span style="width:8px;flex-shrink:0">:</span><span class="id-mlv">${v}</span></div>`;
   const bankRows=[["Account Name",f.accountName],["Account No",f.accountNo],["Bank",f.bankName],["IFSC",f.ifsc],["Branch",f.branch]];
   const bankBorderColor=((S.themeDesign?.borderMode||"black")==="black")?"#000000":rgbToHex(invoiceThemeDarkest(invoiceTheme()));
-  return `<div class="id">
+  const dataTextStyle=["normal","bold","italic"].includes(S.themeDesign?.dataTextStyle)?S.themeDesign.dataTextStyle:"normal";
+  const td=invoiceTheme(),fonts=td.customFonts||{};
+  const headerFamily=fonts.header?"ERPHeaderCustom":(td.customHeaderFont?"ERPInvoiceCustom":"Arial");
+  const subheaderFamily=fonts.subheader?"ERPSubheaderCustom":(td.customHeaderFont?"ERPInvoiceCustom":"Arial");
+  const headerBodyFamily=fonts.headerBody?"ERPHeaderBodyCustom":"Arial";
+  const tableFamily=fonts.table?"ERPTableCustom":"Arial";
+  const headerStyle=`font-size:${Math.max(9,Math.min(24,Number(td.headerFontSize)||15))}pt;font-weight:${td.headerFontBold===false?400:700};font-family:'${headerFamily}',Arial,sans-serif;`;
+  const subheaderStyle=`font-size:${Math.max(5,Math.min(14,Number(td.subheaderFontSize)||7.2))}pt;font-weight:${td.subheaderFontBold?700:400};font-family:'${subheaderFamily}',Arial,sans-serif;`;
+  const fontDefs=[['ERPHeaderCustom',fonts.header],['ERPSubheaderCustom',fonts.subheader],['ERPHeaderBodyCustom',fonts.headerBody],['ERPTableCustom',fonts.table],['ERPInvoiceCustom',td.customHeaderFont]].filter(x=>x[1]).map(([n,d])=>`@font-face{font-family:'${n}';src:url('${d}') format('truetype');font-display:swap;}`).join('');
+  const fontFace=fontDefs?`<style>${fontDefs}</style>`:"";
+  const tableWeight=td.tableFontBold?700:(dataTextStyle==="bold"?700:400);
+  const bodyStyle=`--td-hb-size:${Math.max(5,Math.min(14,Number(td.headerBodyFontSize)||7.2))}pt;--td-hb-weight:${td.headerBodyFontBold?700:400};--td-hb-family:'${headerBodyFamily}',Arial,sans-serif;--td-table-size:${clampFontSize(td.dataFontSize||7.6)}pt;--td-table-head-size:${(6.85*(clampFontSize(td.dataFontSize||7.6)/6.65)).toFixed(2)}pt;--td-table-weight:${tableWeight};--td-table-family:'${tableFamily}',Arial,sans-serif;`;
+  return `${fontFace}<div class="id data-style-${dataTextStyle}" style="${bodyStyle}">
     <div class="id-hd">
       <div class="id-st">Original Copy</div>
-      <div class="id-fn">${ec(f.name)}</div>
-      <div class="id-fa">${ec(f.address)}</div>
-      <div class="id-fa">Phone: ${ec(f.phone)} | E-Mail: ${ec(f.email)}</div>
+      <div class="id-fn" style="${headerStyle}">${ec(f.name)}</div>
+      <div class="id-fa" style="${subheaderStyle}">${ec(f.address)}</div>
+      <div class="id-fa" style="${subheaderStyle}">Phone: ${ec(f.phone)} | E-Mail: ${ec(f.email)}</div>
     </div>
     <div class="id-gst"><span>GSTIN: ${ec(f.gstin)}</span><span>PAN: ${ec(f.pan)}</span></div>
     <div class="id-meta">
@@ -2993,7 +3018,7 @@ function invDoc(c,form,sch,invNo){
         </div>
       </div>
     </div>
-    <table class="itbl"><colgroup><col style="width:4%"><col style="width:19%"><col style="width:7%"><col style="width:5%"><col style="width:4.5%"><col style="width:7%"><col style="width:10%"><col style="width:6.5%"><col style="width:8%"><col style="width:6.5%"><col style="width:8%"><col style="width:14.5%"></colgroup><thead><tr>${["Sr. No","Name of Product","HSN/SAC","Qty","Unit","Rate","Taxable Value","CGST Rate %","CGST Amt","SGST Rate %","SGST Amt","Total"].map(h=>`<th class="ith">${h}${h==="Unit"?`<div style="font-size:7px;font-weight:600;line-height:1.1;margin-top:2px;white-space:nowrap">KG / GM / LTR</div>`:""}</th>`).join("")}</tr></thead><tbody>
+    <table class="itbl"><colgroup><col style="width:4%"><col style="width:16.5%"><col style="width:8.5%"><col style="width:6%"><col style="width:4.5%"><col style="width:7%"><col style="width:10%"><col style="width:6.5%"><col style="width:8%"><col style="width:6.5%"><col style="width:8%"><col style="width:14.5%"></colgroup><thead><tr>${["Sr. No","Name of Product","HSN/SAC","Qty","Unit","Rate","Taxable Value","CGST Rate %","CGST Amt","SGST Rate %","SGST Amt","Total"].map(h=>`<th class="ith">${h}${h==="Unit"?`<div style="font-size:7px;font-weight:600;line-height:1.1;margin-top:2px;white-space:nowrap">KG / GM / LTR</div>`:""}</th>`).join("")}</tr></thead><tbody>
       ${ir}
       ${blanks}
       <tr style="background:#F0F4F8"><td colspan="6" class="itd" style="text-align:right;font-weight:700">Total:</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd"></td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd"></td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.gross.toFixed(2)}</td></tr>
@@ -4054,7 +4079,7 @@ function pgNew(){
       <option value="disabled"  ${(A.sett||ST0).gstMode==="disabled"?"selected":""}>Disabled</option>
     </select>
   </div>
-</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="niReset()" title="Clear form">&#10006; Clear</button><label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txl)"><label class="tog"><input type="checkbox" ${NI.doShuffle?"checked":""} onchange="NI.doShuffle=this.checked"><span class="tog-s"></span></label>Randomise</label>${NI.calc&&!NI.saved?`<button class="btn btn-g btn-sm" onclick="niVerifyOpen()">&#128190; Save</button>`:""}${NI.saved?`<span class="bdg bg">&#10003; Saved</span>`:""}${NI.calc?`<button class="btn btn-t btn-sm" onclick="niPr(NI.tab||'merged')">&#128424; Print (Preview)</button>`:""}</div></div><div class="ni-layout" style="display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start;margin-bottom:14px"><div class="card" style="margin:0"><div class="chd ni-section-head" style="background-image:none!important"><span class="cht">Invoice Details</span><span class="mono" style="font-weight:700;font-size:12px;color:var(--nvtx)">${nxt}</span></div><div class="cbd"><div class="fg fg3 ni-basic-grid" style="margin-bottom:12px"><div><label class="flbl">School <span style="color:var(--rd)">*</span></label>${niSchoolPickerHTML(NI.schoolId)}</div><div><label class="flbl">Invoice Date</label><input class="fi" type="date" value="${NI.date}" onchange="NI.date=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;const _p=(NI.date||'').split('-');if(_p.length===3){const _mi=parseInt(_p[1],10)-1;if(_mi>=0&&_mi<12){NI.month=MN[_mi];NI.year=_p[0];}}NI.availableSearch='';gP('new')"/></div><div><label class="flbl">Bill Month / Year</label><div style="display:flex;gap:7px"><select class="fi" onchange="NI.month=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')">${moO}</select><input class="fi" style="width:74px" type="number" value="${NI.year}" onchange="NI.year=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')"/></div></div></div>${schI}${dupW}${activeBillingMode()==="hybrid"?`<section id="mdm-v7-original-hybrid" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Original vs Hybrid Verification</div><div class="mdm-v7-sub">Live invoice calculation · GST-aware financial comparison</div></div><span class="mdm-v7-state" id="mdm-v7-verify-state">${NI.calc?"Ready to verify":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Original Net Payable</small><b id="mdm-v7-original-net">${NI.calc?R(NI.calc.mTot?.net||0):"—"}</b></div><div><small>Hybrid Net Payable</small><b id="mdm-v7-hybrid-net">—</b></div><div><small>Net Difference</small><b id="mdm-v7-net-diff">—</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-verify" ${NI.calc?"":"disabled"} onclick="mdmV7Verify()">Verify Original vs Hybrid</button><span class="mdm-v7-note">Read-only check. Original calculation and invoice/PDF data are not modified.</span></div><div id="mdm-v7-verify-results" class="mdm-v7-results" hidden></div></section><section id="mdm-v7-smart-recon" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Smart Reconciliation Optimizer</div><div class="mdm-v7-sub">Hybrid-only · Green Veg Mix primary: jointly optimize quantity + daily rate, then exact GST reconciliation</div></div><span class="mdm-v7-state" id="mdm-v7-recon-state">${NI.calc?"Awaiting verified baseline":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Reconciliation Difference</small><b id="mdm-v7-diff">—</b></div><div><small>Valid Options</small><b id="mdm-v7-options">Not evaluated</b></div><div><small>Apply Status</small><b id="mdm-v7-action">Blocked until valid option</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-analyze" ${NI.calc?"":"disabled"} onclick="mdmV7Analyze()">Analyze &amp; Compare</button><span class="mdm-v7-note">Green Veg Mix is optimized first using quantity + its variable daily rate together. Other enabled items are fallback only. Exact GST/Gross/Net match required; no arbitrary balancing entry.</span></div><div id="mdm-v7-recon-results" class="mdm-v7-results" hidden></div></section>`:""}<div class="ni-entry-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch"><div class="ni-class-card"><div class="ni-class-card-title">Class 1–5 Students</div><input id="ni-s15" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s15}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s15',this.value)" onchange="niStudentInput('s15',this.value)"/>${s15>0?`<div class="ni-alloc">Alloc: ${R(a15)}</div>`:""}</div><div class="ni-class-card"><div class="ni-class-card-title">Class 6–8 Students</div><input id="ni-s68" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s68}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s68',this.value)" onchange="niStudentInput('s68',this.value)"/>${s68>0?`<div class="ni-alloc">Alloc: ${R(a68)}</div>`:""}</div><div class="ni-fruit-card" style="flex:0 0 auto;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 13px;min-width:230px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><label class="tog"><input type="checkbox" ${NI.useFruit?"checked":""} onchange="NI.useFruit=this.checked;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton();gP('new')"><span class="tog-s"></span></label>
+</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="niReset()" title="Clear form">&#10006; Clear</button><label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txl)"><label class="tog"><input type="checkbox" ${NI.doShuffle?"checked":""} onchange="NI.doShuffle=this.checked"><span class="tog-s"></span></label>Randomise</label>${NI.calc&&!NI.saved?`<button class="btn btn-g btn-sm" onclick="niVerifyOpen()">&#128190; Save</button>`:""}${NI.saved?`<span class="bdg bg">&#10003; Saved</span>`:""}${NI.calc?`<button class="btn btn-t btn-sm" onclick="niPr(NI.tab||'merged')">&#128424; Print (Preview)</button>`:""}</div></div><div class="ni-layout" style="display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start;margin-bottom:14px"><div class="card" style="margin:0"><div class="chd ni-section-head" style="background-image:none!important"><span class="cht">Invoice Details</span><span class="mono" style="font-weight:700;font-size:12px;color:var(--nvtx)">${nxt}</span></div><div class="cbd"><div class="fg fg3 ni-basic-grid" style="margin-bottom:12px"><div><label class="flbl">School <span style="color:var(--rd)">*</span></label>${niSchoolPickerHTML(NI.schoolId)}</div><div><label class="flbl">Invoice Date</label><input class="fi" type="date" value="${NI.date}" onchange="NI.date=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;const _p=(NI.date||'').split('-');if(_p.length===3){const _mi=parseInt(_p[1],10)-1;if(_mi>=0&&_mi<12){NI.month=MN[_mi];NI.year=_p[0];}}NI.availableSearch='';gP('new')"/></div><div><label class="flbl">Bill Month / Year</label><div style="display:flex;gap:7px"><select class="fi" onchange="NI.month=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')">${moO}</select><input class="fi" style="width:74px" type="number" value="${NI.year}" onchange="NI.year=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')"/></div></div></div>${schI}${dupW}${activeBillingMode()==="hybrid"?`<section id="mdm-v7-original-hybrid" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Original vs Hybrid Verification</div><div class="mdm-v7-sub">Live invoice calculation · GST-aware financial comparison</div></div><span class="mdm-v7-state" id="mdm-v7-verify-state">${NI.calc?"Ready to verify":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Original Net Payable</small><b id="mdm-v7-original-net">${NI.calc?R(NI.calc.mTot?.net||0):"—"}</b></div><div><small>Hybrid Net Payable</small><b id="mdm-v7-hybrid-net">—</b></div><div><small>Net Difference</small><b id="mdm-v7-net-diff">—</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-verify" ${NI.calc?"":"disabled"} onclick="mdmV7Verify()">Verify Original vs Hybrid</button><span class="mdm-v7-note">Read-only check. Original calculation and invoice/PDF data are not modified.</span></div><div id="mdm-v7-verify-results" class="mdm-v7-results" hidden></div></section><section id="mdm-v7-smart-recon" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Smart Reconciliation Optimizer</div><div class="mdm-v7-sub">Hybrid-only · Green Veg Mix primary: jointly optimize quantity + daily rate, then exact GST reconciliation</div></div><span class="mdm-v7-state" id="mdm-v7-recon-state">${NI.calc?"Awaiting verified baseline":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Reconciliation Difference</small><b id="mdm-v7-diff">—</b></div><div><small>Valid Options</small><b id="mdm-v7-options">Not evaluated</b></div><div><small>Apply Status</small><b id="mdm-v7-action">Blocked until valid option</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-analyze" ${NI.calc?"":"disabled"} onclick="mdmV7Analyze()">Analyze &amp; Compare</button><span class="mdm-v7-note">After manual rounding, the remaining plus/minus difference is automatically analyzed for Green Veg Mix first using joint quantity + daily-rate adjustment. Other enabled items are fallback only. Exact GST/Gross/Net match required; no arbitrary balancing entry.</span></div><div id="mdm-v7-recon-results" class="mdm-v7-results" hidden></div></section>`:""}<div class="ni-entry-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch"><div class="ni-class-card"><div class="ni-class-card-title">Class 1–5 Students</div><input id="ni-s15" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s15}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s15',this.value)" onchange="niStudentInput('s15',this.value)"/>${s15>0?`<div class="ni-alloc">Alloc: ${R(a15)}</div>`:""}</div><div class="ni-class-card"><div class="ni-class-card-title">Class 6–8 Students</div><input id="ni-s68" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s68}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s68',this.value)" onchange="niStudentInput('s68',this.value)"/>${s68>0?`<div class="ni-alloc">Alloc: ${R(a68)}</div>`:""}</div><div class="ni-fruit-card" style="flex:0 0 auto;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 13px;min-width:230px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><label class="tog"><input type="checkbox" ${NI.useFruit?"checked":""} onchange="NI.useFruit=this.checked;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton();gP('new')"><span class="tog-s"></span></label>
 
 <span style="font-weight:600;font-size:12.5px">Egg / Fruit</span></div>${NI.useFruit?`<div style="display:flex;gap:8px"><div style="flex:1"><label class="flbl">Count</label><input class="fi fi-sm" type="number" min="0" value="${NI.sFruit}" onchange="NI.sFruit=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.sFruit=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" placeholder="${s15+s68}"/></div><div style="flex:1"><label class="flbl">Rate</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[5,6,7].map(rv=>`<button class="btn btn-sm" style="background:${NI.fruitRate===String(rv)?"var(--sf)":"var(--bd)"};color:${NI.fruitRate===String(rv)?"#fff":"var(--tx)"};border:none;height:25px;padding:0 8px;font-size:11px" onclick="NI.fruitRate='${rv}';NI.calc=null;NI.calcSignature=null;NI.saved=false;gP('new')">\u20B9${rv}</button>`).join("")}<input class="fi fi-sm" type="number" min="0" value="${NI.fruitRate}" onchange="NI.fruitRate=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.fruitRate=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" style="width:48px"/></div></div></div>${aFr>0?`<div style="font-size:10.5px;color:var(--sf);margin-top:5px;font-weight:600">Alloc: ${R(aFr)}</div>`:""}`:""}</div>
 ${niAmountAdjustmentEnabled()?`<div class="ni-adjust-control ni-adjust-secondary" style="flex:0 0 100%;width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:9px;background:var(--card)">
@@ -4114,7 +4139,20 @@ function niDraftMasterInvoice(){
   const hybridActive=activeBillingMode()==="hybrid";
   const _srcSig=JSON.stringify(sourceRows.map(r=>[r.id,r.qty,r.rate,r.taxable,r.cgst,r.sgst]));
   const _approved=hybridActive&&window.MDM_V7_APPLIED_SNAPSHOT&&window.MDM_V7_APPLIED_SOURCE_SIGNATURE===_srcSig?JSON.parse(JSON.stringify(window.MDM_V7_APPLIED_SNAPSHOT)):null;
-  const hybridSnap=hybridActive?(_approved||hybridMakeSnapshot({id:"__new_invoice_preview__",invNo:nxt,savedAt:null,net:t.net||0,grand:t.gross||0,taxable:t.taxable||0,cgst:t.cgst||0,sgst:t.sgst||0,roundOff:t.roundOff||0,mergedTotals:t,mergedItems:sourceRows})):null;
+  let hybridSnap=null;
+  if(hybridActive){
+    const baseSnap=hybridMakeSnapshot({id:"__new_invoice_preview__",invNo:nxt,savedAt:null,net:t.net||0,grand:t.gross||0,taxable:t.taxable||0,cgst:t.cgst||0,sgst:t.sgst||0,roundOff:t.roundOff||0,mergedTotals:t,mergedItems:sourceRows});
+    if(_approved)hybridSnap=_approved;
+    else {
+      const auto=mdmV7AutoReconcileSnapshot(baseSnap,hybridReconEligible());
+      hybridSnap=auto.snapshot||baseSnap;
+      window.MDM_V7_AUTO_STATUS={status:auto.status,optionCount:(auto.proposals||[]).length,diagnostics:auto.diagnostics||null,at:new Date().toISOString()};
+      if(auto.status==="AUTO_RECONCILED"){
+        window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(hybridSnap));
+        window.MDM_V7_APPLIED_SOURCE_SIGNATURE=_srcSig;
+      }
+    }
+  }
   const displayRows=hybridActive?hybridProjectRows(sourceRows,hybridSnap):sourceRows;
   const invoiceTotals=hybridActive?{taxable:hybridSnap.hybridTaxableTotal,cgst:hybridSnap.hybridCgstTotal,sgst:hybridSnap.hybridSgstTotal,gross:hybridSnap.hybridGross,roundOff:hybridSnap.hybridRoundOff,net:hybridSnap.hybridNet}:t;
   return {
@@ -4790,13 +4828,34 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
 function hybridLivePreviewHTML(calc){
   if(activeBillingMode()!=="hybrid"||!calc||!Array.isArray(calc.merged))return "";
   try{
-    const snap=hybridMakeSnapshot({id:"LIVE-PREVIEW",invNo:niResolvedInvNo(false)||"Draft",schoolName:A.schools.find(x=>x.id===NI.schoolId)?.name||"",savedAt:null,net:Number(calc.mTot?.net)||0,mergedItems:calc.merged});
-    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">${modeLabel(snap.displayMode)} · Rate reconciled</span></div><div class="cbd"><div class="info inf-b" style="margin-bottom:9px">Hybrid Quantity follows the approved item rule. Every item rate is automatically recalculated from its saved Original item Taxable ÷ Billed Quantity. This applies to all items, including items without quantity rounding; no adjustment is shifted to another item. Original invoice, Market Rate Control, GST and Net Payable remain unchanged.</div><div class="info inf-g" style="margin-bottom:9px">${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹${Number(snap.reconciliation.differenceAfter||0).toFixed(2)}.</div><div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Actual Qty</th><th class="num">Normalized Qty</th><th class="num">Billed Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.actualQuantity)} ${hybridEsc(r.actualUnit)}</td><td class="num"><b>${hybridEsc(r.normalizedQuantity)} ${hybridEsc(r.normalizedUnit)}</b></td><td class="num"><b>${hybridEsc(r.billedQuantity)} ${hybridEsc(r.billedUnit)}</b></td><td>${hybridEsc(r.actualUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.actualUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(2)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
+    const mt=calc.mTot||{};
+    const baseSnap=hybridMakeSnapshot({id:"LIVE-PREVIEW",invNo:niResolvedInvNo(false)||"Draft",schoolName:A.schools.find(x=>x.id===NI.schoolId)?.name||"",savedAt:null,net:Number(mt.net)||0,grand:Number(mt.gross??mt.grand)||0,taxable:Number(mt.taxable)||0,cgst:Number(mt.cgst)||0,sgst:Number(mt.sgst)||0,roundOff:Number(mt.roundOff)||0,mergedTotals:mt,mergedItems:calc.merged});
+    const auto=mdmV7AutoReconcileSnapshot(baseSnap,hybridReconEligible());
+    const snap=auto.snapshot||baseSnap;
+    if(auto.status==="AUTO_RECONCILED"){
+      window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(snap));
+      window.MDM_V7_APPLIED_SOURCE_SIGNATURE=mdmV7SourceSignature(calc.merged);
+      window.MDM_V7_AUTO_STATUS={status:auto.status,optionCount:auto.proposals.length,at:new Date().toISOString()};
+    }
+    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">${modeLabel(snap.displayMode)} · ${auto.status==="AUTO_RECONCILED"?"Smart Optimizer · Exact Match":"Reconciliation Pending"}</span></div><div class="cbd"><div class="info ${auto.status==="AUTO_RECONCILED"?"inf-g":"inf-b"}" style="margin-bottom:9px">${auto.status==="AUTO_RECONCILED"?"Smart Optimizer automatically absorbed the final plus/minus difference in the Green Veg Mix / enabled eligible items using a joint quantity + daily-rate adjustment. Original Gross, GST and Net Payable are now exactly matched.":"Hybrid Quantity follows the approved item rules. The Smart Optimizer will analyze the final residual before save. If no valid exact solution exists, saving remains blocked."}</div><div class="info inf-g" style="margin-bottom:9px">${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹${Number(snap.reconciliation.differenceAfter||0).toFixed(2)}.</div>${snap.optimizer?.autoApplied?`<section class="mdm-v7-recon" style="margin:10px 0;border:1.5px solid var(--nv2);border-radius:10px;padding:12px"><div class="mdm-v7-title">Optimizer Activity · Applied Automatically</div><div class="mdm-v7-sub">Exact audit of the automatic adjustment; Original invoice remains unchanged.</div><div class="mdm-v7-stats"><div><small>Difference Before</small><b>${mdmV7INR(snap.reconciliation.differenceBefore||0)}</b></div><div><small>Difference After</small><b>${mdmV7INR(snap.reconciliation.differenceAfter||0)}</b></div><div><small>Adjusted Item(s)</small><b>${hybridEsc((snap.optimizer.adjustedItems||[]).map(a=>a.name).join(", ")||snap.reconciliation.adjustmentItemName||"—")}</b></div></div><div style="overflow:auto;margin-top:9px"><table class="dt"><thead><tr><th>Item</th><th class="num">Qty Before</th><th class="num">Qty Applied</th><th class="num">Rate Before</th><th class="num">Rate Applied</th><th class="num">Taxable Before</th><th class="num">Taxable Applied</th></tr></thead><tbody>${(snap.optimizer.adjustedItems||[]).map(a=>`<tr><td>${hybridEsc(a.name)}</td><td class="num">${hybridEsc(a.fromQuantity)}</td><td class="num"><b>${hybridEsc(a.toQuantity)}</b></td><td class="num">${mdmV7INR(a.fromRate)}</td><td class="num"><b>${mdmV7INR(a.toRate)}</b></td><td class="num">${mdmV7INR(a.fromTaxable)}</td><td class="num"><b>${mdmV7INR(a.toTaxable)}</b></td></tr>`).join("")}</tbody></table></div><div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:12px"><span>Original Gross: <b>${mdmV7INR(snap.sourceGross)}</b></span><span>Hybrid Gross: <b>${mdmV7INR(snap.hybridGross)}</b></span><span>Original Net: <b>${mdmV7INR(snap.sourceNet)}</b></span><span>Hybrid Net: <b>${mdmV7INR(snap.hybridNet)}</b></span></div></section>`:`<div class="info inf-b" style="margin:9px 0"><b>Optimizer adjustment not applied.</b> Residual difference: ${mdmV7INR(snap.reconciliation?.differenceBefore??(snap.sourceNet-snap.hybridNet))}. See Smart Reconciliation Optimizer below for analysis and status.</div>`}<div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Actual Qty</th><th class="num">Normalized Qty</th><th class="num">Billed Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.actualQuantity)} ${hybridEsc(r.actualUnit)}</td><td class="num"><b>${hybridEsc(r.normalizedQuantity)} ${hybridEsc(r.normalizedUnit)}</b></td><td class="num"><b>${hybridEsc(r.billedQuantity)} ${hybridEsc(r.billedUnit)}</b></td><td>${hybridEsc(r.actualUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.actualUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(2)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
   }catch(e){return `<div class="info inf-r" style="margin:10px 0"><b>Hybrid preview unavailable:</b> ${hybridEsc(e.message||e)}. Existing Original calculation is unaffected.</div>`;}
 }
 
 function mdmV7Money(v){return Math.round((Number(v)||0)*100)/100;}
 function mdmV7INR(v){return "₹"+mdmV7Money(v).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function mdmV7SourceSignature(rows){return JSON.stringify((rows||[]).map(r=>[r.id,r.qty,r.rate,r.taxable,r.cgst,r.sgst]));}
+function mdmV7AutoReconcileSnapshot(baseSnap,eligibleIds){
+  const result=mdmV7Solve(baseSnap,eligibleIds||hybridReconEligible());
+  const proposals=(result.options||[]).map(option=>mdmV7BuildProposal(baseSnap,option)).filter(Boolean);
+  if(!proposals.length)return {status:result.status||"NO_EXACT_SOLUTION",snapshot:baseSnap,proposals:[],diagnostics:result};
+  const best=proposals[0];
+  best.optimizer.applied=true;
+  best.optimizer.appliedAt=new Date().toISOString();
+  best.optimizer.appliedBy="AUTO_FINAL_RECONCILIATION";
+  best.optimizer.autoApplied=true;
+  best.optimizer.searchDiagnostics={eligibleRows:result.eligibleRows||0,searchStates:result.searchStates||0};
+  return {status:"AUTO_RECONCILED",snapshot:best,proposals,diagnostics:result};
+}
 function mdmV7Verify(){
   const calc=NI&&NI.calc;
   const out=document.getElementById("mdm-v7-verify-results");
@@ -4805,7 +4864,16 @@ function mdmV7Verify(){
   try{
     const original=calc.mTot||{};
     const temp={id:"LIVE-V7-VERIFY",invNo:niResolvedInvNo(false)||"Draft",net:Number(original.net)||0,taxable:Number(original.taxable)||0,cgst:Number(original.cgst)||0,sgst:Number(original.sgst)||0,roundOff:Number(original.roundOff)||0,mergedTotals:{taxable:Number(original.taxable)||0,cgst:Number(original.cgst)||0,sgst:Number(original.sgst)||0,roundOff:Number(original.roundOff)||0,net:Number(original.net)||0},mergedItems:calc.merged};
-    const snap=hybridMakeSnapshot(temp,hybridUnitDisplayMode());
+    const baseSnap=hybridMakeSnapshot(temp,hybridUnitDisplayMode());
+    const sig=mdmV7SourceSignature(calc.merged);
+    const approved=window.MDM_V7_APPLIED_SNAPSHOT&&window.MDM_V7_APPLIED_SOURCE_SIGNATURE===sig?JSON.parse(JSON.stringify(window.MDM_V7_APPLIED_SNAPSHOT)):null;
+    const auto=approved?{status:"APPROVED",snapshot:approved}:mdmV7AutoReconcileSnapshot(baseSnap,hybridReconEligible());
+    const snap=auto.snapshot||baseSnap;
+    if(auto.status==="AUTO_RECONCILED"){
+      window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(snap));
+      window.MDM_V7_APPLIED_SOURCE_SIGNATURE=sig;
+      window.MDM_V7_AUTO_STATUS={status:auto.status,optionCount:auto.proposals.length,at:new Date().toISOString()};
+    }
     const hyTax=mdmV7Money(snap.rows.reduce((a,r)=>a+r.displayTaxable,0));
     const hyCg=mdmV7Money(snap.rows.reduce((a,r)=>a+r.displayCgst,0));
     const hySg=mdmV7Money(snap.rows.reduce((a,r)=>a+r.displaySgst,0));
@@ -4817,12 +4885,12 @@ function mdmV7Verify(){
     const grossDiff=mdmV7Money(hyGross-origGross);
     const rowTaxDiff=mdmV7Money(hyTax-mdmV7Money(original.taxable));
     const gstDiff=mdmV7Money((hyCg+hySg)-((Number(original.cgst)||0)+(Number(original.sgst)||0)));
-    const pass=Math.abs(diff)<0.01&&Math.abs(grossDiff)<0.01&&Math.abs(rowTaxDiff)<0.01&&Math.abs(gstDiff)<0.01&&snap.reconciliation.status==="RECONCILED";
+    const pass=Math.abs(diff)<0.01&&Math.abs(grossDiff)<0.01&&Math.abs(rowTaxDiff)<0.01&&Math.abs(gstDiff)<0.01&&["RECONCILED","RECONCILED_BY_SMART_OPTIMIZER"].includes(snap.reconciliation.status)&&snap.reconciliation.financialMatch===true;
     put("mdm-v7-original-net",mdmV7INR(origNet));put("mdm-v7-hybrid-net",mdmV7INR(hyNet));put("mdm-v7-net-diff",mdmV7INR(diff));
     put("mdm-v7-hybrid-gross",mdmV7INR(hyGross));
     put("mdm-v7-gross-diff",mdmV7INR(grossDiff));
     put("mdm-v7-verify-state",pass?"VERIFIED · MATCH":"MISMATCH · BLOCKED");
-    out.hidden=false;out.innerHTML=`<div class="info ${pass?"inf-g":"inf-r"}"><b>${pass?"Original and Hybrid financial totals match.":"Verification failed. Do not proceed."}</b><br>Gross difference: ${mdmV7INR(grossDiff)} · Taxable difference: ${mdmV7INR(rowTaxDiff)} · GST difference: ${mdmV7INR(gstDiff)} · Net Payable difference: ${mdmV7INR(diff)}<br>Rows checked: ${snap.reconciliation.rowsChecked} · Rows reconciled: ${snap.reconciliation.rowsPassed}</div>`;
+    out.hidden=false;out.innerHTML=`<div class="info ${pass?"inf-g":"inf-r"}"><b>${pass?"Original and Hybrid financial totals match.":"Verification failed. Do not proceed."}</b><br>${snap.optimizer?.autoApplied?"Smart Optimizer automatically absorbed the final difference in Green Veg Mix / enabled items. ":""}Gross difference: ${mdmV7INR(grossDiff)} · Taxable difference: ${mdmV7INR(rowTaxDiff)} · GST difference: ${mdmV7INR(gstDiff)} · Net Payable difference: ${mdmV7INR(diff)}<br>Rows checked: ${snap.reconciliation.rowsChecked} · Rows reconciled: ${snap.reconciliation.rowsPassed}</div>`;
     window.MDM_V7_VERIFICATION={passed:pass,originalGross:origGross,hybridGross:hyGross,grossDifference:grossDiff,originalNet:origNet,hybridNet:hyNet,netDifference:diff,taxableDifference:rowTaxDiff,gstDifference:gstDiff,checkedAt:new Date().toISOString()};
     return pass;
   }catch(e){out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Verification unavailable:</b> ${hybridEsc(e.message||e)}</div>`;put("mdm-v7-verify-state","ERROR · BLOCKED");return false;}
@@ -4844,7 +4912,7 @@ function mdmV7Category(row){
 function mdmV7Candidate(row,qty,rateOverride){
   const money=mdmV7Money, unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||"KG").toUpperCase();
   const factor=(unit==="GM"||unit==="G"||unit==="ML")?0.001:1;
-  const baseQty=money(qty*factor);if(!(baseQty>0))return null;
+  const baseQty=Number((Number(qty)*factor).toFixed(6));if(!(baseQty>0))return null;
   const sourceTax=money(row.sourceTaxable),normalizedRate=mdmV7RoundRate(sourceTax/baseQty);
   const rate=rateOverride==null?normalizedRate:money(rateOverride);
   if(!(rate>0))return null;
@@ -4897,25 +4965,37 @@ function mdmV7Solve(baseSnap,eligibleIds){
         candidates=[];
         const u=String(g.row.billedUnit||g.row.normalizedUnit||g.row.actualUnit||"KG").toUpperCase();
         const factor=(u==="GM"||u==="G"||u==="ML")?0.001:1;
-        const baseRate=Number(g.row.sourceRateInHybridUnit)||Number(g.row.displayRate)||0;
-        for(const qrec of g.candidates){
-          const baseQty=mdmV7Money(qrec.qty*factor);if(!(baseQty>0)||needTax<=0)continue;
+        // Anchor the optimization to the already-normalized visible Hybrid rate,
+        // not the hidden/source rate. The optimizer may make a small disclosed
+        // adjustment from this point; it must not silently undo rate normalization.
+        const baseRate=Number(g.row.displayRate)||Number(g.row.sourceRateInHybridUnit)||0;
+        const q0=Number(g.row.billedQuantity)||0;
+        const maxRateMove=Math.max(10,Math.abs(baseRate)*0.20);
+        const maxQtyMove=Math.max(1,Math.abs(q0)*0.20);
+        // Joint search: quantity can move in 1-gram (0.001 KG/LTR) increments
+        // inside a conservative local window; for every quantity derive the
+        // exact two-decimal billing rate needed for the residual taxable target.
+        // This is the final absorption step, after all other enabled rows.
+        const qSteps=Math.min(4001,Math.ceil(maxQtyMove/0.001));
+        for(let qi=-qSteps;qi<=qSteps;qi++){
+          const q=Math.round((q0+qi*0.001)*1000)/1000;
+          if(q<=0||Math.abs(q-q0)>maxQtyMove+1e-9)continue;
+          const baseQty=mdmV7Money(q*factor);if(!(baseQty>0)||needTax<=0)continue;
           const exactRate=needTax/100/baseQty;
           const rate=Math.round(exactRate*100)/100;
-          if(Math.abs(rate-exactRate)>0.000001)continue;
-          // Do not permit an implausible rate swing; Green Veg Mix has a daily rate,
-          // so it may move, but only within the configured 20%/₹10 per base-unit guard.
-          const maxRateMove=Math.max(10,Math.abs(baseRate)*0.20);
+          if(rate<=0)continue;
           if(Math.abs(rate-baseRate)>maxRateMove+0.000001)continue;
-          const c=mdmV7Candidate(g.row,qrec.qty,rate);if(!c)continue;
+          const c=mdmV7Candidate(g.row,q,rate);if(!c)continue;
           const ct=cents(c.displayTaxable),cc=cents(c.displayCgst),cs=cents(c.displaySgst);
           if(ct!==needTax||cc!==needCg||cs!==needSg)continue;
-          const rateMove=Math.abs(rate-baseRate),qtyMove=Math.abs(qrec.k);
-          // Objective: minimize percentage movement on BOTH dimensions. This naturally
-          // prefers a small split adjustment over a conspicuous one-sided change.
-          const qtyPct=Math.abs(qrec.qty-(Number(g.row.billedQuantity)||0))/Math.max(0.001,Math.abs(Number(g.row.billedQuantity)||0))*100;
+          const rateMove=Math.abs(rate-baseRate);
+          const qtyPct=Math.abs(q-q0)/Math.max(0.001,Math.abs(q0))*100;
           const ratePct=rateMove/Math.max(0.01,Math.abs(baseRate))*100;
-          candidates.push({index:g.index,category:g.category,row:c,t:ct,cg:cc,sg:cs,move:qtyMove,rateMove,k:qrec.k,qtyPct,ratePct,combinedCost:qtyPct+ratePct});
+          // Penalize large one-sided changes; a balanced small move in both
+          // dimensions is preferred when it yields the same exact financial result.
+          const balancePenalty=Math.abs(qtyPct-ratePct)*0.08;
+          const combinedCost=qtyPct+ratePct+balancePenalty;
+          candidates.push({index:g.index,category:g.category,row:c,t:ct,cg:cc,sg:cs,move:Math.abs(q-q0),rateMove,k:qi,qtyPct,ratePct,combinedCost});
         }
       }
       for(const c of candidates){
@@ -8403,9 +8483,21 @@ async function buildInvoicePdfFile(inv,opts={}){
     MAJOR_HEADER_FILL=BAND,
     MEDIUM=invoiceThemeMedium(TH), LIGHT=hexToRgb(TH.highlight)||[214,226,240], GRID=hexToRgb(TH.border)||[204,214,227], OUTER_BORDER=(TH.borderMode||"black")==="black"?[0,0,0]:invoiceThemeDarkest(TH), TEXT=hexToRgb(smartHeaderText(TH.headerBg,TH.headerText))||[22,31,42], HEADER_TEXT=hexToRgb(smartHeaderText(rgbToHex(BAND),TH.headerText))||[255,255,255], WHITE=[255,255,255];
   const DATA_FONT=clampFontSize(TH.dataFontSize||7.25);
+  const DATA_TEXT_STYLE=["normal","bold","italic"].includes(TH.dataTextStyle)?TH.dataTextStyle:"normal";
   const TABLE_FONT_SCALE=DATA_FONT/6.65;
   const TABLE_HEADER_FONT=7.25*TABLE_FONT_SCALE;
   const font="helvetica";
+  const headerFontSize=Math.max(9,Math.min(24,Number(TH.headerFontSize)||15)),subheaderFontSize=Math.max(5,Math.min(14,Number(TH.subheaderFontSize)||7.2));
+  const pdfFonts={};
+  const registerPdfFont=(key,data)=>{if(!data)return "helvetica";try{const b64=String(data).split(",")[1];if(!b64)return "helvetica";const family="ERP_"+key;doc.addFileToVFS(family+".ttf",b64);doc.addFont(family+".ttf",family,"normal");doc.addFont(family+".ttf",family,"bold");pdfFonts[key]=family;return family;}catch(e){console.warn("Custom PDF font unavailable for "+key+"; using Helvetica",e);return "helvetica";}};
+  const cf=TH.customFonts||{};
+  const headerFont=registerPdfFont("Header",cf.header?.data||TH.customHeaderFont);
+  const subheaderFont=registerPdfFont("Subheader",cf.subheader?.data||TH.customHeaderFont);
+  const headerBodyFont=registerPdfFont("HeaderBody",cf.headerBody?.data);
+  const tableFont=registerPdfFont("Table",cf.table?.data);
+  const headerText=(v,x,y,size,bold,align,c)=>{setText(c);doc.setFont(headerFont,bold?"bold":"normal");doc.setFontSize(size);doc.text(_pdfEsc(v),x,y,{align,baseline:"top"});};
+  const headerBodyText=(v,x,y,size=7.2,bold=false,align="left",c=TEXT)=>{setText(c);doc.setFont(headerBodyFont,bold||TH.headerBodyFontBold?"bold":"normal");doc.setFontSize(Math.max(5,Math.min(14,Number(TH.headerBodyFontSize)||size)));doc.text(_pdfEsc(v),x,y,{align,baseline:"top"});};
+  const tableText=(v,x,y,size,bold=false,align="left",c=TEXT)=>{setText(c);doc.setFont(tableFont,bold||TH.tableFontBold?"bold":"normal");doc.setFontSize(size);doc.text(_pdfEsc(v),x,y,{align,baseline:"top"});};
   const setText=(c=TEXT)=>doc.setTextColor(c[0],c[1],c[2]);
   const setFill=(c)=>doc.setFillColor(c[0],c[1],c[2]);
   const setDraw=(c=GRID)=>doc.setDrawColor(c[0],c[1],c[2]);
@@ -8421,7 +8513,9 @@ async function buildInvoicePdfFile(inv,opts={}){
     rect(x,y,w,h,null,GRID,.42);
     let s=safePdf(v);if(!s)return;
     const pad=5;
-    setText(TEXT);doc.setFont(font,bold?(italic?"bolditalic":"bold"):(italic?"italic":"normal"));doc.setFontSize(size);
+    const styleBold=DATA_TEXT_STYLE==="bold"?true:DATA_TEXT_STYLE==="normal"?false:!!bold;
+    const styleItalic=DATA_TEXT_STYLE==="italic"?true:DATA_TEXT_STYLE==="normal"?false:!!italic;
+    setText(TEXT);doc.setFont(tableFont,styleBold?(styleItalic?"bolditalic":"bold"):(styleItalic?"italic":"normal"));doc.setFontSize(size);
     const maxW=Math.max(3,w-pad*2), lines=doc.splitTextToSize(s,maxW);
     const lineH=size+1.0;
     const shown=lines.slice(0,Math.max(1,Math.floor((h-2)/lineH)));
@@ -8432,15 +8526,15 @@ async function buildInvoicePdfFile(inv,opts={}){
 
   // ── Header ───────────────────────────────────────────────────────
   const HEADER_BLACK=[0,0,0];
-  text(f.name||"MS ENTERPRISES",297.5,18.25,15,true,"center",HEADER_BLACK);
-  text(f.address||"Shop No-01, Eidgah Complex, Mathiya, Motihari, East-Champaran, Bihar, 845401",297.5,41.15,7.2,false,"center",HEADER_BLACK);
-  text(`Phone: ${f.phone||"8228864719"} | E-Mail: ${f.email||"serajalam9850@gmail.com"}`,297.5,53.15,7.2,false,"center",HEADER_BLACK);
+  headerText(f.name||"MS ENTERPRISES",297.5,18.25,headerFontSize,TH.headerFontBold!==false,"center",HEADER_BLACK);
+  headerText(f.address||"Shop No-01, Eidgah Complex, Mathiya, Motihari, East-Champaran, Bihar, 845401",297.5,41.15,subheaderFontSize,!!TH.subheaderFontBold,"center",HEADER_BLACK);
+  headerText(`Phone: ${f.phone||"8228864719"} | E-Mail: ${f.email||"serajalam9850@gmail.com"}`,297.5,53.15,subheaderFontSize,!!TH.subheaderFontBold,"center",HEADER_BLACK);
   rect(523.9,30.0,41.0,10.0,null,OUTER_BORDER,.55);text("Original Copy",544.4,31.75,5.0,true,"center",BLUE);
 
   // GST/PAN band.
   rect(28,67,539,18,MAJOR_HEADER_FILL,null,0);
-  text(`GSTIN: ${f.gstin||""}`,35,71.15,7.0,true,"left",HEADER_TEXT);
-  text(`PAN: ${f.pan||""}`,560.9,71.15,7.0,true,"right",HEADER_TEXT);
+  headerBodyText(`GSTIN: ${f.gstin||""}`,35,71.15,7.0,true,"left",HEADER_TEXT);
+  headerBodyText(`PAN: ${f.pan||""}`,560.9,71.15,7.0,true,"right",HEADER_TEXT);
 
   // ── Invoice metadata ─────────────────────────────────────────────
   rect(28,90.33,539,71.15,null,OUTER_BORDER,.65);line(297.54,90.33,297.54,160.96,.65,GRID);
@@ -8454,8 +8548,8 @@ async function buildInvoicePdfFile(inv,opts={}){
   const rightMeta=[
     ["Invoice Type",""],["Reverse Charge","No"],["Place of Supply","Bihar"],["Payment Terms","As Agreed"],["State Code",f.stateCode||"10"]
   ];
-  leftMeta.forEach((r,i)=>{const y=95.73+i*12.20;text(r[0],35,y,8,true);text(":",118,y,8,true);text(r[1],i===0?134.62:135,y,i===0?9:8,i===0);});
-  rightMeta.forEach((r,i)=>{const y=95.73+i*12.20;text(r[0],304.5,y,8,true);text(":",387.5,y,8,true);if(i===0){drawCheckbox(405.5,96.0,invType!=="bill_of_supply","Tax Invoice");drawCheckbox(494.0,96.0,invType==="bill_of_supply","Bill of Supply");}else{text(r[1],405.5,y,8,false);}});
+  leftMeta.forEach((r,i)=>{const y=95.73+i*12.20;headerBodyText(r[0],35,y,8,true);headerBodyText(":",118,y,8,true);headerBodyText(r[1],i===0?134.62:135,y,i===0?9:8,i===0);});
+  rightMeta.forEach((r,i)=>{const y=95.73+i*12.20;headerBodyText(r[0],304.5,y,8,true);headerBodyText(":",387.5,y,8,true);if(i===0){drawCheckbox(405.5,96.0,invType!=="bill_of_supply","Tax Invoice");drawCheckbox(494.0,96.0,invType==="bill_of_supply","Bill of Supply");}else{headerBodyText(r[1],405.5,y,8,false);}});
 
   // ── Billed / Shipped ─────────────────────────────────────────────
   rect(28,167.18,539,18,MAJOR_HEADER_FILL,null,0);rect(28,167.18,539,18,null,OUTER_BORDER,.75);line(297.5,185.18,297.5,255.18,.65,GRID);rect(28,185.18,539,70,null,OUTER_BORDER,.65);
@@ -8467,7 +8561,7 @@ async function buildInvoicePdfFile(inv,opts={}){
     ["State","Bihar"],
     ["Mob",sch.mobile||"+91"]
   ];
-  buyerRows.forEach((r,i)=>{const y=188.62+i*11.20;text(r[0],35,y,8,true);text(":",95,y,8,true);text(r[1],103.79,y,8,i===0);text(r[0],304.5,y,8,true);text(":",364.5,y,8,true);text(r[1],373.29,y,8,i===0);});
+  buyerRows.forEach((r,i)=>{const y=188.62+i*11.20;headerBodyText(r[0],35,y,8,true);headerBodyText(":",95,y,8,true);headerBodyText(r[1],103.79,y,8,i===0);headerBodyText(r[0],304.5,y,8,true);headerBodyText(":",364.5,y,8,true);headerBodyText(r[1],373.29,y,8,i===0);});
 
   // ── Product table: exact master column geometry ──────────────────
   // Surgical column-width adjustment: give Taxable Value +4 pt by shifting the
@@ -8487,10 +8581,10 @@ async function buildInvoicePdfFile(inv,opts={}){
     if(i===4){
       // Unit legend is deliberately confined to the existing fifth-column header cell.
       // No column edges, row heights, invoice calculations or financial values change.
-      text("Unit",x+w/2,262.8,6.45*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
-      text("KG/GM/LTR",x+w/2,270.0,4.25*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
-    } else if(parts.length===1)text(parts[0],x+w/2,265.15,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);
-    else {text(parts[0],x+w/2,262.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);text(parts[1],x+w/2,269.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);}
+      tableText("Unit",x+w/2,262.8,6.45*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
+      tableText("KG/GM/LTR",x+w/2,270.0,4.25*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
+    } else if(parts.length===1)tableText(parts[0],x+w/2,265.15,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);
+    else {tableText(parts[0],x+w/2,262.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);tableText(parts[1],x+w/2,269.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);}
   }
   // Table vertical borders and horizontal row lines.
   xEdges.forEach(x=>line(x,261,x,totalY+totalH,.42,GRID));
@@ -8508,7 +8602,7 @@ async function buildInvoicePdfFile(inv,opts={}){
     for(let j=0;j<12;j++){
       const x=xEdges[j],w=xEdges[j+1]-xEdges[j];
       let v=vals[j];if(v!==""&&v!=null)v=String(v);
-      const pad=5;setText(TEXT);doc.setFont(font,"normal");doc.setFontSize(DATA_FONT);
+      const pad=5;setText(TEXT);doc.setFont(tableFont,TH.tableFontBold?"bold":"normal");doc.setFontSize(DATA_FONT);
       if(v){
         const a=aligns[j];
         // Qty is intentionally given a slightly wider visual center zone.
@@ -9726,6 +9820,7 @@ function doImp() {
         if(d.al)     sv("al",d.al);
         // Re-init A.sett
         A.sett = A.st||ST0;
+        try{if(typeof persistInvoiceTypography==="function")persistInvoiceTypography(A.sett);}catch(themePersistError){console.warn("Restored typography settings could not be cached locally",themePersistError);}
         auditLog("IMPORT","backup","full",`Backup restored — ${d.invoices.length} invoices, ${d.schools?.length||0} schools`,null);
         toast("Backup restored — your previous data was saved as a Safety Point. Reloading...","ok");
         setTimeout(()=>window.location.reload(),1200);
@@ -9832,7 +9927,11 @@ const INVOICE_THEME_PRESETS={
   red:{name:"Classic Red",seed:"#8B1E1E",text:"auto",border:"#E3CCCC"},
   slate:{name:"Modern Slate",seed:"#34495E",text:"auto",border:"#C7D0D9"},
   forestSlate:{name:"Deep Forest Slate",seed:"#39565C",text:"auto",border:"#C9D4D7"},
-  corporateNavy:{name:"Corporate Navy",seed:"#0E447D",text:"auto",border:"#C4D1E0"}
+  corporateNavy:{name:"Corporate Navy",seed:"#0E447D",text:"auto",border:"#C4D1E0"},
+  lightSky:{name:"Light Sky · Black Text",seed:"#DCEBFA",text:"#111827",border:"#AFC7E2",mode:"light"},
+  lightSage:{name:"Light Sage · Black Text",seed:"#DDEDE4",text:"#111827",border:"#B5D2C0",mode:"light"},
+  lightSkyPlus:{name:"Sky Blue · Deeper Light · Black Text",seed:"#B8D3F0",text:"#111827",border:"#91B5DE",mode:"light"},
+  lightSagePlus:{name:"Fresh Green · Deeper Light · Black Text",seed:"#B7D8C3",text:"#111827",border:"#8FBDA0",mode:"light"}
 };
 function hexToRgb(h){h=String(h||"").trim().replace(/^#/i,"");if(h.length===3)h=h.split("").map(x=>x+x).join("");if(!/^[0-9a-f]{6}$/i.test(h))return null;return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
 function rgbToHex(rgb){return "#"+rgb.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("").toUpperCase();}
@@ -9849,6 +9948,14 @@ function invoiceThemeFamily(seedHex){
   const medium=mixRgb(dark,light,.60);
   return {seed:rgbToHex(seed),dark:rgbToHex(dark),medium:rgbToHex(medium),light:rgbToHex(light)};
 }
+function invoiceThemeLightFamily(seedHex){
+  const seed=hexToRgb(seedHex)||[220,235,250];
+  const dark=seed;
+  const medium=mixRgb(seed,[255,255,255],.34);
+  const light=mixRgb(seed,[255,255,255],.78);
+  return {seed:rgbToHex(seed),dark:rgbToHex(dark),medium:rgbToHex(medium),light:rgbToHex(light)};
+}
+function invoiceThemeFamilyForPreset(p){return p?.mode==="light"?invoiceThemeLightFamily(p.seed):invoiceThemeFamily(p?.seed);}
 function customThemeFamily(primary,secondary,tertiary){
   const p=hexToRgb(primary)||[154,184,214];
   const autoSecondary=rgbToHex(mixRgb(p,[255,255,255],.40));
@@ -9856,14 +9963,15 @@ function customThemeFamily(primary,secondary,tertiary){
   return {seed:rgbToHex(p),dark:rgbToHex(primary||p),medium:secondary&&hexToRgb(secondary)?rgbToHex(secondary):autoSecondary,light:tertiary&&hexToRgb(tertiary)?rgbToHex(tertiary):autoTertiary};
 }
 function invoiceTheme(){
-  const base={...ST0.themeDesign,...(A.sett?.themeDesign||{})};
+  let durableTypography={};try{durableTypography=JSON.parse(localStorage.getItem("mdm_invoice_typography_theme_v1")||"{}");}catch(_){durableTypography={};}
+  const base={...ST0.themeDesign,...(A.sett?.themeDesign||{}),...durableTypography};
   // One-time compatibility migration: the former untouched master default was 6.65pt.
   // Raise only that legacy default; preserve any genuinely customized user value.
   if(Number(base.dataFontSize)===6.65)base.dataFontSize=7.25;
   const p=INVOICE_THEME_PRESETS[base.invoicePreset];
   if(base.invoicePreset&&base.invoicePreset!=="custom"&&p){
-    const fam=invoiceThemeFamily(p.seed);
-    return {...base,invoicePreset:base.invoicePreset,themeSeed:p.seed,headerBg:fam.light,accent:fam.dark,highlight:fam.light,border:p.border,headerText:p.text,_themeFamily:fam};
+    const fam=invoiceThemeFamilyForPreset(p);
+    return {...base,invoicePreset:base.invoicePreset,themeSeed:p.seed,themeMode:p.mode||"dark",headerBg:fam.light,accent:fam.dark,highlight:fam.light,border:p.border,headerText:p.text,_themeFamily:fam};
   }
   if(base.invoicePreset==="custom" || base.customTheme){
     const fam=customThemeFamily(base.customPrimary||base.themeSeed||base.accent,base.customSecondary,base.customTertiary);
@@ -9886,18 +9994,19 @@ function invoiceThemeSaveFromUI(){
   const primary=(document.getElementById("td-accent-hex")||{}).value||draft.customPrimary||old.customPrimary||old.accent;
   const secondary=(document.getElementById("td-medium-hex")||{}).value||draft.customSecondary||old.customSecondary;
   const tertiary=(document.getElementById("td-bg-hex")||{}).value||draft.customTertiary||old.customTertiary||old.headerBg;
-  const upd=isCustom?{...old,invoicePreset:"custom",customTheme:true,customPrimary:primary.toUpperCase(),customSecondary:secondary.toUpperCase(),customTertiary:tertiary.toUpperCase(),customSecondaryManual:!!draft.customSecondaryManual,customTertiaryManual:!!draft.customTertiaryManual,themeSeed:primary.toUpperCase(),headerBg:tertiary.toUpperCase(),accent:primary.toUpperCase(),highlight:tertiary.toUpperCase(),headerText:(document.getElementById("td-text")||{}).value||old.headerText,border:(document.getElementById("td-border-hex")||{}).value||old.border,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize)}:{...old,invoicePreset:preset,themeSeed:draft.themeSeed||old.themeSeed,headerText:(document.getElementById("td-text")||{}).value||old.headerText,border:(document.getElementById("td-border-hex")||{}).value||old.border,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize)};
-  const st={...(A.sett||ST0),themeDesign:upd};sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design saved","ok");gP("settings");
+  const upd=isCustom?{...old,invoicePreset:"custom",customTheme:true,customPrimary:primary.toUpperCase(),customSecondary:secondary.toUpperCase(),customTertiary:tertiary.toUpperCase(),customSecondaryManual:!!draft.customSecondaryManual,customTertiaryManual:!!draft.customTertiaryManual,themeSeed:primary.toUpperCase(),headerBg:tertiary.toUpperCase(),accent:primary.toUpperCase(),highlight:tertiary.toUpperCase(),headerText:(document.getElementById("td-text")||{}).value||old.headerText,border:(document.getElementById("td-border-hex")||{}).value||old.border,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize),dataTextStyle:(document.getElementById("td-data-style")||{}).value||old.dataTextStyle||"normal"}:{...old,invoicePreset:preset,themeSeed:draft.themeSeed||old.themeSeed,themeMode:draft.themeMode||old.themeMode||"dark",dataTextStyle:(document.getElementById("td-data-style")||{}).value||old.dataTextStyle||"normal",headerText:(document.getElementById("td-text")||{}).value||old.headerText,border:(document.getElementById("td-border-hex")||{}).value||old.border,borderMode:document.getElementById("td-border-mode")?.checked?"black":"theme",dataFontSize:clampFontSize(parseFloat((document.getElementById("td-font")||{}).value)||old.dataFontSize)};
+  Object.assign(upd,{headerFontSize:Math.max(9,Math.min(24,Number(document.getElementById("td-h-size")?.value)||old.headerFontSize||15)),headerFontBold:!!document.getElementById("td-h-bold")?.checked,subheaderFontSize:Math.max(5,Math.min(14,Number(document.getElementById("td-sh-size")?.value)||old.subheaderFontSize||7.2)),subheaderFontBold:!!document.getElementById("td-sh-bold")?.checked,headerBodyFontSize:Math.max(5,Math.min(14,Number(document.getElementById("td-hb-size")?.value)||old.headerBodyFontSize||7.2)),headerBodyFontBold:!!document.getElementById("td-hb-bold")?.checked,tableFontBold:!!document.getElementById("td-table-bold")?.checked});
+  const st={...(A.sett||ST0),themeDesign:upd};persistInvoiceTypography(st);sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design saved for Original and Hybrid invoices","ok");gP("settings");
 }
 function invoiceThemeReset(){A._themeDraft=null;toast("Unsaved Theme Design changes reset","ok");gP("settings");}
-function invoiceThemeMasterReset(){const st={...(A.sett||ST0),themeDesign:{...ST0.themeDesign}};sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design restored to Master","ok");gP("settings");}
+function invoiceThemeMasterReset(){const st={...(A.sett||ST0),themeDesign:{...ST0.themeDesign}};persistInvoiceTypography(st);sv("st",st);A.sett=st;A._themeDraft=null;toast("Theme Design restored to Master","ok");gP("settings");}
 function saveAsCustomSlot(n){
   const primary=(document.getElementById("td-accent-hex")||{}).value;
   const secondary=(document.getElementById("td-medium-hex")||{}).value;
   const tertiary=(document.getElementById("td-bg-hex")||{}).value;
   if(n<1||n>6||!hexToRgb(primary)||!hexToRgb(secondary)||!hexToRgb(tertiary)){toast("Pick valid theme colors first","err");return;}
   const old=A.sett?.themeDesign||ST0.themeDesign;
-  const customSlots={...(old.customSlots||{}),["c"+n]:{name:"Custom "+n,primary:primary.toUpperCase(),secondary:secondary.toUpperCase(),tertiary:tertiary.toUpperCase(),secondaryManual:!!A._themeDraft?.customSecondaryManual,tertiaryManual:!!A._themeDraft?.customTertiaryManual}};
+  const customSlots={...(old.customSlots||{}),["c"+n]:{name:"Custom "+n,primary:primary.toUpperCase(),secondary:secondary.toUpperCase(),tertiary:tertiary.toUpperCase(),seed:primary.toUpperCase(),secondaryManual:!!A._themeDraft?.customSecondaryManual,tertiaryManual:!!A._themeDraft?.customTertiaryManual}};
   const st={...(A.sett||ST0),themeDesign:{...old,customSlots}};
   sv("st",st);A.sett=st;toast("Saved as Custom "+n,"ok");gP("settings");
 }
@@ -9911,8 +10020,8 @@ function setCustomSlotPreset(n){
   document.querySelectorAll(".theme-preset").forEach(el=>el.classList.remove("on"));const btn=[...document.querySelectorAll(".theme-preset")].find(el=>el.textContent.includes("Custom "+n));if(btn)btn.classList.add("on");toast("Custom "+n+" selected — press Save Theme to apply","ok");
 }
 function setInvoicePreset(id){const p=INVOICE_THEME_PRESETS[id];if(!p)return;
-  const fam=invoiceThemeFamily(p.seed);
-  A._themeDraft={...(A.sett?.themeDesign||ST0.themeDesign),invoicePreset:id,themeSeed:p.seed,headerBg:fam.light,headerText:p.text,accent:fam.dark,border:p.border,highlight:fam.light};
+  const fam=invoiceThemeFamilyForPreset(p);
+  A._themeDraft={...(A.sett?.themeDesign||ST0.themeDesign),invoicePreset:id,themeSeed:p.seed,themeMode:p.mode||"dark",headerBg:fam.light,headerText:p.text,accent:fam.dark,border:p.border,highlight:fam.light};
   const bg=document.getElementById("td-bg"),bh=document.getElementById("td-bg-hex"),ac=document.getElementById("td-accent"),ach=document.getElementById("td-accent-hex"),bo=document.getElementById("td-border"),boh=document.getElementById("td-border-hex"),hi=document.getElementById("td-highlight"),hih=document.getElementById("td-highlight-hex"),tx=document.getElementById("td-text");
   if(bg){bg.value=fam.light;bh.value=fam.light;ac.value=fam.dark;ach.value=fam.dark;bo.value=p.border;boh.value=p.border;hi.value=fam.light;hih.value=fam.light;tx.value=p.text;updateThemePreview();}
   document.querySelectorAll(".theme-preset").forEach(el=>el.classList.remove("on"));const btn=[...document.querySelectorAll(".theme-preset")].find(el=>el.textContent.includes(p.name));if(btn)btn.classList.add("on");
@@ -9921,7 +10030,7 @@ function setInvoicePreset(id){const p=INVOICE_THEME_PRESETS[id];if(!p)return;
 function updateThemePreview(){
   const bg=(document.getElementById("td-bg-hex")||{}).value||"#9AB8D6";const t=smartHeaderText(bg,(document.getElementById("td-text")||{}).value||"auto");
   const a=(document.getElementById("td-accent-hex")||{}).value||"#1F486F";const b=document.getElementById("td-border-hex")?.value||"#CCD6E3";const h=document.getElementById("td-highlight-hex")?.value||"#D6E2F0";const bm=document.getElementById("td-border-mode")?.checked!==false;const darkest=invoiceThemeDarkest({accent:a,headerBg:bg,highlight:h});const outer=bm?"#000000":rgbToHex(darkest);
-  const fam=(A._themeDraft?.invoicePreset==="custom")?customThemeFamily((document.getElementById("td-accent-hex")||{}).value,(document.getElementById("td-medium-hex")||{}).value,(document.getElementById("td-bg-hex")||{}).value):invoiceThemeFamily((A._themeDraft?.themeSeed)||a);
+  const activePreset=INVOICE_THEME_PRESETS[A._themeDraft?.invoicePreset];const fam=(A._themeDraft?.invoicePreset==="custom")?customThemeFamily((document.getElementById("td-accent-hex")||{}).value,(document.getElementById("td-medium-hex")||{}).value,(document.getElementById("td-bg-hex")||{}).value):invoiceThemeFamilyForPreset(activePreset||{seed:(A._themeDraft?.themeSeed)||a,mode:A._themeDraft?.themeMode});
   const p=document.getElementById("td-preview");if(p){p.style.background=fam.dark;p.style.color=smartHeaderText(fam.dark,(document.getElementById("td-text")||{}).value||"auto");p.querySelector(".theme-preview-title").style.color=p.style.color;p.querySelector(".theme-preview-sub").style.color=p.style.color;p.querySelector(".theme-preview-meta").style.color=p.style.color;p.style.borderColor=outer;const ac=p.querySelector(".theme-preview-meta");if(ac)ac.style.borderTop="2px solid "+outer;const med=p.querySelector(".theme-preview-medium");if(med){med.style.background=fam.medium;med.style.color=smartHeaderText(fam.medium,"auto");}const light=p.querySelector(".theme-preview-light");if(light){light.style.background=fam.light;light.style.color=smartHeaderText(fam.light,"auto");}}
   const c=document.getElementById("td-contrast");if(c){const ratio=contrastRatio(hexToRgb(bg)||[154,184,214],hexToRgb(t)||[17,24,39]);c.className="theme-contrast "+(ratio>=4.5?"ok":"warn");c.textContent=ratio.toFixed(2)+":1 contrast — "+(ratio>=4.5?"Good readability":"Low contrast; consider Auto/White/Black");}
 }
@@ -9962,15 +10071,40 @@ function loginBgReset(){
   toast("Login page background reset to default","ok");
   gP("settings");
 }
+function persistInvoiceTypography(st){
+  const td=st.themeDesign||ST0.themeDesign;
+  try{localStorage.setItem("mdm_invoice_typography_theme_v1",JSON.stringify(td));}catch(e){throw new Error("Typography settings could not be saved locally: "+(e.message||e));}
+}
+function uploadInvoiceTypographyFont(input,key){
+  const file=input?.files?.[0];if(!file)return;
+  if(!["header","subheader","headerBody","table"].includes(key)){toast("Unknown font category","err");return;}
+  const ext=(file.name.split(".").pop()||"").toLowerCase();
+  if(!["ttf","otf"].includes(ext)){toast("Please upload a TTF or OTF font file","err");input.value="";return;}
+  if(file.size>350000){toast("Each custom font must be 350 KB or smaller to keep settings and backup storage reliable","err");input.value="";return;}
+  const reader=new FileReader();reader.onload=()=>{try{
+    const data=String(reader.result||"");if(!data.startsWith("data:font/")&&!data.startsWith("data:application/octet-stream"))throw new Error("Unsupported font file format");
+    const st={...(A.sett||ST0)},td={...(st.themeDesign||ST0.themeDesign)},customFonts={...(td.customFonts||{})};
+    customFonts[key]={data,name:file.name,format:ext};td.customFonts=customFonts;
+    if(key==="header"||key==="subheader"){td.customHeaderFont=data;td.customHeaderFontName=file.name;}
+    st.themeDesign=td;persistInvoiceTypography(st);sv("st",st);A.sett=st;toast(file.name+" saved for "+({header:"Header",subheader:"Subheader",headerBody:"Header Body Text",table:"Particulars Table"}[key]),"ok");gP("settings");
+  }catch(e){toast("Font could not be saved: "+e.message,"err");}};reader.onerror=()=>toast("Unable to read font file","err");reader.readAsDataURL(file);
+}
+function removeInvoiceTypographyFont(key){
+  const st={...(A.sett||ST0)},td={...(st.themeDesign||ST0.themeDesign)},fonts={...(td.customFonts||{})};delete fonts[key];td.customFonts=fonts;
+  if(key==="header"||key==="subheader"){td.customHeaderFont=null;td.customHeaderFontName="";}
+  st.themeDesign=td;try{persistInvoiceTypography(st);sv("st",st);A.sett=st;toast("Custom font removed","ok");gP("settings");}catch(e){toast(e.message,"err");}
+}
+function uploadInvoiceHeaderFont(input){uploadInvoiceTypographyFont(input,"header");}
+function removeInvoiceHeaderFont(){removeInvoiceTypographyFont("header");}
 function renderThemeDesignCard(){
   const t=invoiceTheme(), r=fontSafeRange();
   const textChoice=t.headerText||"auto", smart=smartHeaderText(t.headerBg,textChoice);
-  const presets=Object.entries(INVOICE_THEME_PRESETS).map(([id,p])=>{const f=invoiceThemeFamily(p.seed);return `<button type="button" class="theme-preset ${t.invoicePreset===id?"on":""}" onclick="setInvoicePreset('${id}')"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">${p.name}</div><div class="theme-preset-note">Auto Dark · Medium · Light</div></button>`}).join("");
+  const presets=Object.entries(INVOICE_THEME_PRESETS).map(([id,p])=>{const f=invoiceThemeFamilyForPreset(p);return `<button type="button" class="theme-preset ${t.invoicePreset===id?"on":""}" onclick="setInvoicePreset('${id}')"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">${p.name}</div><div class="theme-preset-note">${p.mode==="light"?"Light headers · Black text":"Auto Dark · Medium · Light"}</div></button>`}).join("");
   const custSlots=(A.sett?.themeDesign?.customSlots)||{};
   const customPresets=[1,2,3,4,5,6].map(n=>{
     const slot=custSlots["c"+n];
-    if(slot&&slot.seed){
-      const f=invoiceThemeFamily(slot.seed);
+    if(slot&&(slot.primary||slot.seed)){
+      const f=customThemeFamily(slot.primary||slot.seed,slot.secondary,slot.tertiary);
       const active=t.invoicePreset==="customSlot"+n;
       return `<button type="button" class="theme-preset ${active?"on":""}" onclick="setCustomSlotPreset(${n})"><div class="theme-swatch"><span style="background:${f.dark}"></span><span style="background:${f.medium}"></span><span style="background:${f.light}"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Saved custom palette</div></button>`;
     }
@@ -10013,6 +10147,25 @@ function renderThemeDesignCard(){
       ${["none","glow","dots","waves","geometric"].map(id=>`<div onclick="setLoginPattern('${id}')" style="cursor:pointer;text-align:center;padding:6px;border-radius:9px;border:2px solid ${((A.sett&&A.sett.themeDesign&&A.sett.themeDesign.loginPattern)||"glow")===id?"var(--sf)":"var(--bd)"};background:var(--bg)"><div class="login-pattern-${id}" style="height:34px;border-radius:6px;background:linear-gradient(135deg,#1e3a5f,#2d5282);position:relative;overflow:hidden"></div><div style="font-size:9.5px;font-weight:700;margin-top:4px;color:var(--txl);text-transform:capitalize">${id}</div></div>`).join("")}
     </div>
 
+    <div style="height:1px;background:var(--bd);margin:18px 0"></div>
+    <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Invoice Data Text Style</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 14px"><label for="td-data-style" style="font-size:11px;color:var(--txl);font-weight:700">Rows & Amount Data</label><select class="fi" id="td-data-style" style="max-width:190px"><option value="normal" ${(t.dataTextStyle||"normal")==="normal"?"selected":""}>Normal</option><option value="bold" ${t.dataTextStyle==="bold"?"selected":""}>Bold</option><option value="italic" ${t.dataTextStyle==="italic"?"selected":""}>Italic</option></select><span style="font-size:10px;color:var(--txl)">Applies to product rows, quantities, rates, GST and table totals in invoice print/PDF.</span></div>
+    <div style="height:1px;background:var(--bd);margin:18px 0"></div>
+    <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Invoice Typography — Four Independent Categories</div>
+    <div class="font-range-card" style="display:block">
+      <div style="font-size:11px;font-weight:800;margin-bottom:7px">1. Header Font — Business / Firm Name</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><label style="font-size:11px"><input id="td-h-bold" type="checkbox" ${t.headerFontBold!==false?"checked":""}> Bold</label><span style="font-size:11px;color:var(--txl)">Size</span><input id="td-h-size" type="range" min="9" max="24" step="0.5" value="${Math.max(9,Math.min(24,Number(t.headerFontSize)||15))}" oninput="document.getElementById('td-h-size-val').textContent=Number(this.value).toFixed(1)+' pt'"><strong id="td-h-size-val">${(Number(t.headerFontSize)||15).toFixed(1)} pt</strong></div>
+      <div style="font-size:11px;font-weight:800;margin:12px 0 7px">2. Subheader Font — Address / Phone / E-mail</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><label style="font-size:11px"><input id="td-sh-bold" type="checkbox" ${t.subheaderFontBold===true?"checked":""}> Bold</label><span style="font-size:11px;color:var(--txl)">Size</span><input id="td-sh-size" type="range" min="5" max="14" step="0.25" value="${Math.max(5,Math.min(14,Number(t.subheaderFontSize)||7.2))}" oninput="document.getElementById('td-sh-size-val').textContent=Number(this.value).toFixed(2)+' pt'"><strong id="td-sh-size-val">${(Number(t.subheaderFontSize)||7.2).toFixed(2)} pt</strong></div>
+      <div style="font-size:11px;font-weight:800;margin:12px 0 7px">3. Header Body Text — GSTIN / PAN / Invoice Details / Billed & Shipped Details</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><label style="font-size:11px"><input id="td-hb-bold" type="checkbox" ${t.headerBodyFontBold===true?"checked":""}> Bold</label><span style="font-size:11px;color:var(--txl)">Size</span><input id="td-hb-size" type="range" min="5" max="14" step="0.25" value="${Math.max(5,Math.min(14,Number(t.headerBodyFontSize)||7.2))}" oninput="document.getElementById('td-hb-size-val').textContent=Number(this.value).toFixed(2)+' pt'"><strong id="td-hb-size-val">${(Number(t.headerBodyFontSize)||7.2).toFixed(2)} pt</strong></div>
+      <div style="font-size:11px;font-weight:800;margin:12px 0 7px">4. Particulars Table Font — Item / Qty / Unit / Rate / Tax / GST / Total</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><label style="font-size:11px"><input id="td-table-bold" type="checkbox" ${t.tableFontBold===true?"checked":""}> Bold Table Text</label><span style="font-size:10px;color:var(--txl)">Font size is controlled by the existing Printable Product Table size slider below.</span></div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bd)"><div style="font-size:11px;font-weight:800;margin-bottom:6px">Custom Font Upload — Select category (TTF / OTF)</div>
+        ${[['header','Header',t.customFonts?.header?.name||((t.customHeaderFont&&t.customHeaderFontName)||'')],['subheader','Subheader',t.customFonts?.subheader?.name||''],['headerBody','Header Body Text',t.customFonts?.headerBody?.name||''],['table','Particulars Table',t.customFonts?.table?.name||'']].map(([k,n,v])=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:7px 0"><strong style="font-size:10.5px;min-width:112px">${n}</strong><input type="file" accept=".ttf,.otf,font/ttf,font/otf" style="max-width:210px;font-size:10px" onchange="uploadInvoiceTypographyFont(this,'${k}')"><span class="safe-note">${v?`Saved: ${ec(v)}`:'Default font'}</span><button type="button" class="btn btn-g btn-sm" onclick="removeInvoiceTypographyFont('${k}')" ${v?'':'disabled'}>Remove</button></div>`).join('')}
+      </div>
+      <div class="safe-note" style="margin-top:8px">All four typography categories are shared by Original/Normal and Hybrid invoice rendering. Font files and typography values are saved locally with ERP settings and retained after refresh or logout/login. TTF is recommended for embedded PDF output; OTF browser/print rendering depends on browser font support.</div>
+    </div>
     <div style="height:1px;background:var(--bd);margin:18px 0"></div>
     <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Printable Product Table — Font Size</div>
     <div class="font-range-card"><div><input id="td-font" type="range" min="${r.min}" max="${r.max}" step="0.05" value="${Math.max(r.min,Math.min(r.max,t.dataFontSize||r.current))}" style="width:100%" oninput="document.getElementById('td-font-val').textContent=Number(this.value).toFixed(2)+' pt'"><div class="font-meter"><span>${r.min.toFixed(2)} pt</span><strong id="td-font-val">${Number(t.dataFontSize||r.current).toFixed(2)} pt</strong><span style="text-align:right">${r.max.toFixed(2)} pt</span></div><div class="safe-note">Applies to product data rows AND column headers in PDF and browser print. Column widths, row heights, vertical grid and A4 page geometry remain locked. Values outside the safe range cannot be saved.</div></div><div style="padding:12px;border:1px solid var(--bd);border-radius:10px;background:var(--slx);text-align:center"><div style="font-size:10px;color:var(--txl)">Recommended</div><div style="font-size:20px;font-weight:900;color:var(--tx);margin:3px 0">7.25 pt</div><div style="font-size:9.5px;color:var(--txl)">Safe range calculated for the locked table geometry</div></div></div>
@@ -11083,9 +11236,9 @@ function buildPrintHTML(bodyContent, title, pageSize, orientation) {
     font-size:7.35px!important;
   }
   .id .itbl col:nth-child(1){width:4%!important}
-  .id .itbl col:nth-child(2){width:18%!important}
-  .id .itbl col:nth-child(3){width:6%!important}
-  .id .itbl col:nth-child(4){width:7%!important}
+  .id .itbl col:nth-child(2){width:16%!important}
+  .id .itbl col:nth-child(3){width:7%!important}
+  .id .itbl col:nth-child(4){width:8%!important}
   .id .itbl col:nth-child(5){width:5%!important}
   .id .itbl col:nth-child(6){width:8%!important}
   .id .itbl col:nth-child(7){width:11%!important}
