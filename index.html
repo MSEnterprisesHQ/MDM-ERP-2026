@@ -17,7 +17,7 @@ Update: v4.57.4 — Corrects School Master ID/category resolution, includes inac
 Update: v4.36 — Locked Master vector restore: removed SVG/canvas/raster print conversion from Main Invoice preview/print path. The authoritative jsPDF PDF remains the sole source. No invoice geometry, calculations, data, Annexure/GST, or other export logic changed.
 Update: v4.37 — Canonical PDF print/share bridge: Main Invoice Print/Preview now opens the exact prepared PDF File used by Save/Share, with no secondary HTML print renderer and no browser print() interception. This is a surgical bridge-only change; locked invoice geometry/data/calculations and Annexure/GST are untouched.
 Update: v4.51 — Production infrastructure hardening: real Apps Script bridge hooks, Google-auth cloud-write gating, durable offline queue ACK handling, persistent session handling, emergency local login preservation, and cloud backup routing. Existing invoice/PDF/theme/calculation/rendering logic remains locked.
-Update: v4.41 — Theme Engine architecture pass: presets and custom color selection now use a single reference/seed color; Dark, Medium (60% toward Light), and Light shades are generated automatically and semantically mapped. Added Deep Forest Slate and Corporate Navy presets. No invoice geometry, columns, calculations, typography, or non-theme logic changed.
+Update: v4.41 — Theme Engine architecture pass: presets and custom color selection now use a sing/le reference/seed color; Dark, Medium (60% toward Light), and Light shades are generated automatically and semantically mapped. Added Deep Forest Slate and Corporate Navy presets. No invoice geometry, columns, calculations, typography, or non-theme logic changed.
 
 Update: v4.40 — Dashboard dark-mode contrast correction; mobile dashboard cards, labels, status chips and desktop dashboard light-only surfaces now map to dark theme tokens. Locked Main Invoice/PDF renderer untouched. Previous v4.39 — Surgical correction: Product/Particulars fourth header is explicitly rendered from the active theme darkest/Primary shade, with smart header-text contrast resolved against that exact shade. No data, calculations, geometry, column positions, typography, or non-theme invoice logic changed.
 
@@ -5195,58 +5195,67 @@ function mdmV7Apply(index){
 }
 function mdmV7ForceAdjustment(){
   const state=window.MDM_V7_OPTIMIZER;
-  if(!state?.baseSnapshot){
-    mdmV7Analyze();
-  }
+  if(!state?.baseSnapshot)mdmV7Analyze();
   const current=window.MDM_V7_OPTIMIZER,base=current?.baseSnapshot;
   if(!base){toast('Run Analyze & Compare first; no safe source snapshot is available.','err');return false;}
-  const rows=base.rows||[],idx=rows.findIndex(r=>mdmV7Category(r)==='green_veg_mix');
-  if(idx<0){toast('Force Adjustment unavailable: Green Veg Mix row not found.','err');return false;}
+  const rows=base.rows||[],eligible=rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==='green_veg_mix'&&Number(x.r.sourceTaxable??x.r.displayTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount??x.r.independentAdjustmentGross)||0)<0.005);
+  if(!eligible.length){toast('Force Adjustment unavailable: no eligible Green Veg Mix row.','err');return false;}
   const original=NI?.calc?.merged||[],sig=mdmV7SourceSignature(original);
   if(sig!==mdmV7SourceSignature(base.sourceInvoiceSnapshot?.mergedItems||[])){toast('Source invoice changed. Run Analyze & Compare again.','err');return false;}
-  const row=rows[idx],unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||'KG').toUpperCase();
-  const factor=(unit==='GM'||unit==='G'||unit==='ML')?0.001:1;
-  const fixedCents=Math.round(rows.reduce((a,r,i)=>a+(i===idx?0:(Number(r.displayTaxable)||0)+(Number(r.displayCgst)||0)+(Number(r.displaySgst)||0)),0)*100);
-  const targetCents=Math.round(Number(base.sourceGross||0)*100)-fixedCents;
-  if(targetCents<=0){toast('Force Adjustment cannot proceed: fixed item rows already exceed the Original Gross target.','err');return false;}
-  const q0=Number(row.billedQuantity)||0,rate0=Number(row.displayRate)||0;
-  if(!(q0>0&&rate0>0)){toast('Green Veg Mix baseline quantity/rate is invalid.','err');return false;}
+  const cents=v=>Math.round((Number(v)||0)*100), idx=eligible[0].i,row=eligible[0].r;
+  const fixedCents=rows.reduce((a,r,i)=>a+(i===idx?0:cents(r.displayTaxable)+cents(r.displayCgst)+cents(r.displaySgst)),0);
+  const targetGrossCents=cents(base.sourceGross), targetItemGross=targetGrossCents-fixedCents;
+  if(targetItemGross<=0){toast('Fixed invoice rows exceed the Original Gross target. No safe adjustment is possible.','err');return false;}
+  const unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||'KG').toUpperCase(),factor=(unit==='GM'||unit==='G'||unit==='ML')?0.001:1;
   const treatment=String(row.taxTreatment||row.gstTreatment||row.taxability||'').toLowerCase();
   const explicit=Number(row.gstRate??row.gstPercent??row.gst??row.taxRate);
   const exempt=['exempt','nil_rated','nil-rated','non_gst','non-gst','non_gst_supply'].includes(treatment);
   const srcTax=Number(row.sourceTaxable)||0,srcGst=(Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0);
   const gstRate=exempt?0:(Number.isFinite(explicit)&&explicit>=0?explicit/100:(srcTax>0?srcGst/srcTax:0));
-  const taxableTargets=[];for(let tc=Math.max(1,Math.floor(targetCents/(1+gstRate))-4);tc<=Math.ceil(targetCents/(1+gstRate))+4;tc++){if(tc+Math.round(tc*gstRate)===targetCents)taxableTargets.push(tc);}
-  const maxQty=Math.max(q0*0.75, q0+10), minQty=Math.max(0.001,q0*0.25);
+  const taxableTargets=[];
+  // Enumerate every nearby taxable-cent value whose saved GST treatment yields the exact item gross.
+  const lo=Math.max(1,Math.floor(targetItemGross/(1+gstRate))-250),hi=Math.ceil(targetItemGross/(1+gstRate))+250;
+  for(let tc=lo;tc<=hi;tc++)if(tc+Math.round(tc*gstRate)===targetItemGross)taxableTargets.push(tc);
+  if(!taxableTargets.length){mdmV7ManualOpen();const h=document.getElementById('mdm-v7-manual-result');if(h)h.innerHTML=`<div class="info inf-r"><b>No taxable/GST combination can produce the target item gross.</b><br>Required Green Veg Mix gross: ${mdmV7INR(targetItemGross/100)}. No values were applied.</div>`;return false;}
+  const q0=Number(row.billedQuantity)||0,rate0=Number(row.displayRate)||Number(row.sourceRateInHybridUnit)||0;
+  if(!(q0>0&&rate0>0)){toast('Green Veg Mix baseline quantity/rate is invalid.','err');return false;}
+  // Expanded, deterministic search: quantity precision 0.001; rate precision 0.01.
+  // Search both sides of the current quantity and progressively widen the envelope.
+  const ranges=[{min:Math.max(.001,q0*.25),max:q0*1.75},{min:Math.max(.001,q0*.05),max:q0*3},{min:.001,max:q0*5}];
   let found=null,checked=0;
-  // Force route expands the search envelope versus Smart mode, but still requires an exact,
-  // visible Qty × Rate line and the same final Gross/RoundOff/Net validator.
-  for(let qi=Math.ceil(minQty*1000);qi<=Math.floor(maxQty*1000)&&!found;qi++){
-    const qty=qi/1000,baseQty=qty*factor;if(!(baseQty>0))continue;
-    for(const tc of taxableTargets){
-      const center=Math.round((tc/100/baseQty)*100);
-      for(let dr=-2;dr<=2;dr++){
-        const rate=(center+dr)/100;if(rate<=0)continue;
-        checked++;const candidate=mdmV7Candidate(row,qty,rate);if(!candidate)continue;
-        const itemCents=Math.round((Number(candidate.displayTaxable)+Number(candidate.displayCgst)+Number(candidate.displaySgst))*100);
-        if(itemCents!==targetCents)continue;
-        const option={id:'FORCE-'+checked,rows:[{index:idx,category:'green_veg_mix',row:candidate}]};
-        const proposal=mdmV7BuildProposal(base,option);if(proposal){found={qty,rate,proposal};break;}
+  for(const range of ranges){
+    const qMin=Math.max(1,Math.ceil(range.min*1000)),qMax=Math.floor(range.max*1000);
+    for(let qi=qMin;qi<=qMax&&!found;qi++){
+      const qty=qi/1000,baseQty=qty*factor;if(!(baseQty>0))continue;
+      for(const tc of taxableTargets){
+        const center=Math.round((tc/100/baseQty)*100);
+        for(let dr=-3;dr<=3;dr++){
+          const rateCents=center+dr;if(rateCents<=0)continue;
+          const rate=rateCents/100;if(rate>Math.max(rate0*5,rate0+500))continue;
+          checked++;const candidate=mdmV7Candidate(row,qty,rate);if(!candidate)continue;
+          const itemCents=cents(candidate.displayTaxable)+cents(candidate.displayCgst)+cents(candidate.displaySgst);
+          if(itemCents!==targetItemGross)continue;
+          const option={id:'FORCE-EXACT-'+checked,rows:[{index:idx,category:'green_veg_mix',row:candidate,move:Math.abs(qty-q0),rateMove:Math.abs(rate-rate0)}]};
+          const proposal=mdmV7BuildProposal(base,option);
+          if(proposal){found={qty,rate,proposal};break;}
+        }
+        if(found)break;
       }
-      if(found)break;
     }
-  }
-  if(!found){
-    mdmV7ManualOpen();
-    const host=document.getElementById('mdm-v7-manual-result');
-    if(host)host.innerHTML=`<div class="info inf-r"><b>Force Adjustment could not find an exact solution.</b><br>Expanded search checked ${checked.toLocaleString('en-IN')} candidate combinations. No values were applied. You can enter a permitted decimal Quantity and Billing Rate manually; Fetch &amp; Reconcile will still enforce exact financial validation.</div>`;
-    toast('No exact Force Adjustment candidate found. Manual entry remains available.','err');return false;
+    if(found)break;
   }
   mdmV7ManualOpen();
+  const host=document.getElementById('mdm-v7-manual-result');
+  if(!found){
+    if(host)host.innerHTML=`<div class="info inf-r"><b>Exact candidate not found within the expanded safe search.</b><br>Required Green Veg Mix Gross: ${mdmV7INR(targetItemGross/100)} · Search checked ${checked.toLocaleString('en-IN')} quantity/rate combinations.<br>Current Quantity: ${q0} · Current Rate: ${mdmV7INR(rate0)}.<br>No values were applied. You may enter another decimal combination manually; Fetch &amp; Reconcile will enforce the same exact financial gate.</div>`;
+    toast('No exact candidate found within permitted search precision.','err');return false;
+  }
   const q=document.getElementById('mdm-v7-manual-qty'),r=document.getElementById('mdm-v7-manual-rate');
-  if(!q||!r){toast('Force Adjustment panel could not be opened.','err');return false;}
+  if(!q||!r){toast('Manual adjustment panel could not be opened.','err');return false;}
   q.value=String(found.qty);r.value=String(found.rate);mdmV7ManualPreview();
-  // Reuse the independent Manual Fetch path so Force and Manual share one apply gate.
+  // Directly hand the exact suggested decimal candidate to the independent Manual Fetch gate.
+  // Manual Fetch rebuilds and revalidates the proposal against the current source signature.
+  if(host)host.innerHTML=`<div class="info inf-b"><b>Exact candidate found.</b><br>Green Veg Mix target: ${mdmV7INR(targetItemGross/100)} · Quantity: ${found.qty} ${hybridEsc(unit)} · Rate: ${mdmV7INR(found.rate)}<br>Running independent Fetch &amp; Reconcile with the same exact financial validator…</div>`;
   return mdmV7ManualFetch();
 }
 function mdmV7ManualOpen(){
