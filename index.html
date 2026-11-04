@@ -5057,11 +5057,14 @@ function mdmV7Candidate(row,qty,rateOverride){
   if(!(rate>0))return null;
   const taxable=money(baseQty*rate);
   const sourceGST=money((Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0));
-  const gstRate=sourceTax>0?sourceGST/sourceTax:0,gst=money(taxable*gstRate);
+  // Green Veg Mix is treated as GST-exempt for optimizer absorption by policy.
+  // Its adjustment changes only taxable/gross; it must never manufacture CGST/SGST.
+  const isGreenVeg=mdmV7Category(row)==="green_veg_mix";
+  const gstRate=isGreenVeg?0:(sourceTax>0?sourceGST/sourceTax:0),gst=money(taxable*gstRate);
   const sourceCG=Number(row.sourceCgst)||0,sourceSG=Number(row.sourceSgst)||0,ratio=sourceGST>0?sourceCG/sourceGST:0;
-  const cgst=money(gst*ratio),sgst=money(gst-cgst);
+  const cgst=isGreenVeg?0:money(gst*ratio),sgst=isGreenVeg?0:money(gst-cgst);
   return {...row,normalizedQuantity:qty,billedQuantity:qty,display:unit==="GM"||unit==="G"?String(qty)+" GM":unit==="ML"?String(qty)+" ML":String(qty)+" "+unit,
-    displayRate:rate,billingRate:rate*factor,rateBasisUnit:unit,displayTaxable:taxable,billingTaxable:taxable,displayCgst:cgst,displaySgst:sgst,
+    displayRate:rate,billingRate:rate*factor,rateBasisUnit:unit,displayTaxable:taxable,billingTaxable:taxable,rateCalculatedTaxable:taxable,displayCgst:cgst,displaySgst:sgst,
     hybridQuantityTimesRate:taxable,autoAdjustmentAmount:money(taxable-sourceTax),netPayableImpact:money(taxable+gst-sourceTax-sourceGST),
     rateRoundingDelta:money(rate-(Number(row.sourceRateInHybridUnit)||normalizedRate)),normalizedGrams:(unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000,adjustmentGrams:((unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000)-(Number(row.actualQuantity)||0)*((String(row.actualUnit||"").toUpperCase()==="GM"||String(row.actualUnit||"").toUpperCase()==="G"||String(row.actualUnit||"").toUpperCase()==="ML")?1:1000),autoAdjustment:true,redistributionApplied:true,optimizerAdjusted:true,optimizerRateAdjusted:rateOverride!=null};
 }
@@ -5069,7 +5072,10 @@ function mdmV7Solve(baseSnap,eligibleIds){
   const cents=v=>Math.round((Number(v)||0)*100), rows=baseSnap.rows||[];
   const targets={tax:cents(baseSnap.sourceTaxableTotal),cg:cents(baseSnap.sourceCgstTotal),sg:cents(baseSnap.sourceSgstTotal)};
   // Independent Hybrid Add-on/Deduction rows are deliberately excluded from optimizer control.
-  const adjustable=rows.map((r,i)=>({r,i,cat:mdmV7Category(r)})).filter(x=>x.cat&&eligibleIds.includes(x.cat)&&x.r.eligible&&Number(x.r.sourceTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount)||0)<0.005);
+  // User policy: every reconciliation residual is absorbed by Green Veg Mix only.
+  // Other allowlisted categories remain available in Settings for future policy versions,
+  // but this optimizer release must not redistribute into them.
+  const adjustable=rows.map((r,i)=>({r,i,cat:mdmV7Category(r)})).filter(x=>x.cat==="green_veg_mix"&&x.r.eligible&&Number(x.r.sourceTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount)||0)<0.005);
   if(!adjustable.length)return {status:"NO_ELIGIBLE_ROWS",options:[],eligibleRows:0};
   // Green Veg Mix is the primary absorption row. Process it last so its live daily rate
   // can be solved against the exact residual left by all other selected rows.
@@ -5120,7 +5126,9 @@ function mdmV7Solve(baseSnap,eligibleIds){
         for(let qi=-qSteps;qi<=qSteps;qi++){
           const q=Math.round((q0+qi*0.001)*1000)/1000;
           if(q<=0||Math.abs(q-q0)>maxQtyMove+1e-9)continue;
-          const baseQty=mdmV7Money(q*factor);if(!(baseQty>0)||needTax<=0)continue;
+          // Preserve sub-unit precision (e.g. 1 gram = 0.001 KG). Rounding
+          // this to paise before rate solving collapses many valid quantity states.
+          const baseQty=Number((q*factor).toFixed(6));if(!(baseQty>0)||needTax<=0)continue;
           const exactRate=needTax/100/baseQty;
           const rate=Math.round(exactRate*100)/100;
           if(rate<=0)continue;
@@ -5138,6 +5146,7 @@ function mdmV7Solve(baseSnap,eligibleIds){
           candidates.push({index:g.index,category:g.category,row:c,t:ct,cg:cc,sg:cs,move:Math.abs(q-q0),rateMove,k:qi,qtyPct,ratePct,combinedCost});
         }
       }
+      if(g.category==="green_veg_mix")g.candidates=candidates;
       for(const c of candidates){
         const n={t:st.t+c.t,cg:st.cg+c.cg,sg:st.sg+c.sg,chosen:st.chosen.concat(c),cost:st.cost+(c.combinedCost??(c.move*100+Math.abs(c.t-cents(g.row.displayTaxable))*0.02))};
         const key=n.t+"|"+n.cg+"|"+n.sg,old=seen.get(key);if(!old||n.cost<old.cost)seen.set(key,n);
@@ -5145,7 +5154,7 @@ function mdmV7Solve(baseSnap,eligibleIds){
     }
     if(!seen.size&&!emptySearch){
       const g=groups[gi],needTax=goal.t-(beam[0]?.t||0),needCg=goal.cg-(beam[0]?.cg||0),needSg=goal.sg-(beam[0]?.sg||0);
-      emptySearch={category:g.category,itemName:g.row?.name||"",reason:g.category==="green_veg_mix"&&needTax<=0?"FIXED_ROWS_EXCEED_TARGET":"NO_CANDIDATE_WITHIN_ALLOWED_QUANTITY_RATE_AND_EXACT_GST_RULES",residual:{taxablePaise:needTax,cgstPaise:needCg,sgstPaise:needSg},candidateCount:g.candidates?.length||0};
+      emptySearch={category:g.category,itemName:g.row?.name||"",reason:g.category==="green_veg_mix"&&needTax<=0?"FIXED_ROWS_EXCEED_TARGET":(g.category==="green_veg_mix"&&(needCg!==0||needSg!==0)?"NON_GREEN_VEG_GST_ROWS_DO_NOT_MATCH_ORIGINAL_CGST_SGST_TARGETS":"NO_CANDIDATE_WITHIN_ALLOWED_QUANTITY_RATE_AND_EXACT_GST_RULES"),residual:{taxablePaise:needTax,cgstPaise:needCg,sgstPaise:needSg},candidateCount:g.candidates?.length||0};
     }
     next.push(...seen.values());
     next.sort((a,b)=>{
