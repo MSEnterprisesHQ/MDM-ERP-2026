@@ -9,8 +9,8 @@ Update: v4.62.08 — Invoice table HSN/SAC and Qty column width correction; recl
 
 Update: v4.35 — Vector-safe Android Print Preview — Final surgical pass: Terms & Conditions left-aligned within its dedicated thin footer row; major invoice section outer borders use the active theme accent/darker color consistently. No other invoice geometry, data, calculations, sharing, or export logic changed.
 Update: v4.35 — Replaced the Android print bridge raster PNG with PDF.js SVG output. Native print sheet behavior is preserved, while saved PDFs retain vector text/lines; no canvas/PNG is used in the print document.
-Update: v4.62.10 — Four-category typography controls mapped across Original/Normal and Hybrid invoice engines; durable saved theme persistence across refresh and login/logout.
-Current Version: v4.62.10 — Header & Subheader Font Controls
+Update: v4.62.12 — Fuel profiles for Domestic LPG, Commercial LPG and Firewood with per-profile rate, GST treatment/rate, HSN and price-basis controls; existing GST engine reused for invoice calculation.
+Current Version: v4.62.12 — Fuel GST Controlser & Subheader Font Controls
 Update: v4.61.91 — Mode-switch transition fix with persistent, color-coded Original (blue) / Hybrid (green) active-state indicator. v4.61.87 — Final approved Hybrid rules and lifecycle wiring. Adds persistent Smart (KG + GM) / KG Only display modes; approved generic 500g+ threshold bands; separates Actual, Normalized and Billed quantities in immutable snapshots; stores the full Original invoice snapshot per Hybrid revision; records same-category-only/no-transfer policy; aligns Hybrid PDF rows to the current source revision. Original calc() remains byte-identical to Stable v4.61.76.
 
 Update: v4.57.4 — Corrects School Master ID/category resolution, includes inactive schools for historical lookup, and requires explicit historical rate/GST inputs. Original invoice, PDF, and print core paths are preserved where feasible; cloud end-to-end testing is still required.
@@ -70,7 +70,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <!-- PART 2 FINAL: Mobile Invoice History alignment and header accent fix. Desktop layout/logic intentionally untouched. -->
 
 <html lang="en">
-<meta name="application-name" content="MDM ERP — VERSION 7 HYBRID TEST">
+<meta name="application-name" content="MDM ERP v4.62.14 — School Search & Ordering Fix">
 <meta name="application-stage" content="BETA">
 <meta name="application-version" content="4.61.95">
 <meta name="data-continuity" content="Genuine invoice data must persist across BETA updates and final adoption.">
@@ -78,7 +78,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>MDM ERP — VERSION 7 HYBRID TEST</title>
+<title>MDM ERP v4.62.13 — School Search & Ordering Fix</title>
 <!-- v4.61.37: Revision-mode identity isolation; new-invoice numbering allocation unchanged. -->
 <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
@@ -1755,7 +1755,7 @@ Invoice/PDF/business logic intentionally preserved.
 
 <script id="mdm-beta-baseline-init">
 /*
- * MDM ERP — VERSION 7 HYBRID TEST CLEAN DATA BASELINE
+ * MDM ERP v4.62.13 — School Search & Ordering Fix CLEAN DATA BASELINE
  *
  * One-time migration:
  *   KEEP  -> School Master List / master configuration
@@ -2569,15 +2569,13 @@ function schGroupedByCat(list){
   SCH_CATS.forEach(c=>byCat[c].sort((a,b)=>a.name.localeCompare(b.name)));
   return byCat;
 }
-// Shared school <select> option builder — used by every School Selection
-// dropdown app-wide so grouping/order stays consistent everywhere.
-function schoolOptionsHTML(selectedId){
-  // Legacy compatibility helper.
-  // New Invoice uses niSchoolPickerHTML(); individual school options here
-  // intentionally have NO category background/color.
-  return A.schools.filter(s=>s.active).map(s=>
-    `<option value="${s.id}"${s.id===selectedId?" selected":""}>${ec(s.name)}</option>`
-  ).join("");
+// Canonical school search + ordering shared across every module.
+function schSearchNorm(value){return String(value??"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLocaleLowerCase("en-IN").replace(/[^\p{L}\p{N}]+/gu," ").trim();}
+function schMatchesSearch(s,q){const needle=schSearchNorm(q);if(!needle)return true;const hay=schSearchNorm([s?.name,s?.udise,s?.block,s?.district,s?.address].filter(Boolean).join(" "));return needle.split(/\s+/).every(token=>hay.includes(token));}
+function schSortList(list){const groups=schGroupedByCat(Array.isArray(list)?list:[]);return SCH_CATS.flatMap(c=>groups[c]);}
+function schoolOptionsHTML(selectedId, includeInactive=false){
+  const list=schSortList((A.schools||[]).filter(s=>includeInactive||s.active));
+  return SCH_CATS.map(cat=>{const rows=list.filter(s=>schCategory(s.name)===cat);return rows.length?`<optgroup label="${ec(SCH_CAT_LABEL[cat])} Schools">${rows.map(s=>`<option value="${ec(s.id)}"${String(s.id)===String(selectedId)?" selected":""}>${ec(s.name)}${s.active===false?" · INACTIVE":""}</option>`).join("")}</optgroup>`:"";}).join("");
 }
 function nw(n){const a=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"],b=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"],w=n=>{if(n<20)return a[n];if(n<100)return b[~~(n/10)]+(n%10?" "+a[n%10]:"");if(n<1000)return a[~~(n/100)]+" Hundred"+(n%100?" "+w(n%100):"");if(n<1e5)return w(~~(n/1000))+" Thousand"+(n%1000?" "+w(n%1000):"");if(n<1e7)return w(~~(n/1e5))+" Lakh"+(n%1e5?" "+w(n%1e5):"");return w(~~(n/1e7))+" Crore"+(n%1e7?" "+w(n%1e7):"");};const r=Math.round(+n||0);return(r?w(r):"Zero")+" Rupees Only";}
 function shuf(a){const r=[...a];for(let i=r.length-1;i>0;i--){const j=~~(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];}return r;}
@@ -2598,29 +2596,84 @@ function addRV(id){let r=A.rv.filter(x=>x!==id);r.unshift(id);if(r.length>5)r=r.
 function sBdg(st,sy){const sync=( ["syncing","uploading","processing"].includes(sy))?'<span class="bdg bb sync-badge"><span class="sync-dot sync-blue"></span>Syncing</span>':sy==="pending"?'<span class="bdg bp sync-badge"><span class="sync-dot sync-orange"></span>Pending Sync</span>':sy==="synced"?'<span class="bdg bg sync-badge"><span class="sync-dot sync-green"></span>Synced</span>':sy==="failed"?'<span class="bdg br sync-badge"><span class="sync-dot sync-red"></span>Sync Failed</span>':'<span class="bdg bn sync-badge"><span class="sync-dot sync-gray"></span>Not Synced</span>';if(st==="released")return sync+' <span class="bdg bp">Released</span>';if(st==="cancelled")return sync+' <span class="bdg br">Cancelled</span>';if(st==="draft")return sync+' <span class="bdg bs">Draft</span>';return sync;}
 function histRevisionStatus(inv){const n=Array.isArray(inv?.revisions)?inv.revisions.length:0;const revised=inv?.status==="revised"||n>0||!!inv?.revisedAt;return revised?`<span class="bdg bam">${n?`REV${n}`:"Revised"}</span>`:'<span class="bdg bn">Original</span>';}
 
+// Fuel profile configuration — stored in the existing LPG state key so it is
+// included in local persistence, cloud state sync, export and backup/restore.
+function fuelProfilesWithDefaults(cfg){
+  const c=cfg||{}, oldRate=Number(c.cylinderRate)||67.11, oldCap=Number(c.cylinderCapacity)||14.2;
+  const defaults={
+    domestic:{label:"Domestic LPG / Indane",unit:"Kg",netWeight:14.2,rate:oldRate,gst:0,taxTreatment:"taxable",taxMode:"inclusive",hsn:"2711"},
+    commercial:{label:"Commercial LPG / Indane",unit:"Kg",netWeight:19,rate:0,gst:0,taxTreatment:"taxable",taxMode:"inclusive",hsn:"2711"},
+    firewood:{label:"Firewood",unit:"Kg",netWeight:0,rate:0,gst:0,taxTreatment:"taxable",taxMode:"inclusive",hsn:""}
+  };
+  const saved=c.fuelProfiles||{};
+  Object.keys(defaults).forEach(k=>{defaults[k]={...defaults[k],...(saved[k]||{})};});
+  // Preserve the legacy capacity if it was customized before this migration.
+  if(!saved.domestic?.netWeight && oldCap!==14.2) defaults.domestic.netWeight=oldCap;
+  return defaults;
+}
+function fuelTaxRate(profile){return String(profile?.taxTreatment||"taxable")==="taxable"?Math.max(0,Number(profile?.gst)||0):0;}
+function selectedFuelProfile(cfg){const c=cfg||{},profiles=fuelProfilesWithDefaults(c),key=["domestic","commercial","firewood"].includes(c.selectedFuel)?c.selectedFuel:"domestic";return {key,profile:profiles[key]};}
+
+// Historical calculation context: freeze the exact master inputs used by an invoice.
+// This is deliberately invoice-scoped; editing a historical invoice must not silently
+// inherit today's item names, rates, fuel profile, category splits or tax settings.
+function invoiceCalculationSnapshot(){
+  return {schema:"MDM-INVOICE-CALC-SNAPSHOT",version:1,capturedAt:new Date().toISOString(),
+    items:(A.items||[]).map(x=>({...x})),heads:(A.heads||[]).map(x=>({...x})),
+    rates:{...(A.rates||{})},lpg:JSON.parse(JSON.stringify(A.lpg||{})),
+    settings:{gstMode:(A.sett||ST0).gstMode||"cgst_sgst",roundOff:(A.sett||ST0).roundOff!==false,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice"}};
+}
+function legacyInvoiceCalculationSnapshot(inv){
+  // One-time compatibility fallback for invoices created before snapshot support.
+  // Reconstruct item definitions from their saved invoice rows, never from today's names/rates.
+  const rows=Array.isArray(inv?.mergedItems)?inv.mergedItems:[];
+  const items=rows.filter(r=>r&&r.id&&r.id!=="fruit"&&r.id!=="invoice-adjustment").map(r=>({id:r.id,name:r.name,head:r.head,dist:Number(r.dist)||0,unit:r.unit||"Kg",rate:Number(r.rate)||0,gst:Number(r.gst)||0,taxTreatment:r.taxTreatment||"taxable",taxMode:r.taxMode||"inclusive",hsn:r.hsn||"",active:true}));
+  const heads=(A.heads||[]).map(h=>({...h}));
+  const fuel=rows.find(r=>String(r.id)==="i21"||r.head==="fuel");
+  const fuelKey=["domestic","commercial","firewood"].includes(fuel?.selectedFuel)?fuel.selectedFuel:(/firewood|wood/i.test(String(fuel?.name||""))?"firewood":"domestic");
+  const lpg=JSON.parse(JSON.stringify(A.lpg||{}));lpg.selectedFuel=fuelKey;lpg.fuelProfiles={...(lpg.fuelProfiles||{}),[fuelKey]:{...(lpg.fuelProfiles?.[fuelKey]||{}),label:fuel?.name||"Historical Fuel",unit:fuel?.unit||"Kg",netWeight:Number(fuel?.netCylinderWeight)||0,rate:Number(fuel?.rate)||0,gst:Number(fuel?.gst)||0,taxTreatment:fuel?.taxTreatment||"taxable",taxMode:fuel?.taxMode||"inclusive",hsn:fuel?.hsn||""}};
+  return {schema:"MDM-INVOICE-CALC-SNAPSHOT",version:1,legacyReconstructed:true,capturedAt:inv?.savedAt||null,items,heads,
+    rates:{r15:Number(inv?.s15)?Number(inv?.a15||0)/Number(inv.s15):Number(A.rates?.r15)||0,r68:Number(inv?.s68)?Number(inv?.a68||0)/Number(inv.s68):Number(A.rates?.r68)||0},
+    lpg,settings:{gstMode:(A.sett||ST0).gstMode||"cgst_sgst",roundOff:(A.sett||ST0).roundOff!==false,invoiceType:inv?.invoiceType||"tax_invoice"}};
+}
+function invoiceCalcContext(inv){
+  const snap=inv?.calculationSnapshot;
+  if(snap&&snap.schema==="MDM-INVOICE-CALC-SNAPSHOT"&&Array.isArray(snap.items)&&Array.isArray(snap.heads)&&snap.rates&&snap.lpg)return snap;
+  return legacyInvoiceCalculationSnapshot(inv);
+}
+
 // ═══ CALC ENGINE - GST Back Calculation BR-07 ═══
-function calc(s15,s68,sFr,frR,doSh, adjustmentAmount=0){
+function calc(s15,s68,sFr,frR,doSh, adjustmentAmount=0, adjustmentItemId="", masterContext=null) {
+const master=masterContext||A;
 const __calcAdj=Number.isFinite(Number(adjustmentAmount))?Number(adjustmentAmount):0;
 
 const __calcS15=Number.parseFloat(s15)||0,__calcS68=Number.parseFloat(s68)||0;
 
-  const a15=d2(__calcS15*A.rates.r15),a68=d2(__calcS68*A.rates.r68),aFr=d2(sFr*frR);
-  const act=A.items.filter(i=>i.active);
-  function bR(stu,vk){if(!stu)return[];const rows=[];A.heads.forEach(h=>{const hv=h[vk]||0;if(!hv)return;const hB=d2(stu*hv);const hi=act.filter(i=>i.head===h.id);const td=hi.reduce((s,i)=>s+i.dist,0)||1;hi.forEach(item=>{const iB=d2(hB*(item.dist/td));const tax=item.gst>0?d2(iB/(1+item.gst/100)):iB;const cg=d2(tax*(item.gst/2)/100),sg=cg,gr=d2(tax+cg+sg);rows.push({...item,qty:d3(iB/item.rate),taxable:tax,cgst:cg,sgst:sg,gross:gr});});});return rows;}
+  const a15=d2(__calcS15*master.rates.r15),a68=d2(__calcS68*master.rates.r68),aFr=d2(sFr*frR);
+  const act=master.items.filter(i=>i.active).map(i=>{
+    if(i.head!=="fuel" && i.id!=="i21") return i;
+    const chosen=selectedFuelProfile(master.lpg),p=chosen.profile;
+    if(!(Number(p.rate)>0)) return {...i,active:false};
+    return {...i,id:"i21",name:p.label,unit:"Kg",rate:Number(p.rate),gst:fuelTaxRate(p),taxTreatment:p.taxTreatment||"taxable",taxMode:p.taxMode||"inclusive",hsn:(p.hsn|| (chosen.key==="firewood"?"":i.hsn)),netCylinderWeight:Number(p.netWeight)||0,selectedFuel:chosen.key,active:true};
+  }).filter(i=>i.active);
+  function bR(stu,vk){if(!stu)return[];const rows=[];master.heads.forEach(h=>{const hv=h[vk]||0;if(!hv)return;const hB=d2(stu*hv);const hi=act.filter(i=>i.head===h.id);const td=hi.reduce((s,i)=>s+i.dist,0)||1;hi.forEach(item=>{const iB=d2(hB*(item.dist/td));const gRate=String(item.taxTreatment||"taxable")==="taxable"?Math.max(0,Number(item.gst)||0):0;const exclusive=item.head==="fuel"&&item.taxMode==="exclusive";const tax=exclusive?iB:(gRate>0?d2(iB/(1+gRate/100)):iB);const cg=d2(tax*(gRate/2)/100),sg=cg,gr=exclusive?d2(tax+cg+sg):d2(tax+cg+sg);rows.push({...item,gst:gRate,qty:d3(iB/item.rate),taxable:tax,cgst:cg,sgst:sg,gross:gr});});});return rows;}
   const r15=bR(__calcS15,"v15"),r68=bR(__calcS68,"v68");
   if(sFr>0&&frR>0)r15.push({id:"fruit",name:"Egg / Fruits",unit:"Pcs",rate:frR,gst:0,head:"fruit",dist:100,hsn:"0804",active:true,qty:sFr,taxable:aFr,cgst:0,sgst:0,gross:aFr});
   const mm={};r15.forEach(r=>{mm[r.id]={...r};});r68.forEach(r=>{if(mm[r.id]){mm[r.id].qty=d3(mm[r.id].qty+r.qty);mm[r.id].taxable=d2(mm[r.id].taxable+r.taxable);mm[r.id].cgst=d2(mm[r.id].cgst+r.cgst);mm[r.id].sgst=d2(mm[r.id].sgst+r.sgst);mm[r.id].gross=d2(mm[r.id].gross+r.gross);}else mm[r.id]={...r};});
-  if(__calcAdj>0){
-    const sabzi=Object.values(mm).find(r=>/sabzi|vegetable|veg mix|aloo|potato/i.test(String(r.name||"")));
-    if(sabzi){
-      const adj=d2(__calcAdj);
-      const rateGst=Number(sabzi.gst)||0;
+  if(Math.abs(__calcAdj)>=0.005){
+    const adj=d2(__calcAdj);
+    if(adjustmentItemId){
+      const target=mm[adjustmentItemId];
+      if(!target)throw new Error("Selected adjustment item is not present in this invoice. Select a valid item and recalculate.");
+      const rateGst=Number(target.gst)||0;
       const adjTax=rateGst>0?d2(adj/(1+rateGst/100)):adj;
       const adjCg=rateGst>0?d2(adjTax*(rateGst/2)/100):0;
-      sabzi.taxable=d2(sabzi.taxable+adjTax);
-      sabzi.cgst=d2(sabzi.cgst+adjCg);
-      sabzi.sgst=d2(sabzi.sgst+adjCg);
-      sabzi.gross=d2(sabzi.gross+adj);
+      if(target.gross+adj< -0.005 || target.taxable+adjTax< -0.005)throw new Error("Deduction cannot exceed the selected item's available amount.");
+      target.taxable=d2(target.taxable+adjTax);target.cgst=d2(target.cgst+adjCg);target.sgst=d2(target.sgst+adjCg);target.gross=d2(target.gross+adj);
+      target.adjustmentAmount=d2((Number(target.adjustmentAmount)||0)+adj);target.independentAdjustmentAmount=d2((Number(target.independentAdjustmentAmount)||0)+adj);
+    }else{
+      // Normal mode: keep the adjustment explicit as its own non-GST invoice row.
+      mm["invoice-adjustment"]={id:"invoice-adjustment",name:adj<0?"Amount Deduction":"Amount Addition",unit:"Pcs",qty:1,rate:Math.abs(adj),gst:0,head:"adjustment",dist:0,hsn:"",taxable:adj,cgst:0,sgst:0,gross:adj,adjustmentAmount:adj,independentAdjustmentAmount:adj};
     }
   }
   function tot(rows){const t=rows.reduce((a,r)=>({taxable:d2(a.taxable+r.taxable),cgst:d2(a.cgst+r.cgst),sgst:d2(a.sgst+r.sgst),gross:d2(a.gross+r.gross)}),{taxable:0,cgst:0,sgst:0,gross:0});const ro=d2(Math.round(t.gross)-t.gross);return{...t,roundOff:ro,net:d2(t.gross+ro)};}
@@ -3217,10 +3270,20 @@ function setBillingMode(next){
     return false;
   }
 }
-function hybridEnsureSnapshot(inv){
+function hybridEnsureSnapshot(inv,approvedSnapshot=null){
   if(!inv||!Array.isArray(inv.mergedItems))return inv;
   if(!window.MDMHybridQuantityEngine||typeof hybridMakeSnapshot!=="function")throw new Error("Hybrid quantity engine is not ready");
-  const snap=hybridMakeSnapshot(inv,hybridUnitDisplayMode());
+  const sourceSig=typeof mdmV7SourceSignature==="function"?mdmV7SourceSignature(inv.mergedItems):"";
+  const approved=approvedSnapshot||(typeof mdmV7GetAppliedSnapshot==="function"?mdmV7GetAppliedSnapshot(inv.mergedItems):null);
+  const snap=approved&&approved.reconciliation?.financialMatch&&approved.reconciliation?.status==="RECONCILED_BY_SMART_OPTIMIZER"
+    ?JSON.parse(JSON.stringify(approved))
+    :hybridMakeSnapshot(inv,hybridUnitDisplayMode());
+  if(approved){
+    snap.sourceInvoiceId=inv.id;snap.sourceInvoiceNo=inv.invNo;snap.sourceSavedAt=inv.savedAt||null;
+    snap.sourceInvoiceSnapshot={...(snap.sourceInvoiceSnapshot||{}),id:inv.id,invNo:inv.invNo,date:inv.date,month:inv.month,year:inv.year,schoolId:inv.schoolId,schoolName:inv.schoolName,schoolAddress:inv.schoolAddress,schoolUdise:inv.schoolUdise,schoolBlock:inv.schoolBlock,schoolDistrict:inv.schoolDistrict,schoolMobile:inv.schoolMobile,invoiceType:inv.invoiceType,grand:Number(inv.grand)||0,taxable:Number(inv.taxable)||0,cgst:Number(inv.cgst)||0,sgst:Number(inv.sgst)||0,roundOff:Number(inv.roundOff)||0,net:Number(inv.net)||0,mergedTotals:{...(inv.mergedTotals||{})},mergedItems:inv.mergedItems.map(r=>({...r}))};
+    const checks={tax:mdmV7Money(snap.rows.reduce((a,r)=>a+(Number(r.displayTaxable)||0),0)),cg:mdmV7Money(snap.rows.reduce((a,r)=>a+(Number(r.displayCgst)||0),0)),sg:mdmV7Money(snap.rows.reduce((a,r)=>a+(Number(r.displaySgst)||0),0))};
+    if(checks.tax!==mdmV7Money(inv.taxable)||checks.cg!==mdmV7Money(inv.cgst)||checks.sg!==mdmV7Money(inv.sgst)||mdmV7Money(checks.tax+checks.cg+checks.sg)!==mdmV7Money(inv.grand)||mdmV7Money(checks.tax+checks.cg+checks.sg+Number(inv.roundOff||0))!==mdmV7Money(inv.net))throw new Error("Approved optimizer snapshot no longer matches the invoice source totals; save blocked. Re-run optimizer.");
+  }
   const old=inv.hybridModel||{schema:"MDM-HYBRID-MODEL",schemaVersion:3,activeRevision:0,revisions:[],createdAt:snap.createdAt};
   const revisions=Array.isArray(old.revisions)?old.revisions.slice():[];
   snap.revisionNo=revisions.reduce((m,r)=>Math.max(m,Number(r.revisionNo)||0),0)+1;
@@ -3394,7 +3457,7 @@ function gP(p){
     NI.month=MN[new Date().getMonth()];
     NI.year=String(new Date().getFullYear());
     NI.s15="";NI.s68="";NI.useFruit=true;NI.sFruit="";NI.fruitRate="5";
-    NI.notes="";NI.adjustmentOn=false;NI.adjustmentAmount="";NI.doShuffle=true;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.dupWarns=[];NI.tab="merged";NI.hsnOn=niHsnDefault();NI.autoAllocate=true;NI.manualNum="";NI.availableSearch="";
+    NI.notes="";NI.adjustmentOn=false;NI.adjustmentAmount="";NI.adjustmentSign="plus";NI.hybridAdjustmentItemId="";NI.doShuffle=true;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.dupWarns=[];NI.tab="merged";NI.hsnOn=niHsnDefault();NI.autoAllocate=true;NI.manualNum="";NI.availableSearch="";
   }
   // Navigation history: back/forward moves do not create duplicate entries.
   if(!A._navHistory)A._navHistory=["dashboard"];
@@ -3883,7 +3946,7 @@ function dupBanner(){
 function rsDup(id){sv("dups",A.dups.map(d=>d.id===id?{...d,resolved:true}:d));toast("Alert resolved","ok");gP("dashboard");}
 
 // ═══ NEW INVOICE ═══
-let NI={editId:null,schoolId:"",schoolOpen:false,date:new Date().toISOString().slice(0,10),month:MN[new Date().getMonth()],year:String(new Date().getFullYear()),s15:"",s68:"",useFruit:true,sFruit:"",fruitRate:"5",adjustmentOn:false,adjustmentAmount:"",notes:"",doShuffle:true,calc:null,generated:false,generatedSignature:null,saved:false,dupWarns:[],tab:"merged",autoAllocate:true,manualNum:"",autoStrategy:"next",batchMenu:false,showAvailable:false,availableSearch:"",schoolSearch:""};
+let NI={editId:null,schoolId:"",schoolOpen:false,date:new Date().toISOString().slice(0,10),month:MN[new Date().getMonth()],year:String(new Date().getFullYear()),s15:"",s68:"",useFruit:true,sFruit:"",fruitRate:"5",adjustmentOn:false,adjustmentAmount:"",adjustmentSign:"plus",hybridAdjustmentItemId:"",notes:"",doShuffle:true,calc:null,generated:false,generatedSignature:null,saved:false,dupWarns:[],tab:"merged",autoAllocate:true,manualNum:"",autoStrategy:"next",batchMenu:false,showAvailable:false,availableSearch:"",schoolSearch:""};
 const NI_HSN_KEY="ni_hsn_behavior_v1";
 function niHsnState(){return LS.get(NI_HSN_KEY,{stickyOn:false,onStreak:0,offStreak:0});}
 function niHsnDefault(){return niHsnState().stickyOn===true;}
@@ -3895,7 +3958,9 @@ niHsnInit();
 function niNumberCard(){
   const es=niEffectiveSeries();
   const monthInvoices=A.invoices.filter(i=>(!NI.month||i.month===NI.month)&&(!NI.year||String(i.year)===String(NI.year))).filter(i=>parseCounterFromInvNo(i.invNo,es)!==null);
-  const recent=[...monthInvoices].sort((a,b)=>String(b.savedAt||b.date||"").localeCompare(String(a.savedAt||a.date||"")));
+  const scope=activeBillingMode()==="hybrid"?(NI.numberSummaryScope||"all"):"all";
+  const scopedInvoices=scope==="hybrid"?monthInvoices.filter(i=>invoiceEngineOf(i)==="hybrid"):monthInvoices;
+  const recent=[...scopedInvoices].sort((a,b)=>String(b.savedAt||b.date||"").localeCompare(String(a.savedAt||a.date||"")));
   const lastInv=recent[0]?recent[0].invNo:"—";
   const prevInv=recent[1]?recent[1].invNo:"—";
   const win=invNoBatchWindow(es,NI.month,NI.year);
@@ -3932,12 +3997,13 @@ function niNumberCard(){
   return `<div class="card ni-number-summary" style="margin:0;padding:14px;border-radius:16px;box-shadow:0 2px 10px rgba(0,0,0,.06);width:100%">
     <div class="ni-ns-head ni-summary-head" style="background-image:none!important"><div>${ic("invoice",15)}<span>Invoice Number Summary</span></div></div>
     <div class="ni-meta"><span class="ni-meta-ico ni-series-ico">${ic("pushpin",15)}</span><div><div class="ni-meta-l">Invoice Series</div><div class="mono ni-meta-v">${ec(seriesLabel)}</div></div></div>
+    ${activeBillingMode()==="hybrid"?`<div class="ni-strategy" style="margin:7px 0"><div class="ni-meta-l" style="margin-bottom:6px">Summary View</div><div class="ni-segment"><button class="${scope==="all"?"on":""}" onclick="NI.numberSummaryScope='all';gP('new')">All Engines</button><button class="${scope==="hybrid"?"on":""}" onclick="NI.numberSummaryScope='hybrid';gP('new')">Hybrid Only</button></div></div>`:""}
     <div class="ni-meta"><span class="ni-meta-ico ni-month-ico">${ic("calendar",15)}</span><div><div class="ni-meta-l">Billing Month</div><div class="ni-meta-v">${ec(NI.month)} ${ec(NI.year)}</div></div></div>
     <div class="ni-batch-wrap" style="position:relative"><div class="ni-batch-row"><div><div class="ni-meta-l">Batch</div><div class="mono ni-meta-v">${ec(fN(es,rangeStart))} – ${ec(fN(es,rangeEnd))}</div></div><button class="ni-inline-more" title="Modify batch range" onclick="NI.batchMenu=!NI.batchMenu;gP('new')">${ic("more",15)}</button></div>${NI.batchMenu?niBatchEditor():""}</div>
     ${externalUsed.length?`<div class="ni-stat" style="margin-top:6px;border-color:rgba(217,163,0,.28);background:rgba(217,163,0,.06)"><div class="ni-stat-label" style="color:#b88900"><span class="ni-dot" style="background:#d9a300"></span>External Used</div><div class="mono ni-stat-value" style="color:#d9a300">${ec(extRefUsedLabel(externalUsed))}</div></div>`:""}
-    <div class="ni-stat ni-stat-next"><div class="ni-stat-label"><span class="ni-dot next"></span>Next Auto</div><div class="mono ni-stat-value">${ec(nextInv)}</div></div>
-    <div class="ni-stat ni-stat-last"><div class="ni-stat-label"><span class="ni-dot last"></span>Last Invoice</div><div class="mono ni-stat-value">${ec(lastInv)}</div></div>
-    <div class="ni-stat ni-stat-prev"><div class="ni-stat-label"><span class="ni-dot prev"></span>Previous Invoice</div><div class="mono ni-stat-value">${ec(prevInv)}</div></div>
+    <div class="ni-stat ni-stat-next"><div class="ni-stat-label"><span class="ni-dot next"></span>Next Auto · Global</div><div class="mono ni-stat-value">${ec(nextInv)}</div></div>
+    <div class="ni-stat ni-stat-last"><div class="ni-stat-label"><span class="ni-dot last"></span>${scope==="hybrid"?"Last Hybrid Invoice":"Last Invoice"}</div><div class="mono ni-stat-value">${ec(lastInv)}</div></div>
+    <div class="ni-stat ni-stat-prev"><div class="ni-stat-label"><span class="ni-dot prev"></span>${scope==="hybrid"?"Previous Hybrid Invoice":"Previous Invoice"}</div><div class="mono ni-stat-value">${ec(prevInv)}</div></div>
     <div class="ni-strategy"><div class="ni-meta-l" style="margin-bottom:6px">Auto Strategy</div><div class="ni-segment"><button class="${stratNext?"on":""}" onclick="NI.autoStrategy='next';gP('new')">${stratNext?"✓ ":""}Next Available</button><button class="${!stratNext?"on":""}" onclick="NI.autoStrategy='continuous';gP('new')">${!stratNext?"✓ ":""}Continuous Sequence</button></div></div>
     <div class="ni-available"><div class="ni-meta-l">Invoice Numbers Available</div><div class="ni-av-count">${ec(availableLabel)}</div>${available.length?`<button class="btn btn-g btn-sm ni-view-available" style="width:100%" onclick="NI.showAvailable=!NI.showAvailable;if(!NI.showAvailable)NI.availableSearch='';gP('new')">${NI.showAvailable?"Hide Available Numbers":"View Available Numbers"}</button>${picker}`:""}</div>
     <div class="ni-control-divider"></div>
@@ -3973,7 +4039,7 @@ function niFilterSchoolPicker(q){
     const cat=(group.querySelector(".ni-school-picker-cat")?.textContent||"").toLowerCase();
     let visible=0;
     group.querySelectorAll(".ni-school-picker-option").forEach(btn=>{
-      const match=!needle || cat.includes(needle) || (btn.textContent||"").toLowerCase().includes(needle);
+      const match=!needle || schSearchNorm(cat).includes(schSearchNorm(needle)) || schMatchesSearch({name:btn.textContent},needle);
       btn.style.display=match?"":"none";
       if(match)visible++;
     });
@@ -4017,7 +4083,7 @@ function niSchoolPickerHTML(selectedId){
       ${cats.map(c=>{
         const st=SCH_CAT_STYLE[c];
         const catLabel=SCH_CAT_LABEL[c];
-        const rows=byCat[c].filter(s=>!q || s.name.toLowerCase().includes(q) || catLabel.toLowerCase().includes(q));
+        const rows=byCat[c].filter(s=>!q || schMatchesSearch(s,q) || schSearchNorm(catLabel).includes(schSearchNorm(q)));
         if(!rows.length) return '';
         return `<div class="ni-school-picker-group">
           <div class="ni-school-picker-cat" style="--cat-border:${st.border};--cat-text:${st.text};--cat-bg:${st.bg}">
@@ -4028,7 +4094,7 @@ function niSchoolPickerHTML(selectedId){
           </div>
         </div>`;
       }).join("")}
-      ${cats.every(c=>!byCat[c].some(s=>!q || s.name.toLowerCase().includes(q) || SCH_CAT_LABEL[c].toLowerCase().includes(q)))?`<div class="ni-school-picker-empty">No matching school found.</div>`:''}
+      ${cats.every(c=>!byCat[c].some(s=>!q || schMatchesSearch(s,q) || schSearchNorm(SCH_CAT_LABEL[c]).includes(schSearchNorm(q))))?`<div class="ni-school-picker-empty">No matching school found.</div>`:''}
       </div>
     </div>`:""}
   </div>`;
@@ -4091,12 +4157,14 @@ ${niAmountAdjustmentEnabled()?`<div class="ni-adjust-control ni-adjust-secondary
     <button type="button" id="ni-adjust-mode" class="btn ${NI.adjustmentOn?"btn-p":"btn-g"} btn-xs" onclick="niToggleAmountAdjustment()" aria-pressed="${NI.adjustmentOn?"true":"false"}" data-on="${NI.adjustmentOn?"1":"0"}">${NI.adjustmentOn?"ON":"OFF"}</button>
   </div>
   <div id="ni-adjust-panel" style="display:${NI.adjustmentOn?"block":"none"};margin-top:7px">
-    <label style="display:block;font-size:11px;margin-bottom:3px">Adjustment Amount</label>
+    <div style="display:flex;gap:6px;margin-bottom:7px"><button type="button" class="btn btn-xs ${NI.adjustmentSign!=="minus"?"btn-p":"btn-g"}" onclick="NI.adjustmentSign='plus';NI.calc=null;NI.calcSignature=null;NI.saved=false;gP('new')">＋ Add</button><button type="button" class="btn btn-xs ${NI.adjustmentSign==="minus"?"btn-p":"btn-g"}" onclick="NI.adjustmentSign='minus';NI.calc=null;NI.calcSignature=null;NI.saved=false;gP('new')">− Deduct</button></div>
+    ${activeBillingMode()==="hybrid"?`<label style="display:block;font-size:11px;margin-bottom:3px">Apply independently to item</label><select class="fi fi-sm" style="margin-bottom:7px" value="${ec(NI.hybridAdjustmentItemId||"")}" onchange="NI.hybridAdjustmentItemId=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;gP('new')"><option value="">Auto: Green Veg Mix / matching item</option>${(A.items||[]).filter(x=>x.active&&x.head!=="fruit").map(x=>`<option value="${ec(x.id)}" ${NI.hybridAdjustmentItemId===x.id?"selected":""}>${ec(x.name)}</option>`).join("")}<option value="i21" ${NI.hybridAdjustmentItemId==="i21"?"selected":""}>Selected Fuel (LPG / Firewood)</option></select>`:""}
+    <label style="display:block;font-size:11px;margin-bottom:3px">Adjustment Amount (positive value)</label>
     <input id="ni-adjust-amount" class="fi fi-sm" type="number" step="0.01" inputmode="decimal" min="0" placeholder="0.00" aria-label="Adjustment amount" value="${ec(NI.adjustmentAmount||"")}" oninput="NI.adjustmentAmount=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()">
-    <small style="display:block;margin-top:3px;color:var(--txl);font-size:9.5px">Added to the approved allocation total and applied internally to the existing allocation item; no separate adjustment line is created.</small>
+    <small style="display:block;margin-top:3px;color:var(--txl);font-size:9.5px">${activeBillingMode()==="hybrid"?"Independent item adjustment; separate from Smart Reconciliation Optimizer.":"Applied within the existing allocation item; no separate adjustment line."}</small>
   </div>
 </div>`:""}
-<div style="flex:1;min-width:180px"><div class="aband"><div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Total Allocation</div><div style="font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace">${R(grand)}</div>${niAmountAdjustmentValue()>0?`<div style="font-size:9.5px;color:var(--sf);font-weight:700;margin-top:3px">Base + Adjustment: ${R(niAmountAdjustmentValue())}</div>`:""}</div><button id="ni-generate-btn" class="btn btn-lg ${niIsGeneratedFresh()?"btn-s":(niCalcIsFresh()?"ni-stage-generate":"ni-stage-fetch")}" title="${niIsGeneratedFresh()?"Step 3 of 3: Generated — verify and save":(niCalcIsFresh()?"Step 2 of 3: Generate invoice":"Step 1 of 3: Fetch / recalculate")}" aria-label="${niIsGeneratedFresh()?"Generated — verify and save":(niCalcIsFresh()?"Generate invoice":"Fetch / recalculate")}" onclick="${niIsGeneratedFresh()?"niFinalizeGenerate()":(niCalcIsFresh()?"niFinalizeGenerate()":"niGen()")}" ${(!NI.s15&&!NI.s68)||!NI.schoolId?"disabled":""}>${niCalcIsFresh()&&!niIsGeneratedFresh()?"&#10003; Generate Invoice":niIsGeneratedFresh()?"&#10003; Generated":"&#8635; Fetch / Recalculate"}</button></div></div></div><div style="margin-top:11px"><label class="flbl">Notes</label><input class="fi" value="${ec(NI.notes||"")}" onchange="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" placeholder="Optional remarks..."/></div></div></div>${niRevisionIdentityCard()}</div>${calcH}${!NI.calc?`<div class="card"><div class="empty"><div class="ei">&#127979;</div><div class="et">Ready to generate</div><div class="es">Select a school, enter the details, then click Fetch / Recalculate before saving or exporting.</div></div></div>`:""}`;
+<div style="flex:1;min-width:180px"><div class="aband"><div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Total Allocation</div><div style="font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace">${R(grand)}</div>${Math.abs(niAmountAdjustmentValue())>0?`<div style="font-size:9.5px;color:var(--sf);font-weight:700;margin-top:3px">Base ${niAmountAdjustmentValue()>=0?"+":"−"} Adjustment: ${R(Math.abs(niAmountAdjustmentValue()))}</div>`:""}</div><button id="ni-generate-btn" class="btn btn-lg ${niIsGeneratedFresh()?"btn-s":(niCalcIsFresh()?"ni-stage-generate":"ni-stage-fetch")}" title="${niIsGeneratedFresh()?"Step 3 of 3: Generated — verify and save":(niCalcIsFresh()?"Step 2 of 3: Generate invoice":"Step 1 of 3: Fetch / recalculate")}" aria-label="${niIsGeneratedFresh()?"Generated — verify and save":(niCalcIsFresh()?"Generate invoice":"Fetch / recalculate")}" onclick="${niIsGeneratedFresh()?"niFinalizeGenerate()":(niCalcIsFresh()?"niFinalizeGenerate()":"niGen()")}" ${(!NI.s15&&!NI.s68)||!NI.schoolId?"disabled":""}>${niCalcIsFresh()&&!niIsGeneratedFresh()?"&#10003; Generate Invoice":niIsGeneratedFresh()?"&#10003; Generated":"&#8635; Fetch / Recalculate"}</button></div></div></div><div style="margin-top:11px"><label class="flbl">Notes</label><input class="fi" value="${ec(NI.notes||"")}" onchange="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" placeholder="Optional remarks..."/></div></div></div>${niRevisionIdentityCard()}</div>${calcH}${!NI.calc?`<div class="card"><div class="empty"><div class="ei">&#127979;</div><div class="et">Ready to generate</div><div class="es">Select a school, enter the details, then click Fetch / Recalculate before saving or exporting.</div></div></div>`:""}`;
 }
 function niIsGeneratedFresh(){return !!(NI.generated===true && NI.generatedSignature && NI.generatedSignature===niInputSignature() && niCalcIsFresh());}
 function niFinalizeGenerate(){
@@ -4137,8 +4205,7 @@ function niDraftMasterInvoice(){
   const nxt=niCurrentInvoiceNo(false);
   const sourceRows=NI.calc.merged||[];
   const hybridActive=activeBillingMode()==="hybrid";
-  const _srcSig=JSON.stringify(sourceRows.map(r=>[r.id,r.qty,r.rate,r.taxable,r.cgst,r.sgst]));
-  const _approved=hybridActive&&window.MDM_V7_APPLIED_SNAPSHOT&&window.MDM_V7_APPLIED_SOURCE_SIGNATURE===_srcSig?JSON.parse(JSON.stringify(window.MDM_V7_APPLIED_SNAPSHOT)):null;
+  const _approved=hybridActive?mdmV7GetAppliedSnapshot(sourceRows):null;
   let hybridSnap=null;
   if(hybridActive){
     const baseSnap=hybridMakeSnapshot({id:"__new_invoice_preview__",invNo:nxt,savedAt:null,net:t.net||0,grand:t.gross||0,taxable:t.taxable||0,cgst:t.cgst||0,sgst:t.sgst||0,roundOff:t.roundOff||0,mergedTotals:t,mergedItems:sourceRows});
@@ -4378,7 +4445,7 @@ function niToggleAmountAdjustment(){
 function niAmountAdjustmentValue(){
   if(!niAmountAdjustmentEnabled() || !NI.adjustmentOn)return 0;
   const v=Number.parseFloat(NI.adjustmentAmount||"0");
-  return Number.isFinite(v)&&v>0?d2(v):0;
+  return Number.isFinite(v)&&v>0?d2(v)*(NI.adjustmentSign==="minus"?-1:1):0;
 }
 function niInputSignature(){
   const settings=A.sett||ST0||{};
@@ -4386,7 +4453,7 @@ function niInputSignature(){
     schoolId:NI.schoolId,date:NI.date,month:NI.month,year:String(NI.year||""),
     s15:String(NI.s15??""),s68:String(NI.s68??""),useFruit:!!NI.useFruit,
     sFruit:String(NI.sFruit??""),fruitRate:String(NI.fruitRate??""),
-    adjustmentOn:!!NI.adjustmentOn,adjustmentAmount:String(NI.adjustmentAmount??""),
+    adjustmentOn:!!NI.adjustmentOn,adjustmentAmount:String(NI.adjustmentAmount??""),adjustmentSign:NI.adjustmentSign||"plus",hybridAdjustmentItemId:NI.hybridAdjustmentItemId||"",
     notes:String(NI.notes??""),doShuffle:!!NI.doShuffle,manualNum:String(NI.manualNum??""),autoAllocate:!!NI.autoAllocate,autoStrategy:String(NI.autoStrategy||"next"),
     r15:Number(A.rates?.r15)||0,r68:Number(A.rates?.r68)||0,
     gstMode:settings.gstMode||"cgst_sgst",invoiceType:settings.invoiceType||"tax_invoice",
@@ -4412,7 +4479,14 @@ function niGen(){
   NI.dupWarns=warns;
   const sFr=NI.useFruit?Math.max(0,parseInt(NI.sFruit)||0):0;
   const adjustmentAmount=niAmountAdjustmentValue();
-  NI.calc=calc(s15,s68,sFr,parseFloat(NI.fruitRate)||0,NI.doShuffle,adjustmentAmount);
+  const isHybrid=activeBillingMode()==="hybrid",adjustmentItemId=isHybrid?String(NI.hybridAdjustmentItemId||""):"";
+  if(isHybrid&&Math.abs(adjustmentAmount)>=0.005&&!adjustmentItemId){toast("Hybrid Add / Deduct: select the exact item first. No automatic item selection is allowed.","err");return;}
+  const editingSource=NI.editId?A.invoices.find(x=>String(x.id)===String(NI.editId)):null;
+  const calcContext=editingSource?invoiceCalcContext(editingSource):invoiceCalculationSnapshot();
+  NI.calcMasterSnapshot=calcContext;
+  try{NI.calc=calc(s15,s68,sFr,parseFloat(NI.fruitRate)||0,NI.doShuffle,adjustmentAmount,adjustmentItemId,calcContext);}catch(e){NI.calcMasterSnapshot=null;toast(e?.message||"Unable to calculate invoice adjustment.","err");return;}
+  NI.hybridAppliedSnapshot=null;NI.hybridAppliedSourceSignature="";NI.hybridAppliedAt=null;
+  window.MDM_V7_APPLIED_SNAPSHOT=null;window.MDM_V7_APPLIED_SOURCE_SIGNATURE="";
   NI.calcSignature=niInputSignature();
   NI.generated=false;NI.generatedSignature=null;NI.saved=false;NI.tab="merged";gP("new");toast("Invoice fetched/recalculated. Click Generate Invoice to enable saving.","ok");
 }
@@ -4432,11 +4506,15 @@ function niSave(){
   const frR=parseFloat(NI.fruitRate)||0;
   const seriesCounterBefore=A.series.counter;
   const generatedAt=new Date().toISOString();
-  const inv={id:uid(),invNo:nxt,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||"",schoolAddress:sch?.address||"",schoolUdise:sch?.udise||"",schoolBlock:sch?.block||"",schoolDistrict:sch?.district||"",schoolMobile:sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:generatedAt,status:"active",syncStatus:"pending",createdByUserId:A.currentUser?.id||"",createdByName:A.currentUser?.name||"",undoMeta:{eligible:true,generatedAt,seriesCounterBefore,seriesStateBefore:JSON.parse(JSON.stringify(A.series))},revisions:[],printCount:0,lastPrintedAt:null,delivery:{status:"NOT_SENT",method:"",at:null},deliveryStatus:"NOT_SENT",deliveryMethod:"",deliveryAt:null};
+  const inv={id:uid(),invNo:nxt,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||"",schoolAddress:sch?.address||"",schoolUdise:sch?.udise||"",schoolBlock:sch?.block||"",schoolDistrict:sch?.district||"",schoolMobile:sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),adjustmentSign:NI.adjustmentSign||"plus",adjustmentItemId:activeBillingMode()==="hybrid"?(NI.hybridAdjustmentItemId||""):"",taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,calculationSnapshot:NI.calcMasterSnapshot||invoiceCalculationSnapshot(),annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:generatedAt,status:"active",syncStatus:"pending",createdByUserId:A.currentUser?.id||"",createdByName:A.currentUser?.name||"",undoMeta:{eligible:true,generatedAt,seriesCounterBefore,seriesStateBefore:JSON.parse(JSON.stringify(A.series))},revisions:[],printCount:0,lastPrintedAt:null,delivery:{status:"NOT_SENT",method:"",at:null},deliveryStatus:"NOT_SENT",deliveryMethod:"",deliveryAt:null};
   if(activeBillingMode()==="hybrid"){
-    try{hybridEnsureSnapshot(inv);}catch(e){toast("Hybrid snapshot could not be created; invoice was not saved: "+(e.message||e),"err");return;}
+    try{hybridEnsureSnapshot(inv,mdmV7GetAppliedSnapshot(inv.mergedItems));}catch(e){toast("Hybrid snapshot could not be created; invoice was not saved: "+(e.message||e),"err");return;}
   }
   sv("iv",[inv,...A.invoices]);
+  if(activeBillingMode()==="hybrid"){
+    NI.hybridAppliedSnapshot=null;NI.hybridAppliedSourceSignature="";NI.hybridAppliedAt=null;
+    window.MDM_V7_APPLIED_SNAPSHOT=null;window.MDM_V7_APPLIED_SOURCE_SIGNATURE="";
+  }
   // Series counter is now informational only (Invoice Register is the source
   // of truth for numbering) — keep it monotonic with whatever was just used.
   const usedN=parseCounterFromInvNo(nxt);
@@ -4455,7 +4533,7 @@ function niSaveEdited(){
   const old=A.invoices[idx], before=mrSnapshot(old), sch=A.schools.find(s=>s.id===NI.schoolId); const s15=Math.max(0,parseInt(NI.s15)||0),s68=Math.max(0,parseInt(NI.s68)||0),sFr=NI.useFruit?Math.max(0,parseInt(NI.sFruit)||0):0,frR=parseFloat(NI.fruitRate)||0;
   if(!NI.calc||!Array.isArray(NI.calc.merged)||!Number.isFinite(Number(NI.calc.a15))||!Number.isFinite(Number(NI.calc.a68))||!Number.isFinite(Number(NI.calc.aFr))||!Number.isFinite(Number(NI.calc.grand))){resetRevisionConfirmation();toast("Invoice calculation is incomplete. Recalculate the invoice before saving; no data was changed.","err");return;}
   const at=new Date().toISOString();
-  let updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:sch?.name||old.schoolName,schoolAddress:sch?.address||old.schoolAddress||"",schoolUdise:sch?.udise||old.schoolUdise||"",schoolBlock:sch?.block||old.schoolBlock||"",schoolDistrict:sch?.district||old.schoolDistrict||"",schoolMobile:sch?.mobile||old.schoolMobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:old.savedAt||at,updatedAt:at,revisedAt:at,status:"revised",revisionStatus:mrInvoiceShared(old)?"RE_SHARE_PENDING":(old.issuedAt?"RE_ISSUE_PENDING":"REVISED_NOT_SHARED"),reSharePending:mrInvoiceShared(old),recallPending:mrInvoiceShared(old),reIssuePending:!!old.issuedAt,originalSnapshot:old.originalSnapshot||before};
+  let updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:old.schoolName||sch?.name||"",schoolAddress:old.schoolAddress||sch?.address||"",schoolUdise:old.schoolUdise||sch?.udise||"",schoolBlock:old.schoolBlock||sch?.block||"",schoolDistrict:old.schoolDistrict||sch?.district||"",schoolMobile:old.schoolMobile||sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),adjustmentSign:NI.adjustmentSign||"plus",adjustmentItemId:activeBillingMode()==="hybrid"?(NI.hybridAdjustmentItemId||""):"",taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,calculationSnapshot:old.calculationSnapshot||invoiceCalcContext(old),annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:old.invoiceType||(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:old.savedAt||at,updatedAt:at,revisedAt:at,status:"revised",revisionStatus:mrInvoiceShared(old)?"RE_SHARE_PENDING":(old.issuedAt?"RE_ISSUE_PENDING":"REVISED_NOT_SHARED"),reSharePending:mrInvoiceShared(old),recallPending:mrInvoiceShared(old),reIssuePending:!!old.issuedAt,originalSnapshot:old.originalSnapshot||before};
   if(!NI.revisionPreviewConfirmed){
     NI.pendingRevisionPreview={invoiceId:old.id,updatedAt:at,updated};
     const beforeRows=Array.isArray(old.mergedItems)?old.mergedItems:[],afterRows=Array.isArray(updated.mergedItems)?updated.mergedItems:[];
@@ -4802,6 +4880,7 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
       hybridQuantityTimesRate:multiplication,autoAdjustmentAmount:money(displayTaxable-sourceTaxable),
       autoAdjustment:true,zeroFloorFallback,redistributionPolicy:"SETTINGS_ALLOWLIST_ONLY",
       redistributionApplied:false,netPayableImpact:money(displayTaxable+displayCgst+displaySgst-(sourceTaxable+sourceCgst+sourceSgst)),
+      independentAdjustmentAmount:money(Number(r.independentAdjustmentAmount)||0),
       reason:zeroFloorFallback?"Actual quantity retained because normalized quantity would be zero for a positive taxable row":(result.reason||"")};
   });
   const sum=k=>money(rows.reduce((a,r)=>a+Number(r[k]||0),0));
@@ -4830,20 +4909,30 @@ function hybridLivePreviewHTML(calc){
   try{
     const mt=calc.mTot||{};
     const baseSnap=hybridMakeSnapshot({id:"LIVE-PREVIEW",invNo:niResolvedInvNo(false)||"Draft",schoolName:A.schools.find(x=>x.id===NI.schoolId)?.name||"",savedAt:null,net:Number(mt.net)||0,grand:Number(mt.gross??mt.grand)||0,taxable:Number(mt.taxable)||0,cgst:Number(mt.cgst)||0,sgst:Number(mt.sgst)||0,roundOff:Number(mt.roundOff)||0,mergedTotals:mt,mergedItems:calc.merged});
-    const auto=mdmV7AutoReconcileSnapshot(baseSnap,hybridReconEligible());
+    const approved=mdmV7GetAppliedSnapshot(calc.merged);
+    const auto=approved?{status:"USER_APPROVED",snapshot:approved,proposals:[]}:mdmV7AutoReconcileSnapshot(baseSnap,hybridReconEligible());
     const snap=auto.snapshot||baseSnap;
     if(auto.status==="AUTO_RECONCILED"){
       window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(snap));
       window.MDM_V7_APPLIED_SOURCE_SIGNATURE=mdmV7SourceSignature(calc.merged);
       window.MDM_V7_AUTO_STATUS={status:auto.status,optionCount:auto.proposals.length,at:new Date().toISOString()};
     }
-    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">${modeLabel(snap.displayMode)} · ${auto.status==="AUTO_RECONCILED"?"Smart Optimizer · Exact Match":"Reconciliation Pending"}</span></div><div class="cbd"><div class="info ${auto.status==="AUTO_RECONCILED"?"inf-g":"inf-b"}" style="margin-bottom:9px">${auto.status==="AUTO_RECONCILED"?"Smart Optimizer automatically absorbed the final plus/minus difference in the Green Veg Mix / enabled eligible items using a joint quantity + daily-rate adjustment. Original Gross, GST and Net Payable are now exactly matched.":"Hybrid Quantity follows the approved item rules. The Smart Optimizer will analyze the final residual before save. If no valid exact solution exists, saving remains blocked."}</div><div class="info inf-g" style="margin-bottom:9px">${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹${Number(snap.reconciliation.differenceAfter||0).toFixed(2)}.</div>${snap.optimizer?.autoApplied?`<section class="mdm-v7-recon" style="margin:10px 0;border:1.5px solid var(--nv2);border-radius:10px;padding:12px"><div class="mdm-v7-title">Optimizer Activity · Applied Automatically</div><div class="mdm-v7-sub">Exact audit of the automatic adjustment; Original invoice remains unchanged.</div><div class="mdm-v7-stats"><div><small>Difference Before</small><b>${mdmV7INR(snap.reconciliation.differenceBefore||0)}</b></div><div><small>Difference After</small><b>${mdmV7INR(snap.reconciliation.differenceAfter||0)}</b></div><div><small>Adjusted Item(s)</small><b>${hybridEsc((snap.optimizer.adjustedItems||[]).map(a=>a.name).join(", ")||snap.reconciliation.adjustmentItemName||"—")}</b></div></div><div style="overflow:auto;margin-top:9px"><table class="dt"><thead><tr><th>Item</th><th class="num">Qty Before</th><th class="num">Qty Applied</th><th class="num">Rate Before</th><th class="num">Rate Applied</th><th class="num">Taxable Before</th><th class="num">Taxable Applied</th></tr></thead><tbody>${(snap.optimizer.adjustedItems||[]).map(a=>`<tr><td>${hybridEsc(a.name)}</td><td class="num">${hybridEsc(a.fromQuantity)}</td><td class="num"><b>${hybridEsc(a.toQuantity)}</b></td><td class="num">${mdmV7INR(a.fromRate)}</td><td class="num"><b>${mdmV7INR(a.toRate)}</b></td><td class="num">${mdmV7INR(a.fromTaxable)}</td><td class="num"><b>${mdmV7INR(a.toTaxable)}</b></td></tr>`).join("")}</tbody></table></div><div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:12px"><span>Original Gross: <b>${mdmV7INR(snap.sourceGross)}</b></span><span>Hybrid Gross: <b>${mdmV7INR(snap.hybridGross)}</b></span><span>Original Net: <b>${mdmV7INR(snap.sourceNet)}</b></span><span>Hybrid Net: <b>${mdmV7INR(snap.hybridNet)}</b></span></div></section>`:`<div class="info inf-b" style="margin:9px 0"><b>Optimizer adjustment not applied.</b> Residual difference: ${mdmV7INR(snap.reconciliation?.differenceBefore??(snap.sourceNet-snap.hybridNet))}. See Smart Reconciliation Optimizer below for analysis and status.</div>`}<div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Actual Qty</th><th class="num">Normalized Qty</th><th class="num">Billed Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.actualQuantity)} ${hybridEsc(r.actualUnit)}</td><td class="num"><b>${hybridEsc(r.normalizedQuantity)} ${hybridEsc(r.normalizedUnit)}</b></td><td class="num"><b>${hybridEsc(r.billedQuantity)} ${hybridEsc(r.billedUnit)}</b></td><td>${hybridEsc(r.actualUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.actualUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(2)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
+    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">${modeLabel(snap.displayMode)} · ${auto.status==="USER_APPROVED"?"Smart Optimizer · User Approved":(auto.status==="AUTO_RECONCILED"?"Smart Optimizer · Exact Match":"Reconciliation Pending")}</span></div><div class="cbd"><div class="info ${auto.status==="AUTO_RECONCILED"?"inf-g":"inf-b"}" style="margin-bottom:9px">${auto.status==="USER_APPROVED"?"Your selected Smart Optimizer option is applied to this active Hybrid draft. The Original calculation remains unchanged; this approved Hybrid snapshot will be saved with the invoice.":(auto.status==="AUTO_RECONCILED"?"Smart Optimizer automatically absorbed the final plus/minus difference in the Green Veg Mix / enabled eligible items using a joint quantity + daily-rate adjustment. Original Gross, GST and Net Payable are now exactly matched.":"Hybrid Quantity follows the approved item rules. The Smart Optimizer will analyze the final residual before save. If no valid exact solution exists, saving remains blocked.")}</div><div class="info inf-g" style="margin-bottom:9px">${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹${Number(snap.reconciliation.differenceAfter||0).toFixed(2)}.</div>${(snap.optimizer?.autoApplied||auto.status==="USER_APPROVED")?`<section class="mdm-v7-recon" style="margin:10px 0;border:1.5px solid var(--nv2);border-radius:10px;padding:12px"><div class="mdm-v7-title">Optimizer Activity · ${auto.status==="USER_APPROVED"?"User Approved":"Applied Automatically"}</div><div class="mdm-v7-sub">Exact audit of the applied adjustment; Original invoice remains unchanged.</div><div class="mdm-v7-stats"><div><small>Difference Before</small><b>${mdmV7INR(snap.reconciliation.differenceBefore||0)}</b></div><div><small>Difference After</small><b>${mdmV7INR(snap.reconciliation.differenceAfter||0)}</b></div><div><small>Adjusted Item(s)</small><b>${hybridEsc((snap.optimizer.adjustedItems||[]).map(a=>a.name).join(", ")||snap.reconciliation.adjustmentItemName||"—")}</b></div></div><div style="overflow:auto;margin-top:9px"><table class="dt"><thead><tr><th>Item</th><th class="num">Qty Before</th><th class="num">Qty Applied</th><th class="num">Rate Before</th><th class="num">Rate Applied</th><th class="num">Taxable Before</th><th class="num">Taxable Applied</th></tr></thead><tbody>${(snap.optimizer.adjustedItems||[]).map(a=>`<tr><td>${hybridEsc(a.name)}</td><td class="num">${hybridEsc(a.fromQuantity)}</td><td class="num"><b>${hybridEsc(a.toQuantity)}</b></td><td class="num">${mdmV7INR(a.fromRate)}</td><td class="num"><b>${mdmV7INR(a.toRate)}</b></td><td class="num">${mdmV7INR(a.fromTaxable)}</td><td class="num"><b>${mdmV7INR(a.toTaxable)}</b></td></tr>`).join("")}</tbody></table></div><div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:12px"><span>Original Gross: <b>${mdmV7INR(snap.sourceGross)}</b></span><span>Hybrid Gross: <b>${mdmV7INR(snap.hybridGross)}</b></span><span>Original Net: <b>${mdmV7INR(snap.sourceNet)}</b></span><span>Hybrid Net: <b>${mdmV7INR(snap.hybridNet)}</b></span></div></section>`:`<div class="info inf-b" style="margin:9px 0"><b>Optimizer adjustment not applied.</b> Residual difference: ${mdmV7INR(snap.reconciliation?.differenceBefore??(snap.sourceNet-snap.hybridNet))}. See Smart Reconciliation Optimizer below for analysis and status.</div>`}<div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Actual Qty</th><th class="num">Normalized Qty</th><th class="num">Billed Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.actualQuantity)} ${hybridEsc(r.actualUnit)}</td><td class="num"><b>${hybridEsc(r.normalizedQuantity)} ${hybridEsc(r.normalizedUnit)}</b></td><td class="num"><b>${hybridEsc(r.billedQuantity)} ${hybridEsc(r.billedUnit)}</b></td><td>${hybridEsc(r.actualUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.actualUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(2)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
   }catch(e){return `<div class="info inf-r" style="margin:10px 0"><b>Hybrid preview unavailable:</b> ${hybridEsc(e.message||e)}. Existing Original calculation is unaffected.</div>`;}
 }
 
 function mdmV7Money(v){return Math.round((Number(v)||0)*100)/100;}
 function mdmV7INR(v){return "₹"+mdmV7Money(v).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function mdmV7SourceSignature(rows){return JSON.stringify((rows||[]).map(r=>[r.id,r.qty,r.rate,r.taxable,r.cgst,r.sgst]));}
+function mdmV7GetAppliedSnapshot(rows){
+  const sig=mdmV7SourceSignature(rows||[]);
+  const draftSnap=NI?.hybridAppliedSnapshot;
+  const draftSig=NI?.hybridAppliedSourceSignature;
+  if(draftSnap&&draftSig===sig)return JSON.parse(JSON.stringify(draftSnap));
+  const legacy=window.MDM_V7_APPLIED_SNAPSHOT;
+  if(legacy&&window.MDM_V7_APPLIED_SOURCE_SIGNATURE===sig)return JSON.parse(JSON.stringify(legacy));
+  return null;
+}
 function mdmV7AutoReconcileSnapshot(baseSnap,eligibleIds){
   const result=mdmV7Solve(baseSnap,eligibleIds||hybridReconEligible());
   const proposals=(result.options||[]).map(option=>mdmV7BuildProposal(baseSnap,option)).filter(Boolean);
@@ -4929,7 +5018,8 @@ function mdmV7Candidate(row,qty,rateOverride){
 function mdmV7Solve(baseSnap,eligibleIds){
   const cents=v=>Math.round((Number(v)||0)*100), rows=baseSnap.rows||[];
   const targets={tax:cents(baseSnap.sourceTaxableTotal),cg:cents(baseSnap.sourceCgstTotal),sg:cents(baseSnap.sourceSgstTotal)};
-  const adjustable=rows.map((r,i)=>({r,i,cat:mdmV7Category(r)})).filter(x=>x.cat&&eligibleIds.includes(x.cat)&&x.r.eligible&&Number(x.r.sourceTaxable)>0);
+  // Independent Hybrid Add-on/Deduction rows are deliberately excluded from optimizer control.
+  const adjustable=rows.map((r,i)=>({r,i,cat:mdmV7Category(r)})).filter(x=>x.cat&&eligibleIds.includes(x.cat)&&x.r.eligible&&Number(x.r.sourceTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount)||0)<0.005);
   if(!adjustable.length)return {status:"NO_ELIGIBLE_ROWS",options:[],eligibleRows:0};
   // Green Veg Mix is the primary absorption row. Process it last so its live daily rate
   // can be solved against the exact residual left by all other selected rows.
@@ -5039,10 +5129,11 @@ function mdmV7Analyze(){
     const proposals=(result.options||[]).map(o=>({option:o,proposal:mdmV7BuildProposal(base,o)})).filter(x=>x.proposal);
     window.MDM_V7_OPTIMIZER={status:proposals.length?"SOLVED":"NO_EXACT_SOLUTION",validOptions:proposals.length,applyEnabled:proposals.length>0,eligibleItems:eligible.slice(),eligibleRows:result.eligibleRows||0,searchStates:result.searchStates||0,proposals,baseSnapshot:base,policy:"SAVED_ALLOWLIST_ONLY_EXACT_LINE_AND_INVOICE_RECONCILIATION",analyzedAt:new Date().toISOString()};
     put("mdm-v7-recon-state",proposals.length?"EXACT SOLUTION FOUND":"NO EXACT SOLUTION");put("mdm-v7-diff",mdmV7INR(base.sourceNet-base.hybridNet));put("mdm-v7-options",proposals.length+" valid options");put("mdm-v7-action",proposals.length?"Ready for approval":"Apply blocked");
-    const html=proposals.length?proposals.map((x,i)=>{const p=x.proposal,adj=p.optimizer.adjustedItems;return `<div class="info inf-g" style="margin:9px 0"><b>Option ${i+1} · Exact financial match</b><br>Hybrid Gross: ${mdmV7INR(p.hybridGross)} · Net Payable: ${mdmV7INR(p.hybridNet)}<br>Adjusted: ${adj.map(a=>`${hybridEsc(a.name)} (${hybridEsc(a.fromQuantity)} → ${hybridEsc(a.toQuantity)} ${hybridEsc((p.rows.find(r=>r.id===a.id)||{}).billedUnit||"")}; Rate ${mdmV7INR(a.fromRate)} → ${mdmV7INR(a.toRate)})`).join("; ")}<br><button class="btn btn-p btn-sm" style="margin-top:8px" onclick="mdmV7Apply(${i})">Approve &amp; Apply Option ${i+1}</button></div>`;}).join(""):`<div class="info inf-b"><b>No exact proposal found.</b><br>Eligible categories: ${labels.length?labels.map(hybridEsc).join(", "):"None"}. Checked ${result.searchStates||0} bounded search states across ${result.eligibleRows||0} eligible rows. No quantities or rates were changed. Enable additional permitted categories or review source data; no approximate result will be applied.</div>`;
-    out.hidden=false;out.innerHTML=html;
+    const html=proposals.length?`<div class="info inf-g" style="margin:9px 0"><b>${proposals.length} mathematically valid option(s)</b><label class="flbl" style="display:block;margin-top:9px">Choose optimization strategy</label><select id="mdm-v7-option-select" class="fi" onchange="mdmV7PreviewOption(Number(this.value))">${proposals.map((x,i)=>`<option value="${i}">Option ${i+1} · ${i===0?"Lowest combined movement":"Alternative valid solution"} · Net ${mdmV7INR(x.proposal.hybridNet)}</option>`).join("")}</select><div id="mdm-v7-option-detail" style="margin-top:8px"></div><button class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmV7Apply(Number(document.getElementById('mdm-v7-option-select')?.value||0))">Apply Selected Option</button></div>`:`<div class="info inf-b"><b>No exact proposal found.</b><br>Eligible categories: ${labels.length?labels.map(hybridEsc).join(", "):"None"}. Checked ${result.searchStates||0} bounded search states across ${result.eligibleRows||0} eligible rows. No quantities or rates were changed. Enable additional permitted categories or review source data; no approximate result will be applied.</div>`;
+    out.hidden=false;out.innerHTML=html;if(proposals.length)mdmV7PreviewOption(0);
   }catch(e){console.error("Hybrid optimizer failed",e);put("mdm-v7-recon-state","SOLVER ERROR · BLOCKED");put("mdm-v7-options","0 valid options");put("mdm-v7-action","Apply blocked");out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Optimizer could not complete safely:</b> ${hybridEsc(e.message||e)}. No values changed.</div>`;window.MDM_V7_OPTIMIZER={status:"ERROR",validOptions:0,applyEnabled:false,error:String(e.message||e)};}
 }
+function mdmV7PreviewOption(index){const e=window.MDM_V7_OPTIMIZER?.proposals?.[Number(index)];const host=document.getElementById("mdm-v7-option-detail");if(!e||!host)return;const p=e.proposal;host.innerHTML=`<b>Hybrid Gross:</b> ${mdmV7INR(p.hybridGross)} · <b>Net:</b> ${mdmV7INR(p.hybridNet)}<br><b>Items adjusted:</b> ${p.optimizer.adjustedItems.map(a=>`${hybridEsc(a.name)}: Qty ${hybridEsc(a.fromQuantity)} → ${hybridEsc(a.toQuantity)}; Rate ${mdmV7INR(a.fromRate)} → ${mdmV7INR(a.toRate)}`).join("; ")}<br><small>Exact line-level and invoice-level checks required before Apply.</small>`;}
 function mdmV7Apply(index){
   const state=window.MDM_V7_OPTIMIZER,entry=state?.proposals?.[Number(index)];
   if(!entry?.proposal||!state.applyEnabled){toast("No validated optimizer proposal is available","err");return false;}
@@ -5053,11 +5144,18 @@ function mdmV7Apply(index){
   if(!p.reconciliation?.financialMatch||p.reconciliation.status!=="RECONCILED_BY_SMART_OPTIMIZER"){toast("Final reconciliation gate failed. Apply blocked.","err");return false;}
   const sums={tax:mdmV7Money(p.rows.reduce((a,r)=>a+r.displayTaxable,0)),cg:mdmV7Money(p.rows.reduce((a,r)=>a+r.displayCgst,0)),sg:mdmV7Money(p.rows.reduce((a,r)=>a+r.displaySgst,0))};
   if(sums.tax!==p.sourceTaxableTotal||sums.cg!==p.sourceCgstTotal||sums.sg!==p.sourceSgstTotal||mdmV7Money(sums.tax+sums.cg+sums.sg)!==p.sourceGross||mdmV7Money(sums.tax+sums.cg+sums.sg+p.sourceRoundOff)!==p.sourceNet){toast("Independent final totals check failed. Apply blocked.","err");return false;}
-  p.optimizer.applied=true;p.optimizer.appliedAt=new Date().toISOString();p.optimizer.appliedBy="USER_APPROVAL";
+  p.optimizer.applied=true;p.optimizer.appliedAt=new Date().toISOString();p.optimizer.appliedBy="USER_APPROVAL";p.optimizer.autoApplied=false;
+  // Bind the approved proposal to this exact active draft. Do not mutate NI.calc.merged:
+  // that remains the immutable Original calculation; the approved Hybrid snapshot is a separate layer.
+  NI.hybridAppliedSnapshot=JSON.parse(JSON.stringify(p));
+  NI.hybridAppliedSourceSignature=sourceSig;
   window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(p));window.MDM_V7_APPLIED_SOURCE_SIGNATURE=sourceSig;
-  toast("Optimizer proposal approved for this invoice draft. Recalculate/Save to persist the Hybrid revision.","ok");
-  const host=document.getElementById("mdm-v7-recon-results");if(host)host.innerHTML=`<div class="info inf-g"><b>Option approved and applied to the active Hybrid draft.</b><br>Original and Hybrid Gross / Net Payable: ${mdmV7INR(p.sourceGross)} / ${mdmV7INR(p.sourceNet)}. Save the invoice to persist the approved immutable Hybrid snapshot.</div>`;
-  putText("mdm-v7-recon-state","APPROVED · READY TO SAVE");putText("mdm-v7-action","Approved");return true;
+  NI.hybridAppliedAt=p.optimizer.appliedAt;
+  toast("Selected optimizer option is now applied to the active Hybrid draft. Save to persist this exact Hybrid revision.","ok");
+  const host=document.getElementById("mdm-v7-recon-results");if(host)host.innerHTML=`<div class="info inf-g"><b>Selected option applied to the active Hybrid draft.</b><br>Adjusted items: ${hybridEsc((p.optimizer.adjustedItems||[]).map(x=>x.name).join(", "))}. Original and Hybrid Gross / Net Payable: ${mdmV7INR(p.sourceGross)} / ${mdmV7INR(p.sourceNet)}.<br><b>The Hybrid Preview below now uses these approved quantities and rates.</b> Save the invoice to persist this exact revision.</div>`;
+  putText("mdm-v7-recon-state","APPLIED TO ACTIVE DRAFT · READY TO SAVE");putText("mdm-v7-action","Applied · Save to persist");
+  try{gP("new");}catch(e){console.warn("Applied optimizer preview refresh failed",e);}
+  return true;
 }
 function putText(id,value){const el=document.getElementById(id);if(el)el.textContent=value;}
 
@@ -6230,10 +6328,10 @@ function mrAdvancedBar(){
 }
 function pgMasterIndividual(){
   const allInvoices=A.invoices||[],allYears=[...new Set(allInvoices.map(i=>String(i.year||"")).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));
-  const schools=(A.schools||[]).slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||"")));
+  const schools=schSortList(A.schools||[]);
   const category=String(MR.individualCategory||"");
   const schoolSearch=String(MR.individualSchoolSearch||"").trim().toLowerCase();
-  const visibleSchools=schools.filter(sc=>(!category||schCategory(sc.name)===category)&&(!MR.individualBlock||String(sc.block||"")===MR.individualBlock)&&(!schoolSearch||[sc.name,sc.udise,sc.block].some(v=>String(v||"").toLowerCase().includes(schoolSearch))));
+  const visibleSchools=schools.filter(sc=>(!category||schCategory(sc.name)===category)&&(!MR.individualBlock||String(sc.block||"")===MR.individualBlock)&&(!schoolSearch||schMatchesSearch(sc,schoolSearch)));
   const selectedSchool=schools.find(sc=>String(sc.id)===String(MR.individualSchoolId||""));
   const schoolOptions=`<option value="">All schools</option>`+visibleSchools.map(sc=>`<option value="${ec(sc.id)}" ${String(MR.individualSchoolId)===String(sc.id)?"selected":""}>${ec(sc.name)}${sc.udise?` · ${ec(sc.udise)}`:""}${sc.active===false?" · INACTIVE (history)":""}</option>`).join("");
   const q=String(MR.individualQ||"").trim().toLowerCase();
@@ -6248,7 +6346,7 @@ function pgMasterIndividual(){
     if(!exactInvoiceSearch&&!mrSchoolMatches(inv,MR.individualSchoolId))return false;
     if(!exactInvoiceSearch&&MR.individualBlock){const sc=(A.schools||[]).find(x=>String(x.id)===String(inv.schoolId));if(String(inv.schoolBlock||sc?.block||"")!==MR.individualBlock)return false;}
     if(!q)return true;
-    return [inv.invNo,inv.schoolName,inv.schoolUdise,inv.month,inv.year].some(v=>String(v||"").toLowerCase().includes(q));
+    return String(inv.invNo||"").toLowerCase().includes(q)||schMatchesSearch({name:inv.schoolName,udise:inv.schoolUdise},q)||[inv.month,inv.year].some(v=>String(v||"").toLowerCase().includes(q));
   }).slice().sort((a,b)=>String(b.date||b.createdAt||"").localeCompare(String(a.date||a.createdAt||"")));
   const monthOptions=`<option value="">All months</option>`+MN.map(m=>`<option value="${ec(m)}" ${MR.individualMonth===m?"selected":""}>${ec(m)}</option>`).join("");
   const yearOptions=`<option value="">All years</option>`+allYears.map(y=>`<option value="${ec(y)}" ${MR.individualYear===y?"selected":""}>${ec(y)}</option>`).join("");
@@ -6302,7 +6400,7 @@ function pgMasterRevision(){
   const categoryOpts=`<option value="">All Categories</option>`+SCH_CATS.map(c=>`<option value="${ec(c)}" ${MR.bulkCategory===c?"selected":""}>${ec(SCH_CAT_LABEL[c])}</option>`).join("");
   const bulkBlocks=[...new Set(schools.map(sc=>String(sc.block||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   const bulkBlockOpts=`<option value="">All Blocks</option>`+bulkBlocks.map(b=>`<option value="${ec(b)}" ${MR.bulkBlock===b?"selected":""}>${ec(b)}</option>`).join("");
-  const bulkVisibleSchools=schools.filter(sc=>(!MR.bulkCategory||schCategory(sc.name)===MR.bulkCategory)&&(!MR.bulkBlock||String(sc.block||"")===MR.bulkBlock)&&(!String(MR.bulkSchoolSearch||"").trim()||[sc.name,sc.udise,sc.block].some(v=>String(v||"").toLowerCase().includes(String(MR.bulkSchoolSearch).trim().toLowerCase()))));
+  const bulkVisibleSchools=schSortList(schools.filter(sc=>(!MR.bulkCategory||schCategory(sc.name)===MR.bulkCategory)&&(!MR.bulkBlock||String(sc.block||"")===MR.bulkBlock)&&(!String(MR.bulkSchoolSearch||"").trim()||schMatchesSearch(sc,MR.bulkSchoolSearch))));
   const bulkSchoolOpts=`<option value="">All schools</option>`+bulkVisibleSchools.map(sc=>`<option value="${ec(sc.id)}" ${String(MR.bulkSchoolId)===String(sc.id)?"selected":""}>${ec(sc.name)}${sc.udise?` · ${ec(sc.udise)}`:""}${sc.active===false?" · INACTIVE (history)":""}</option>`).join("");
   const itemOpts=`<option value="">Select item…</option>`+items.map(it=>{const id=String(it.id||it.name);return `<option value="${ec(id)}" ${MR.itemId===id?"selected":""}>${ec(it.name||id)}${it.gst!==undefined?` · GST ${ec(it.gst)}%`:""}</option>`}).join("");
   const preview=MR.preview?(()=>{const p=MR.preview,ok=p.results.filter(x=>x.calc.ok),before=p.results.reduce((s,x)=>s+(Number(x.inv.net)||0),0),after=p.errors.length?null:ok.reduce((s,x)=>s+(Number(x.calc.after?.net)||0),0);return `<div class="card" id="mr-preview" style="margin-top:14px"><div class="chd"><span class="cht">${p.specialFruitMode?"Egg/Fruit ON/OFF Preview":"Revision Preview"}</span><span class="bdg ${p.errors.length?"br":"bg"}">${p.errors.length?`${p.errors.length} issue(s)`:`${ok.length} ready`}</span></div><div class="cbd"><div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="stat"><div class="sl-l">Selected Invoices</div><div class="sv">${p.results.length}</div></div><div class="stat"><div class="sl-l">Old Net Total</div><div class="sv">${mrMoney(before)}</div></div><div class="stat"><div class="sl-l">New Net Total</div><div class="sv">${after===null?"Resolve issues":mrMoney(after)}</div></div><div class="stat"><div class="sl-l">Difference</div><div class="sv">${after===null?"—":mrMoney(after-before)}</div></div></div>${p.errors.length?`<div class="info inf-r" style="margin:10px 0">${p.errors.map(x=>`<div><b>${ec(x.inv.invNo)}</b>: ${ec(x.calc.msg||"Cannot apply")}</div>`).join("")}</div>`:""}<div class="tw"><table class="dt"><thead><tr><th>Invoice</th><th>School</th><th class="num">Before</th><th class="num">After</th><th class="num">Difference</th><th>Result</th></tr></thead><tbody>${p.results.map(x=>`<tr><td>${ec(x.inv.invNo)}</td><td>${ec(x.inv.schoolName||"")}</td><td class="num">${mrMoney(x.inv.net)}</td><td class="num">${x.calc.ok?mrMoney(x.calc.after.net):"—"}</td><td class="num">${x.calc.ok?mrMoney(x.calc.delta):"—"}</td><td>${x.calc.skip?`<span class="bdg bn">Kept ON — no change</span>`:x.calc.ok?`<span class="bdg bg">${ec(x.calc.detail||"Ready")}</span>`:`<span class="bdg br">Issue</span>`}</td></tr>`).join("")}</tbody></table></div><div class="sac" style="margin-top:12px"><button class="btn btn-g" onclick="mrCancelPreview()">Cancel Preview</button><button class="btn btn-p" ${p.errors.length?"disabled":""} onclick="mrCommitPreview()">Confirm &amp; Create Revisions</button></div></div></div>`;})():"";
@@ -6334,36 +6432,30 @@ function pgMasterRevision(){
   <div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">Recent Master Revision Batches</span><span class="bdg bn">${batchRows.length}</span></div><div class="cbd"><div class="tw"><table class="dt"><thead><tr><th>Batch ID</th><th>Created</th><th>Operation</th><th>Reason</th><th>Invoices</th><th class="num">Difference</th><th>Status</th></tr></thead><tbody>${batchRows.length?batchRows.map(b=>`<tr><td><b>${ec(b.id)}</b></td><td>${b.createdAt?new Date(b.createdAt).toLocaleString("en-IN"):"-"}</td><td>${ec(b.operation||"")}</td><td>${ec(b.reason||"")}</td><td>${(b.invoiceIds||[]).length}</td><td class="num">${mrMoney(b.delta)}</td><td>${ec(b.status||"saved_local")}<div style="font-size:10px;color:var(--txl)">Check Backup &amp; Sync for cloud acknowledgement</div></td></tr>`).join(""):`<tr><td colspan="7">No master revision batches yet.</td></tr>`}</tbody></table></div></div></div>`;
 }
 
+// School Master preservation: merge records by stable ID, then UDISE, then normalized name.
+// Import/restore/schema migration must never silently discard a previously saved school.
+function mergeSchoolMasterRecords(existing,incoming){
+  const out=(Array.isArray(existing)?existing:[]).map(x=>({...x}));
+  const norm=v=>String(v??"").trim().toUpperCase();
+  const idx=new Map();
+  const addKeys=(s,i)=>{if(s?.id!==undefined&&s?.id!==null&&String(s.id).trim())idx.set("id:"+String(s.id).trim(),i);if(norm(s?.udise))idx.set("u:"+norm(s.udise),i);if(norm(s?.name))idx.set("n:"+norm(s.name),i);};
+  out.forEach((s,i)=>addKeys(s,i));
+  (Array.isArray(incoming)?incoming:[]).forEach(s=>{if(!s||typeof s!=="object")return;const id=s.id!==undefined&&s.id!==null&&String(s.id).trim()?idx.get("id:"+String(s.id).trim()):undefined;const i=id??(norm(s.udise)?idx.get("u:"+norm(s.udise)):undefined)??(norm(s.name)?idx.get("n:"+norm(s.name)):undefined);if(i===undefined){const n=out.length;out.push({...s});addKeys(s,n);}else{const prior=out[i],merged={...prior};Object.entries(s).forEach(([k,v])=>{if(v!==undefined&&v!==null&&!(typeof v==="string"&&!v.trim()))merged[k]=v;});merged.id=prior.id||s.id||uid();out[i]=merged;addKeys(merged,i);}});
+  return out;
+}
 // ═══ SCHOOLS ═══
 let SC={q:"",blockFilter:"",eid:null,did:null,show:false,sf:{name:"",udise:"",block:"",district:"",address:"",mobile:"",active:true},draft:null,dirty:false,resetShow:false,resetTyped:""};
 function scWorking(){ if(!Array.isArray(SC.draft)) SC.draft=A.schools.map(s=>({...s})); return SC.draft; }
 function scInitDraft(){ SC.draft=A.schools.map(s=>({...s})); SC.dirty=false; }
-function schMasterResetOpen(){SC.resetShow=true;SC.resetTyped="";gP("schools");}
-async function schMasterResetConfirm(){
-  if((SC.resetTyped||"").trim()!=="RESET SCHOOLS"){toast("Type the confirmation phrase exactly","err");return;}
-  const before=(A.schools||[]).map(s=>({...s}));
-  const sample=SC_SAMPLE.map(s=>({...s}));
-  // Wipes every real school (UDISE codes, addresses, everything) down to 4
-  // sample rows. The audit log already keeps a before/after snapshot, but
-  // that requires manually digging through JSON to recover from — a Safety
-  // Point gives a genuine one-click undo, the same protection every restore
-  // action already has.
-  await V42.savePreRestoreSafetyPoint('Before School Master Reset ('+before.length+' schools)');
-  sv("sc",sample);
-  SC.draft=sample.map(s=>({...s}));
-  SC.dirty=false;
-  SC.resetShow=false;
-  SC.resetTyped="";
-  auditLog("UPDATE","schools","sc","Master Reset — School Master reset to 4 sample schools ("+before.length+" real schools removed; invoices and all other data untouched)",{before,after:sample});
-  toast("School Master reset to sample data — your previous schools were saved as a Safety Point","ok");
-  gP("schools");
-}
+function schMasterResetOpen(){toast("Bulk reset is disabled to protect the School Master. Edit, deactivate, or delete schools individually.","warn");}
+async function schMasterResetConfirm(){toast("School Master bulk reset is disabled. Existing school records are protected.","warn");}
+
 function scSave(){ const before=(A.schools||[]).map(s=>({...s})); const list=scWorking().map(s=>({...s})); sv("sc",list); SC.draft=list.map(s=>({...s})); SC.dirty=false; auditLog("UPDATE","schools","sc","School Master updated ("+list.length+" schools) — includes location/address/block/district changes",{before,after:list}); toast("School Master changes saved","ok"); gP("schools"); }
 function scReset(){ scInitDraft(); SC.eid=null; SC.did=null; SC.show=false; toast("School Master reset to last saved state","info"); gP("schools"); }
 function pgSch(){
   const work=scWorking();
   const blocks=[...new Set(work.map(s=>String(s.block||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const vis=work.filter(s=>{const q=SC.q.toLowerCase();const bf=SC.blockFilter.toLowerCase();return (!q||s.name.toLowerCase().includes(q)||String(s.udise||"").includes(q)||String(s.block||"").toLowerCase().includes(q))&&(!bf||String(s.block||"").toLowerCase()===bf);});
+  const vis=work.filter(s=>{const q=SC.q.toLowerCase();const bf=SC.blockFilter.toLowerCase();return (!q||schMatchesSearch(s,q))&&(!bf||String(s.block||"").toLowerCase()===bf);});
   let mod="";
   if(SC.show){const f=SC.sf;mod=`<div class="ov" onclick="if(event.target===this){SC.show=false;gP('schools')}"><div class="modal"><div class="mhd"><div class="mt">${SC.eid?"Edit School":"Add School"}</div><button class="btn btn-g btn-sm" onclick="SC.show=false;gP('schools')">&#10005;</button></div><div class="mbd"><div class="fg fg2"><div class="fc"><label class="flbl">School Name *</label><input class="fi" id="sf-n" value="${ec(f.name)}"/></div><div><label class="flbl">UDISE Code</label><input class="fi" id="sf-u" value="${ec(f.udise)}"/></div><div><label class="flbl">Block</label><input class="fi" id="sf-b" value="${ec(f.block)}"/></div><div><label class="flbl">District</label><input class="fi" id="sf-d" value="${ec(f.district)}"/></div><div class="fc"><label class="flbl">Address</label><input class="fi" id="sf-a" value="${ec(f.address)}"/></div><div><label class="flbl">Mobile</label><input class="fi" id="sf-m" value="${ec(f.mobile)}"/></div><div style="display:flex;align-items:center;gap:9px"><label class="tog"><input type="checkbox" id="sf-ac" ${f.active?"checked":""}><span class="tog-s"></span></label><span style="font-weight:600;font-size:12px">Active</span></div></div></div><div class="mft"><button class="btn btn-g" onclick="SC.show=false;gP('schools')">Cancel</button><button class="btn btn-p" onclick="schSv()">Save</button></div></div></div>`;}
   let dmod="";if(SC.did)dmod=`<div class="ov" onclick="SC.did=null;gP('schools')"><div class="modal" style="max-width:380px"><div class="mhd"><div class="mt">Confirm Delete</div></div><div class="mbd"><p style="font-size:13px">Delete this school? Historical invoices retain the name.</p></div><div class="mft"><button class="btn btn-g" onclick="SC.did=null;gP('schools')">Cancel</button><button class="btn btn-d" onclick="schDel()">Delete</button></div></div></div>`;
@@ -6422,14 +6514,7 @@ function pgSch(){
     </div></div>`;
   }
   let rmod="";
-  if(SC.resetShow){
-    rmod=`<div class="ov" onclick="if(event.target===this){SC.resetShow=false;SC.resetTyped='';gP('schools')}"><div class="modal" style="max-width:440px"><div class="mhd"><div class="mt" style="color:var(--rd)">&#9888; Master Reset — School Data</div><button class="btn btn-g btn-sm" onclick="SC.resetShow=false;SC.resetTyped='';gP('schools')">&#10005;</button></div><div class="mbd">
-      <div class="info inf-r" style="margin-bottom:12px">This replaces your entire School Master list (${A.schools.length} schools) with 4 generic sample entries (GPS, NPS, GMS, UMS). <b>Invoices, billing history, audit trail, and every other module are completely unaffected</b> — only the school list itself resets.</div>
-      <div style="font-size:12px;color:var(--txl);margin-bottom:10px">This cannot be undone. To confirm, type <b style="color:var(--rd)">RESET SCHOOLS</b> exactly below.</div>
-      <input class="fi" id="sc-reset-confirm-input" placeholder="Type RESET SCHOOLS to confirm" value="${ec(SC.resetTyped||"")}" oninput="SC.resetTyped=this.value;gP('schools')" style="border-color:var(--rd)"/>
-    </div><div class="mft"><button class="btn btn-g" onclick="SC.resetShow=false;SC.resetTyped='';gP('schools')">Cancel</button><button class="btn btn-d" ${((SC.resetTyped||"").trim()==="RESET SCHOOLS")?"":"disabled style='opacity:.4;cursor:not-allowed'"} onclick="schMasterResetConfirm()">Confirm Master Reset</button></div></div></div>`;
-  }
-  return `<div class="shd"><div><div class="stl">School Master</div><div class="sst">${work.filter(s=>s.active).length} active &middot; ${work.length} total${SC.dirty?" &middot; <b style='color:var(--am)'>Unsaved changes</b>":""}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="scReset()" ${SC.dirty?"":"disabled style='opacity:.5'"}>↶ Reset</button><button class="btn btn-p btn-sm" onclick="scSave()" ${SC.dirty?"":"disabled style='opacity:.5'"}>💾 Save Changes</button><button class="btn btn-g btn-sm" onclick="schPrint()">🖨 Print List</button><button class="btn btn-g btn-sm" onclick="biOpen()">${ic("box",14)} Bulk Import</button><button class="btn btn-p" onclick="schAdd()">+ Add School</button></div></div><div class="info inf-g" style="margin-bottom:12px">Changes stay in draft until <b>Save Changes</b>. Reset restores the last saved master. Saved schools appear in the New Invoice dropdown.</div><div style="display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap"><input id="school-master-search" class="fi" style="max-width:280px" placeholder="Search name, UDISE, block..." value="${ec(SC.q)}" oninput="SC.q=this.value;gP('schools')"/><select class="fi" style="max-width:190px" onchange="SC.blockFilter=this.value.toLowerCase();gP('schools')"><option value="">All Blocks</option>${blocks.map(b=>`<option value="${ec(b.toLowerCase())}"${SC.blockFilter===b.toLowerCase()?" selected":""}>${ec(b)}</option>`).join("")}</select><button class="btn btn-g btn-sm" onclick="SC.q='';SC.blockFilter='';gP('schools')">Clear Filters</button></div><div class="card" style="overflow:hidden">${vis.length===0?`<div style="padding:30px;text-align:center;color:var(--txl)">No schools found</div>`:groupsHTML}</div><div class="card" style="margin-top:16px;border:1.5px solid var(--rd)"><div class="chd" style="border-bottom:1px solid var(--rd)"><span class="cht" style="color:var(--rd)">&#9888; Danger Zone</span></div><div class="cbd"><div style="font-size:12px;color:var(--txl);margin-bottom:10px">Reset School Master to 4 generic sample schools (GPS, NPS, GMS, UMS). Does not affect invoices, billing data, or audit history.</div><button class="btn btn-d btn-sm" onclick="schMasterResetOpen()">Master Reset — School Data Only</button></div></div>${mod}${dmod}${bimod}${rmod}`;
+  return `<div class="shd"><div><div class="stl">School Master</div><div class="sst">${work.filter(s=>s.active).length} active &middot; ${work.length} total${SC.dirty?" &middot; <b style='color:var(--am)'>Unsaved changes</b>":""}</div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-g btn-sm" onclick="scReset()" ${SC.dirty?"":"disabled style='opacity:.5'"}>↶ Reset</button><button class="btn btn-p btn-sm" onclick="scSave()" ${SC.dirty?"":"disabled style='opacity:.5'"}>💾 Save Changes</button><button class="btn btn-g btn-sm" onclick="schPrint()">🖨 Print List</button><button class="btn btn-g btn-sm" onclick="biOpen()">${ic("box",14)} Bulk Import</button><button class="btn btn-p" onclick="schAdd()">+ Add School</button></div></div><div class="info inf-g" style="margin-bottom:12px">Changes stay in draft until <b>Save Changes</b>. Reset restores the last saved master. Saved schools appear in the New Invoice dropdown.</div><div style="display:flex;gap:8px;margin-bottom:11px;flex-wrap:wrap"><input id="school-master-search" class="fi" style="max-width:280px" placeholder="Search name, UDISE, block..." value="${ec(SC.q)}" oninput="SC.q=this.value;gP('schools')"/><select class="fi" style="max-width:190px" onchange="SC.blockFilter=this.value.toLowerCase();gP('schools')"><option value="">All Blocks</option>${blocks.map(b=>`<option value="${ec(b.toLowerCase())}"${SC.blockFilter===b.toLowerCase()?" selected":""}>${ec(b)}</option>`).join("")}</select><button class="btn btn-g btn-sm" onclick="SC.q='';SC.blockFilter='';gP('schools')">Clear Filters</button></div><div class="card" style="overflow:hidden">${vis.length===0?`<div style="padding:30px;text-align:center;color:var(--txl)">No schools found</div>`:groupsHTML}</div>${mod}${dmod}${bimod}`;
 }
 function schAdd(){scWorking();SC.eid=null;SC.sf={name:"",udise:"",block:"",district:"",address:"",mobile:"",active:true};SC.show=true;gP("schools");}
 function schEd(id){const s=scWorking().find(x=>x.id===id);if(!s)return;SC.eid=id;SC.sf={...s};SC.show=true;gP("schools");}
@@ -6448,9 +6533,9 @@ function schDel(){
 function schTog(id){SC.draft=scWorking().map(s=>s.id===id?{...s,active:!s.active}:s);SC.dirty=true;toast("Status changed in draft — Save Changes to commit","ok");gP("schools");}
 
 function schPrint(){
-  const work=scWorking().filter(s=>{const q=SC.q.toLowerCase();const bf=SC.blockFilter.toLowerCase();return (!q||s.name.toLowerCase().includes(q)||String(s.udise||"").includes(q)||String(s.block||"").toLowerCase().includes(q))&&(!bf||String(s.block||"").toLowerCase()===bf);});
+  const work=scWorking().filter(s=>{const q=SC.q.toLowerCase();const bf=SC.blockFilter.toLowerCase();return (!q||schMatchesSearch(s,q))&&(!bf||String(s.block||"").toLowerCase()===bf);});
   if(!work.length){toast("No schools to print","warn");return;}
-  const groups={}; work.forEach(s=>{const c=schCategory(s.name);(groups[c]||(groups[c]=[])).push(s);});
+  const groups=schGroupedByCat(work);
   const order=SCH_CATS.filter(c=>groups[c]?.length);
   const body=`<div style="font-family:Arial,sans-serif"><h2 style="margin:0 0 4px">MS ENTERPRISES — School Master</h2><div style="font-size:10px;color:#555;margin-bottom:10px">${work.length} schools · ${SC.blockFilter?"Block: "+ec(SC.blockFilter):"All Blocks"}${SC.q?" · Search: "+ec(SC.q):""}</div>${order.map(c=>`<h3 style="margin:12px 0 4px;padding:6px 8px;background:#eef5f8;border:1px solid #cbdde4;border-left:4px solid ${SCH_CAT_STYLE[c].border};font-size:12px">${ec(SCH_CAT_LABEL[c])} Schools <span style="float:right">${groups[c].length}</span></h3><table style="width:100%;border-collapse:collapse;font-size:9px"><thead><tr><th style="border:1px solid #cbd5e1;padding:4px;text-align:left">#</th><th style="border:1px solid #cbd5e1;padding:4px;text-align:left">School Name</th><th style="border:1px solid #cbd5e1;padding:4px">UDISE</th><th style="border:1px solid #cbd5e1;padding:4px">Block</th><th style="border:1px solid #cbd5e1;padding:4px">District</th><th style="border:1px solid #cbd5e1;padding:4px">Mobile</th><th style="border:1px solid #cbd5e1;padding:4px">Status</th></tr></thead><tbody>${groups[c].map((s,i)=>`<tr><td style="border:1px solid #cbd5e1;padding:4px">${i+1}</td><td style="border:1px solid #cbd5e1;padding:4px;font-weight:700">${ec(s.name)}</td><td style="border:1px solid #cbd5e1;padding:4px">${ec(s.udise||"—")}</td><td style="border:1px solid #cbd5e1;padding:4px">${ec(s.block||"—")}</td><td style="border:1px solid #cbd5e1;padding:4px">${ec(s.district||"—")}</td><td style="border:1px solid #cbd5e1;padding:4px">${ec(s.mobile||"—")}</td><td style="border:1px solid #cbd5e1;padding:4px">${s.active?"Active":"Inactive"}</td></tr>`).join("")}</tbody></table>`).join("")}</div>`;
   const title="School_Master_"+(SC.blockFilter?SC.blockFilter.replace(/\s+/g,"_"):"All_Blocks"); printViaFrame(buildPrintHTML(body,title,"A4","portrait"),null); auditLog("EXPORT","school","master","Printed school master: "+work.length+" schools",null);
@@ -6538,7 +6623,7 @@ function biRun(){
     const idx=findDup(udise,name);
     if(idx!==-1){
       const existing=list[idx];
-      list[idx]={...existing,name,udise:udise||existing.udise,address,block,district,mobile:mobile||existing.mobile};
+      list[idx]={...existing,name:name||existing.name,udise:udise||existing.udise,address:address||existing.address||"",block:block||existing.block||"",district:district||existing.district||"",mobile:mobile||existing.mobile||""};
       dup++; dupRows.push(`${name} (UDISE ${udise})`);
     } else {
       list.push({id:uid(),name,udise,block,district,address,mobile,active:true});
@@ -7656,62 +7741,33 @@ function rtDel(id){
   toast("Roster removed","ok");gP("admin");
 }
 
-// ── TAB 7: LPG SETTINGS ───────────────────────────────────
+// ── TAB 7: LPG / FIREWOOD + FUEL GST SETTINGS ─────────────────
 function admLPG() {
-  const lpg = A.lpg || {};
-  return `<div style="max-width:540px"><div class="card">
-    <div class="chd"><span class="cht">LPG / Jalawan Settings</span></div>
-    <div class="cbd">
-      <div class="info inf-o" style="margin-bottom:14px">LPG rate is used to calculate Jalawan (fuel) quantity in every invoice. Update when market rate changes.</div>
-      <div class="fg fg2" style="margin-bottom:16px">
-        <div><label class="flbl">Current Cylinder Rate (&#8377; per Kg)</label>
-          <div class="pfx"><span class="pfx-s">&#8377;</span><input class="fi fi-p" type="number" step="0.01" id="lpg-rate" value="${lpg.cylinderRate||67.11}"/></div>
-        </div>
-        <div><label class="flbl">Cylinder Capacity (Kg)</label>
-          <input class="fi" type="number" step="0.1" id="lpg-cap" value="${lpg.cylinderCapacity||14.2}"/>
-        </div>
-        <div><label class="flbl">Consumption per Meal (Kg)</label>
-          <input class="fi" type="number" step="0.001" id="lpg-meal" value="${lpg.consumptionPerMeal||0.015}"/>
-        </div>
-        <div><label class="flbl">Calculation Mode</label>
-          <select class="fi" id="lpg-mode">
-            <option value="monetary" ${(lpg.calculationMode||"monetary")==="monetary"?"selected":""}>Monetary (Budget ÷ Rate = Qty)</option>
-            <option value="quantity" ${lpg.calculationMode==="quantity"?"selected":""}>Quantity (Students × Consumption = Qty)</option>
-          </select>
-        </div>
-      </div>
-      <div class="info inf-b" style="margin-bottom:14px">
-        <b>Monetary mode:</b> LPG quantity = (student_count × head_value_per_student) ÷ cylinder_rate<br>
-        <b>Quantity mode:</b> LPG quantity = student_count × consumption_per_meal (ignores monetary allocation)
-      </div>
-      <button class="btn btn-p" onclick="saveLPG()">Save LPG Settings</button>
-      ${lpg.lastUpdated?`<div style="margin-top:10px;font-size:11px;color:var(--txl)">Last updated: ${new Date(lpg.lastUpdated).toLocaleString("en-IN")} by ${ec(lpg.updatedBy||"")}</div>`:""}
-    </div>
-  </div>
-  <div class="card" style="margin-top:14px">
-    <div class="chd"><span class="cht">Live Calculation Preview</span></div>
-    <div class="cbd">
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:13px">
-        <div class="stat"><div class="sl-l">Rate per Kg</div><div class="sv" style="font-size:17px">&#8377;${(lpg.cylinderRate||67.11).toFixed(2)}</div></div>
-        <div class="stat"><div class="sl-l">Cylinder Capacity</div><div class="sv" style="font-size:17px">${(lpg.cylinderCapacity||14.2)} Kg</div></div>
-        <div class="stat hi"><div class="sl-l">Rate per Cylinder</div><div class="sv" style="font-size:17px">&#8377;${d2((lpg.cylinderRate||67.11)*(lpg.cylinderCapacity||14.2)).toFixed(2)}</div></div>
-      </div>
-    </div>
-  </div></div>`;
+  const lpg=A.lpg||{},profiles=fuelProfilesWithDefaults(lpg),active=lpg.selectedFuel||"domestic";
+  const fields=(key,title)=>{const p=profiles[key];return `<div class="card" style="margin-bottom:12px"><div class="chd"><span class="cht">${title}</span><span class="bdg ${active===key?"bg":"bn"}">${active===key?"Selected for new invoices":"Optional profile"}</span></div><div class="cbd"><div class="fg fg2">
+    <div><label class="flbl">Rate per KG (₹)</label><input class="fi" type="number" min="0" step="0.01" id="fuel-${key}-rate" value="${Number(p.rate)||0}"/></div>
+    <div><label class="flbl">Net gas weight / reference weight (KG)</label><input class="fi" type="number" min="0" step="0.1" id="fuel-${key}-weight" value="${Number(p.netWeight)||0}" ${key==="firewood"?'disabled title="Firewood is quantity based; no cylinder weight"':''}/></div>
+    <div><label class="flbl">GST Treatment</label><select class="fi" id="fuel-${key}-treatment"><option value="taxable" ${p.taxTreatment==="taxable"?"selected":""}>Taxable</option><option value="exempt" ${p.taxTreatment==="exempt"?"selected":""}>Exempt</option><option value="nil_rated" ${p.taxTreatment==="nil_rated"?"selected":""}>Nil-rated</option><option value="non_gst" ${p.taxTreatment==="non_gst"?"selected":""}>Non-GST</option></select></div>
+    <div><label class="flbl">GST Rate (%)</label><input class="fi" type="number" min="0" max="100" step="0.01" id="fuel-${key}-gst" value="${Number(p.gst)||0}" ${p.taxTreatment!=="taxable"?'disabled':''}/></div>
+    <div><label class="flbl">HSN / SAC</label><input class="fi" id="fuel-${key}-hsn" value="${ec(p.hsn||"")}" placeholder="Enter applicable HSN/SAC"/></div>
+    <div><label class="flbl">Price Basis</label><select class="fi" id="fuel-${key}-mode"><option value="inclusive" ${p.taxMode!=="exclusive"?"selected":""}>Rate / allocation is GST-inclusive</option><option value="exclusive" ${p.taxMode==="exclusive"?"selected":""}>Rate / allocation is GST-exclusive</option></select></div>
+  </div><div class="info inf-b" style="margin-top:10px">${key==="firewood"?"Firewood quantity is calculated in KG using its configured rate.":`Net content only: ${key==="domestic"?"14.2 KG default":"19 KG default"}. Empty cylinder tare weight is not used.`} Taxable profiles calculate GST automatically and split it 50:50 into CGST and SGST in the existing invoice engine.</div></div></div>`;};
+  return `<div style="max-width:900px"><div class="card" style="margin-bottom:14px"><div class="chd"><span class="cht">Fuel Selection for New Invoices</span></div><div class="cbd"><div class="fg fg2"><div><label class="flbl">Selected Fuel Item</label><select class="fi" id="fuel-selected"><option value="domestic" ${active==="domestic"?"selected":""}>Domestic LPG / Indane — 14.2 KG</option><option value="commercial" ${active==="commercial"?"selected":""}>Commercial LPG / Indane — 19 KG</option><option value="firewood" ${active==="firewood"?"selected":""}>Firewood</option></select></div><div><label class="flbl">Calculation Mode</label><select class="fi" id="lpg-mode"><option value="monetary" ${(lpg.calculationMode||"monetary")==="monetary"?"selected":""}>Monetary (Allocated fuel amount ÷ rate = quantity)</option><option value="quantity" ${lpg.calculationMode==="quantity"?"selected":""}>Quantity (Students × consumption)</option></select></div><div><label class="flbl">Consumption per Meal (KG)</label><input class="fi" type="number" min="0" step="0.001" id="lpg-meal" value="${Number(lpg.consumptionPerMeal)||0.015}"/></div></div><div class="info inf-o" style="margin-top:10px">Only the selected fuel profile is used for new invoice calculations. Other profiles remain saved for future selection. Historical invoices retain their saved item, rate and tax values.</div></div></div>
+  ${fields("domestic","Domestic LPG / Indane")}${fields("commercial","Commercial LPG / Indane")}${fields("firewood","Firewood")}
+  <button class="btn btn-p" onclick="saveLPG()">Save Fuel & GST Settings</button>${lpg.lastUpdated?`<div style="margin-top:10px;font-size:11px;color:var(--txl)">Last updated: ${new Date(lpg.lastUpdated).toLocaleString("en-IN")} by ${ec(lpg.updatedBy||"")}</div>`:""}</div>`;
 }
 function saveLPG(){
-  const old={...A.lpg};
-  const upd={
-    cylinderRate:parseFloat((document.getElementById("lpg-rate")||{}).value)||67.11,
-    cylinderCapacity:parseFloat((document.getElementById("lpg-cap")||{}).value)||14.2,
-    consumptionPerMeal:parseFloat((document.getElementById("lpg-meal")||{}).value)||0.015,
-    calculationMode:(document.getElementById("lpg-mode")||{}).value||"monetary",
-    lastUpdated:new Date().toISOString(),
-    updatedBy:A.currentUser?.name||"admin",
-  };
-  sv("lpg",upd);
-  auditLog("UPDATE","lpg","lpg","LPG settings updated — rate: ₹"+upd.cylinderRate,{before:old,after:upd});
-  toast("LPG settings saved","ok");gP("admin");
+  const old={...(A.lpg||{})},profiles=fuelProfilesWithDefaults(A.lpg||{});
+  ["domestic","commercial","firewood"].forEach(key=>{
+    const val=id=>document.getElementById(`fuel-${key}-${id}`);
+    profiles[key]={...profiles[key],rate:Math.max(0,Number(val("rate")?.value)||0),netWeight:key==="firewood"?0:Math.max(0,Number(val("weight")?.value)||0),taxTreatment:val("treatment")?.value||"taxable",gst:Math.max(0,Math.min(100,Number(val("gst")?.value)||0)),hsn:(val("hsn")?.value||"").trim(),taxMode:val("mode")?.value==="exclusive"?"exclusive":"inclusive"};
+  });
+  const selected=document.getElementById("fuel-selected")?.value||"domestic";
+  if(!(profiles[selected].rate>0)){toast("Selected fuel rate must be greater than zero","err");return;}
+  const upd={...old,fuelProfiles:profiles,selectedFuel:selected,calculationMode:document.getElementById("lpg-mode")?.value||"monetary",consumptionPerMeal:Math.max(0,Number(document.getElementById("lpg-meal")?.value)||0.015),cylinderRate:profiles.domestic.rate,cylinderCapacity:profiles.domestic.netWeight,lastUpdated:new Date().toISOString(),updatedBy:A.currentUser?.name||"admin"};
+  sv("lpg",upd);A.lpg=upd;
+  auditLog("UPDATE","fuel","fuel-settings","Fuel profiles and GST settings updated",{before:old,after:upd});
+  toast("Fuel & GST settings saved","ok");gP("admin");
 }
 
 // ── TAB 8: MDM ALLOCATION MASTER ──────────────────────────
@@ -8287,7 +8343,7 @@ function niReset() {
     schoolId:"", date:new Date().toISOString().slice(0,10),
     month:MN[new Date().getMonth()], year:String(new Date().getFullYear()),
     s15:"", s68:"", useFruit:true, sFruit:"", fruitRate:"5",
-    notes:"", doShuffle:true, calc:null, generated:false, generatedSignature:null, saved:false, dupWarns:[], tab:"merged", hsnOn:niHsnDefault(), availableSearch:"",
+    notes:"", doShuffle:true, adjustmentOn:false, adjustmentAmount:"", adjustmentSign:"plus", hybridAdjustmentItemId:"", numberSummaryScope:NI.numberSummaryScope||"all", calc:null, generated:false, generatedSignature:null, saved:false, dupWarns:[], tab:"merged", hsnOn:niHsnDefault(), availableSearch:"",
     autoAllocate:true, manualNum:""
   };
   gP("new");
@@ -9712,7 +9768,7 @@ function nativeShare(id) {
 function niEditSaved(id){
   const inv=A.invoices.find(i=>i.id===id); if(!inv)return;
   const sch=A.schools.find(s=>s.id===inv.schoolId);
-  NI.editId=inv.id; NI.schoolId=inv.schoolId; NI.date=inv.date; NI.month=inv.month; NI.year=String(inv.year||""); NI.s15=String(inv.s15||""); NI.s68=String(inv.s68||""); NI.useFruit=(inv.sFr||0)>0; NI.sFruit=String(inv.sFr||""); NI.fruitRate=String(inv.fruitRate||5); NI.adjustmentAmount=String(inv.adjustmentAmount||""); NI.adjustmentOn=Number(inv.adjustmentAmount||0)>0; NI.notes=inv.notes||"";
+  NI.editId=inv.id; NI.schoolId=inv.schoolId; NI.date=inv.date; NI.month=inv.month; NI.year=String(inv.year||""); NI.s15=String(inv.s15||""); NI.s68=String(inv.s68||""); NI.useFruit=(inv.sFr||0)>0; NI.sFruit=String(inv.sFr||""); NI.fruitRate=String(inv.fruitRate||5); NI.adjustmentAmount=String(Math.abs(Number(inv.adjustmentAmount)||0)||""); NI.adjustmentSign=inv.adjustmentSign||((Number(inv.adjustmentAmount)||0)<0?"minus":"plus"); NI.hybridAdjustmentItemId=inv.adjustmentItemId||""; NI.adjustmentOn=Math.abs(Number(inv.adjustmentAmount)||0)>0; NI.notes=inv.notes||"";
   // Do not inject a saved historical invoice's cached calculation/PDF-preview payload into
   // the live New Invoice preview. Older invoices can lack newer fields and the
   // async locked-PDF preview may fail during the page transition. Load only the
@@ -9807,7 +9863,7 @@ function doImp() {
         if(d.rates)  sv("rt",d.rates);
         if(d.heads)  sv("hd",d.heads);
         if(d.items)  sv("it",d.items);
-        if(d.schools)sv("sc",d.schools);
+        if(d.schools)sv("sc",mergeSchoolMasterRecords(A.schools||[],d.schools));
         if(d.invoices)sv("iv",d.invoices);
         if(d.invoiceUndoArchive)sv("iu",d.invoiceUndoArchive);
         if(d.users)  sv("us",d.users);
@@ -12138,7 +12194,7 @@ const DRIVE = {
   restoreModule(mod, data){
     if(data===null || data===undefined) return false;
     if(mod==="company")  sv("f", data);
-    if(mod==="schools")  sv("sc", data);
+    if(mod==="schools")  sv("sc", mergeSchoolMasterRecords(A.schools||[], data));
     if(mod==="items")    sv("it", data);
     if(mod==="settings"){ if(data.sett)sv("st",data.sett); if(data.series)sv("sr",data.series); if(data.rates)sv("rt",data.rates); if(data.heads)sv("hd",data.heads); }
     if(mod==="alloc")    sv("alm", data);
@@ -13927,7 +13983,7 @@ v2.8 — Definitive flat-light header + school category correction
 - Mobile action grid is responsive and prevents hidden/collapsed controls.
 - v4.73 is the exact rollback backup.
 -->
-<!-- MDM ERP — VERSION 7 HYBRID TEST BASELINE
+<!-- MDM ERP v4.62.13 — School Search & Ordering Fix BASELINE
      This build is the canonical BETA application baseline.
      From this point forward, genuine invoice transactions are carried forward
      through future BETA updates and the eventual FINAL build.
@@ -15709,3 +15765,5 @@ v2.8 — Definitive flat-light header + school category correction
 <!-- v4.61.75: constrain minimalist message expansion to current modal + 148px and keep expanded view persistent until Restore or Close. -->
 
 <!-- VERSION 7 HYBRID GUARDED RELEASE CANDIDATE v4.61.90 / HYB-1.4.2-V7. Original calc() preserved. -->
+
+<!-- v4.62.15: Smart Optimizer user-approved proposal is now bound to the active Hybrid draft, displayed in live preview, and persisted as the saved Hybrid revision after independent totals validation. Original NI.calc remains unchanged. -->
