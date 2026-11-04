@@ -7,8 +7,8 @@ Level 2 adds only application appearance controls, invoice header theme controls
 MDM PROJECT — VERSION HISTORY
 Update: v4.35 — Vector-safe Android Print Preview — Final surgical pass: Terms & Conditions left-aligned within its dedicated thin footer row; major invoice section outer borders use the active theme accent/darker color consistently. No other invoice geometry, data, calculations, sharing, or export logic changed.
 Update: v4.35 — Replaced the Android print bridge raster PNG with PDF.js SVG output. Native print sheet behavior is preserved, while saved PDFs retain vector text/lines; no canvas/PNG is used in the print document.
-Current Version: v4.61.90 — Version 7 Hybrid Integration Test Candidate
-Update: v4.61.87 — Final approved Hybrid rules and lifecycle wiring. Adds persistent Smart (KG + GM) / KG Only display modes; approved generic 500g+ threshold bands; separates Actual, Normalized and Billed quantities in immutable snapshots; stores the full Original invoice snapshot per Hybrid revision; records same-category-only/no-transfer policy; aligns Hybrid PDF rows to the current source revision. Original calc() remains byte-identical to Stable v4.61.76.
+Current Version: v4.61.96 — Hybrid PDF Snapshot Routing Correction
+Update: v4.61.91 — Mode-switch transition fix with persistent, color-coded Original (blue) / Hybrid (green) active-state indicator. v4.61.87 — Final approved Hybrid rules and lifecycle wiring. Adds persistent Smart (KG + GM) / KG Only display modes; approved generic 500g+ threshold bands; separates Actual, Normalized and Billed quantities in immutable snapshots; stores the full Original invoice snapshot per Hybrid revision; records same-category-only/no-transfer policy; aligns Hybrid PDF rows to the current source revision. Original calc() remains byte-identical to Stable v4.61.76.
 
 Update: v4.57.4 — Corrects School Master ID/category resolution, includes inactive schools for historical lookup, and requires explicit historical rate/GST inputs. Original invoice, PDF, and print core paths are preserved where feasible; cloud end-to-end testing is still required.
 Update: v4.36 — Locked Master vector restore: removed SVG/canvas/raster print conversion from Main Invoice preview/print path. The authoritative jsPDF PDF remains the sole source. No invoice geometry, calculations, data, Annexure/GST, or other export logic changed.
@@ -69,7 +69,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <html lang="en">
 <meta name="application-name" content="MDM ERP — VERSION 7 HYBRID TEST">
 <meta name="application-stage" content="BETA">
-<meta name="application-version" content="4.61.89">
+<meta name="application-version" content="4.61.95">
 <meta name="data-continuity" content="Genuine invoice data must persist across BETA updates and final adoption.">
 
 <head>
@@ -2486,14 +2486,29 @@ const ST0={
     border:"#CCD6E3",
     highlight:"#D6E2F0",
     borderMode:"black", // black = fixed black outer borders; theme = darkest active theme color
-    dataFontSize:7.25,
+    dataFontSize:7.60,
     loginCardBg:null,     // null = use default theme card color; else a hex string the user picked
     loginPattern:"glow"   // none | glow | dots | waves | geometric
   },
 };
-const A={page:"dashboard",loggedIn:false,currentUser:null,flashId:null,firm:LS.get("f",F0),series:LS.get("sr",SR0),rates:LS.get("rt",RT0),heads:LS.get("hd",HD0),items:LS.get("it",IT0),schools:LS.get("sc",SC0),invoices:LS.get("iv",[]),users:LS.get("us",US0),rv:LS.get("rv",[]),dups:LS.get("dp",[]),sett:LS.get("st",ST0),batchCfg:LS.get("ib",{}),invoiceUndoArchive:LS.get("iu",[])};
-const SV_KEY_MAP={f:"firm",sc:"schools",it:"items",sr:"series",rt:"rates",hd:"heads",us:"users",st:"sett",iv:"invoices",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive"};
-let sv=(k,v)=>{A[SV_KEY_MAP[k]||k]=v;LS.set(k,v);};
+const A={page:"dashboard",loggedIn:false,currentUser:null,flashId:null,firm:LS.get("f",F0),series:LS.get("sr",SR0),rates:LS.get("rt",RT0),heads:LS.get("hd",HD0),items:LS.get("it",IT0),schools:LS.get("sc",SC0),invoices:LS.get("iv",[]),users:LS.get("us",US0),rv:LS.get("rv",[]),dups:LS.get("dp",[]),sett:LS.get("st",ST0),batchCfg:LS.get("ib",{}),invoiceUndoArchive:LS.get("iu",[]),invoiceNumberReservations:LS.get("inr",[])};
+const SV_KEY_MAP={f:"firm",sc:"schools",it:"items",sr:"series",rt:"rates",hd:"heads",us:"users",st:"sett",iv:"invoices",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive",inr:"invoiceNumberReservations"};
+// Permanent local tombstone ledger: deleting/replacing invoice arrays never frees a number.
+function mergeInvoiceNumberReservations(records){
+  const map=new Map();
+  (Array.isArray(A.invoiceNumberReservations)?A.invoiceNumberReservations:[]).forEach(x=>{if(x&&x.invNo){const k=String(x.invNo).trim().toLowerCase();if(k)map.set(k,{...x,invNo:String(x.invNo).trim()});}});
+  (Array.isArray(records)?records:[]).forEach(x=>{if(x&&x.invNo){const k=String(x.invNo).trim().toLowerCase();if(k&&!map.has(k))map.set(k,{invNo:String(x.invNo).trim(),date:x.date||"",month:x.month||"",year:x.year||"",source:"reserved",reservedAt:new Date().toISOString()});}});
+  A.invoiceNumberReservations=[...map.values()];LS.set("inr",A.invoiceNumberReservations);
+}
+function sv(k,v){
+  if(k==="iv"||k==="iu"){
+    const prior=k==="iv"?(A.invoices||[]):(A.invoiceUndoArchive||[]);
+    const incoming=Array.isArray(v)?v:[];
+    const extract=arr=>arr.map(x=>{const i=k==="iu"?(x?.invoice||{}):x;const n=k==="iu"?(x?.invoiceNo||i.invNo):i.invNo;return n?{invNo:String(n),date:i.date||x?.originalCreatedAt,month:i.month,year:i.year}:null;}).filter(Boolean);
+    mergeInvoiceNumberReservations([...extract(prior),...extract(incoming)]);
+  }
+  A[SV_KEY_MAP[k]||k]=v;LS.set(k,v);
+}
 // Global on purpose: called from multiple <script> blocks, including the
 // v4.51 hardening block AND page-render functions defined earlier in the
 // file (e.g. cloudCardHTML). A version of these used to live only inside
@@ -2598,6 +2613,26 @@ const __calcS15=Number.parseFloat(s15)||0,__calcS68=Number.parseFloat(s68)||0;
   const aA=r15.filter(r=>r.id!=="fruit"),aB=r68;
   return{a15,a68,aFr,grand:d2(a15+a68+aFr+__calcAdj),merged:ap(Object.values(mm)),mTot:tot(Object.values(mm)),annexA:ap([...aA]),tA:tot(aA),annexB:ap([...aB]),tB:tot(aB)};
 }
+// Global, engine-independent invoice-number reservation ledger.
+// Active records and Undo Archive tombstones both reserve a number permanently.
+function invoiceNumberReservationRecords(){
+  // The durable ledger is authoritative; active and undo records are also
+  // folded in for migration/restore safety before any number is allocated.
+  const rows=[];
+  (A.invoiceNumberReservations||[]).forEach(x=>{if(x?.invNo)rows.push({...x,invNo:String(x.invNo)});});
+  (A.invoices||[]).forEach(i=>{if(i?.invNo)rows.push({invNo:String(i.invNo),date:i.date,month:i.month,year:i.year,source:"invoice"});});
+  (A.invoiceUndoArchive||[]).forEach(a=>{const i=a?.invoice||{};const n=a?.invoiceNo||i.invNo;if(n)rows.push({invNo:String(n),date:i.date||a.originalCreatedAt,month:i.month,year:i.year,source:"undo-archive"});});
+  return rows;
+}
+// One-time migration of all currently known invoices and undo tombstones.
+mergeInvoiceNumberReservations([...(A.invoices||[]),...(A.invoiceUndoArchive||[]).map(a=>({invNo:a?.invoiceNo||a?.invoice?.invNo,date:a?.invoice?.date||a?.originalCreatedAt,month:a?.invoice?.month,year:a?.invoice?.year}))]);
+function invoiceEngineOf(i){
+  if(!i)return "legacy";
+  const m=String(i.billingModeAtCreation||i.creationBillingMode||"").toLowerCase();
+  if(m==="hybrid"||i.hybridModel||Array.isArray(i.hybridDisplayItems))return "hybrid";
+  if(m==="original"||m==="normal")return "original";
+  return "legacy";
+}
 function chkDup(invNo,sId,mo,yr,s15,s68){
   // Invoice numbers are unique across the entire Financial Year, not just
   // the selected Billing Month. The exact formatted invoice number remains
@@ -2606,7 +2641,7 @@ function chkDup(invNo,sId,mo,yr,s15,s68){
   const es={...A.series,fy:fyFromDate(`${String(yr).padStart(4,"0")}-04-01`)};
   const counter=invoiceCounterAnySeries(invNo,es);
   const sameFY=counter!==null?invNoFYUsedCounter(es,counter):false;
-  if(A.invoices.find(i=>i.invNo===invNo && !["released","hard_reset"].includes(i.status))||sameFY)return{hard:"Invoice number "+invNo+" is already used and cannot be reused.",warns:[]};
+  if(invoiceNumberReservationRecords().some(i=>i.invNo.trim().toLowerCase()===String(invNo).trim().toLowerCase())||sameFY)return{hard:"Invoice number "+invNo+" is already used and cannot be reused.",warns:[]};
   const w=[],same=A.invoices.filter(i=>i.schoolId===sId&&i.month===mo&&i.year===yr&&i.status!=="cancelled");
   if(same.length>0){w.push("Invoice already exists for this school in "+mo+" "+yr+" ("+same[0].invNo+")");if(same.find(i=>i.s15===s15&&i.s68===s68))w.push("Exact duplicate: same student counts!");}
   return{hard:null,warns:w};
@@ -2627,7 +2662,7 @@ function parseCounterFromInvNo(invNo,s){
 function invNoCounters(s){
   s=s||A.series;
   const re=seriesInvNoRegex(s);
-  const nums=A.invoices.filter(i=>i.status!=="released"&&i.status!=="hard_reset").map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
+  const nums=invoiceNumberReservationRecords().map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
   return [...new Set(nums.concat(extRefUsedCounters(s)))].sort((a,b)=>a-b);
 }
 function invNoLast(s){const n=invNoCounters(s);return n.length?n[n.length-1]:null;}
@@ -2638,7 +2673,7 @@ function invNoPrevious(s){const n=invNoCounters(s);return n.length>1?n[n.length-
 function invNoMonthCounters(s,month,year){
   s=s||A.series;
   const re=seriesInvNoRegex(s);
-  const nums=A.invoices.filter(i=>i.status!=="released"&&i.status!=="hard_reset"&&(!month||i.month===month)&&(!year||String(i.year)===String(year))).map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
+  const nums=invoiceNumberReservationRecords().filter(i=>(!month||i.month===month)&&(!year||String(i.year)===String(year))).map(i=>{const m=(i.invNo||"").match(re);return m?parseInt(m[1],10):null;}).filter(n=>n!==null);
   return [...new Set(nums)].sort((a,b)=>a-b);
 }
 function invNoMonthGaps(s,month,year){
@@ -2788,12 +2823,12 @@ function invoiceCounterAnySeries(invNo,s){
 }
 function invNoFYUsedCounter(s,counter){
   const es=s||A.series;
-  const internal=A.invoices.some(i=>i.status!=="released"&&i.status!=="hard_reset"&&invoiceFYForRecord(i)===es.fy&&invoiceCounterAnySeries(i.invNo,es)===Number(counter));
+  const internal=invoiceNumberReservationRecords().some(i=>invoiceFYForRecord(i)===es.fy&&invoiceCounterAnySeries(i.invNo,es)===Number(counter));
   return internal || extRefInvoiceUsed(es,counter);
 }
 function invNoFYCounters(s){
   const es=s||A.series;
-  const nums=A.invoices.filter(i=>invoiceFYForRecord(i)===es.fy && i.status!=="released" && i.status!=="hard_reset")
+  const nums=invoiceNumberReservationRecords().filter(i=>invoiceFYForRecord(i)===es.fy)
     .map(i=>invoiceCounterAnySeries(i.invNo,es)).filter(n=>n!==null);
   return [...new Set(nums.concat(extRefUsedCounters(es)))].sort((a,b)=>a-b);
 }
@@ -3201,10 +3236,10 @@ function renderShell(){
 
     <div class="ah-right">
       ${syChip}
-      <div class="hyb-mode-switch" style="display:flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid rgba(255,255,255,.28);border-radius:9px;background:rgba(255,255,255,.10);white-space:nowrap" title="Switch the active billing model">
+      <div class="hyb-mode-switch" data-active-mode="${activeBillingMode()}" style="display:flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid ${activeBillingMode()==="original"?"#60A5FA":"#4ADE80"};border-radius:9px;background:${activeBillingMode()==="original"?"rgba(37,99,235,.22)":"rgba(22,163,74,.22)"};box-shadow:0 0 0 1px ${activeBillingMode()==="original"?"rgba(96,165,250,.18)":"rgba(74,222,128,.18)"} inset;white-space:nowrap" title="Switch the active billing model">
         <span style="font-size:10px;font-weight:800;letter-spacing:.35px;color:#fff">BILLING MODE</span>
-        <button type="button" onclick="setBillingMode('original')" aria-pressed="${activeBillingMode()==="original"?"true":"false"}" style="border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;background:${activeBillingMode()==="original"?"#fff":"transparent"};color:${activeBillingMode()==="original"?"#17365d":"#fff"}">ORIGINAL</button>
-        <button type="button" onclick="setBillingMode('hybrid')" aria-pressed="${activeBillingMode()==="hybrid"?"true":"false"}" style="border:0;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:800;cursor:pointer;background:${activeBillingMode()==="hybrid"?"#fff":"transparent"};color:${activeBillingMode()==="hybrid"?"#17365d":"#fff"}">HYBRID</button>
+        <button type="button" onclick="setBillingMode('original')" aria-pressed="${activeBillingMode()==="original"?"true":"false"}" style="border:1px solid ${activeBillingMode()==="original"?"#93C5FD":"transparent"};border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;letter-spacing:.2px;cursor:pointer;background:${activeBillingMode()==="original"?"#DBEAFE":"transparent"};color:${activeBillingMode()==="original"?"#1E40AF":"#fff"};box-shadow:${activeBillingMode()==="original"?"0 1px 4px rgba(0,0,0,.18)":"none"}">● ORIGINAL</button>
+        <button type="button" onclick="setBillingMode('hybrid')" aria-pressed="${activeBillingMode()==="hybrid"?"true":"false"}" style="border:1px solid ${activeBillingMode()==="hybrid"?"#86EFAC":"transparent"};border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;letter-spacing:.2px;cursor:pointer;background:${activeBillingMode()==="hybrid"?"#DCFCE7":"transparent"};color:${activeBillingMode()==="hybrid"?"#166534":"#fff"};box-shadow:${activeBillingMode()==="hybrid"?"0 1px 4px rgba(0,0,0,.18)":"none"}">● HYBRID</button>
       </div>
       <div class="hyb-unit-control" style="display:${activeBillingMode()==="hybrid"?"flex":"none"};align-items:center;gap:5px;padding:4px 6px;border:1px solid rgba(255,255,255,.28);border-radius:9px;background:rgba(255,255,255,.10);white-space:nowrap" title="Hybrid quantity unit display preference">
         <span class="hyb-unit-label" style="font-size:9px;font-weight:800;letter-spacing:.25px;color:#fff">UNITS</span>
@@ -4421,13 +4456,41 @@ function formatCreatedAt(value){
   const d=new Date(value); if(isNaN(d))return "—";
   return d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})+" · "+d.toLocaleDateString("en-IN",{weekday:"short"})+" · "+d.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});
 }
+
+// v4.61.95 — Canonical invoice snapshot resolver for every PDF/export path.
+// Renderer/layout remains untouched; only the data object supplied to it is resolved.
+function mdmActiveHybridRevision(inv){
+  const model=inv&&inv.hybridModel; if(!model||!Array.isArray(model.revisions)||!model.revisions.length)return null;
+  return model.revisions.find(r=>Number(r.revisionNo)===Number(model.activeRevision))||model.revisions.slice().sort((a,b)=>Number(b.revisionNo)-Number(a.revisionNo))[0]||null;
+}
+function mdmInvoicePrintContext(inv){
+  if(!inv)throw new Error("Invoice not found");
+  const engine=invoiceEngineOf(inv);
+  if(engine!=="hybrid")return {engine:"original",invoice:inv,calc:{merged:inv.mergedItems||[],mTot:inv.mergedTotals||{},annexA:inv.annexA||[],annexB:inv.annexB||[],tA:inv.totalsA||{},tB:inv.totalsB||{}}};
+  const snap=mdmActiveHybridRevision(inv);
+  if(!snap||!Array.isArray(snap.rows))throw new Error("Hybrid invoice has no valid active saved revision; refusing to print Original data as Hybrid.");
+  const source=(snap.sourceInvoiceSnapshot&&Array.isArray(snap.sourceInvoiceSnapshot.mergedItems))?snap.sourceInvoiceSnapshot:inv;
+  const baseRows=source.mergedItems||inv.mergedItems||[];
+  const merged=hybridProjectRows(baseRows,snap);
+  const byId=new Map(merged.map(r=>[String(r.id),r]));
+  const mapSection=arr=>(Array.isArray(arr)?arr:[]).map(r=>byId.get(String(r.id))||r);
+  const totals={taxable:Number(snap.reconciledDisplayTaxableTotal??snap.roundedTaxableTotal??source.taxable??inv.taxable)||0,cgst:Number(snap.hybridCgstTotal??source.cgst??inv.cgst)||0,sgst:Number(snap.hybridSgstTotal??source.sgst??inv.sgst)||0,roundOff:Number(source.roundOff??inv.roundOff)||0};
+  totals.gross=Number((totals.taxable+totals.cgst+totals.sgst).toFixed(2)); totals.net=Number((totals.gross+totals.roundOff).toFixed(2));
+  // Preserve source financial invariant only when snapshot records explicitly confirm it.
+  if(Math.abs(totals.net-Number(snap.sourceNet??inv.net??0))>0.01)throw new Error("Hybrid revision totals do not reconcile to the saved invoice. PDF generation blocked.");
+  const calc={merged,mTot:totals,annexA:mapSection(source.annexA||inv.annexA),annexB:mapSection(source.annexB||inv.annexB),tA:source.totalsA||inv.totalsA||{},tB:source.totalsB||inv.totalsB||{}};
+  return {engine:"hybrid",revision:snap.revisionNo,snapshot:snap,invoice:{...inv,mergedItems:merged,hybridDisplayItems:merged,mergedTotals:totals,annexA:calc.annexA,annexB:calc.annexB},calc};
+}
+
 function getInvoiceHistoryDataset(){ return histFilteredRows(); }
 
 // ═══ HISTORY ═══
-let HS={q:"",fMo:"",fYr:"",fSt:"",fSchool:"",fFrom:"",fTo:"",openYrs:(()=>{const o={},now=new Date(),fyS=now.getMonth()>=3?now.getFullYear():now.getFullYear()-1;o[String(fyS).slice(-2)+String(fyS+1).slice(-2)]=true;return o;})(),vId:null,vTab:"merged",rId:null,page:1,view:"list",mId:null,timelineBasis:"date",tOpt:false,includeCreated:false};
+let HS={engineScope:(activeBillingMode()==="hybrid"?"hybrid":"original"),q:"",fMo:"",fYr:"",fSt:"",fSchool:"",fFrom:"",fTo:"",openYrs:(()=>{const o={},now=new Date(),fyS=now.getMonth()>=3?now.getFullYear():now.getFullYear()-1;o[String(fyS).slice(-2)+String(fyS+1).slice(-2)]=true;return o;})(),vId:null,vTab:"merged",rId:null,page:1,view:"list",mId:null,timelineBasis:"date",tOpt:false,includeCreated:false};
 function histFilteredRows(){
   const q=String(HS.q||"").trim().toLowerCase();
   return A.invoices.filter(i=>{
+    const engine=invoiceEngineOf(i);
+    const engineOk=HS.engineScope==="all"||engine===HS.engineScope;
     const fy=invoiceFYForRecord(i);
     const hay=[
       i.invNo||"",
@@ -4447,7 +4510,7 @@ function histFilteredRows(){
     const schoolOk=!HS.fSchool||i.schoolId===HS.fSchool;
     const fromOk=!HS.fFrom||(i.date||"")>=HS.fFrom;
     const toOk=!HS.fTo||(i.date||"")<=HS.fTo;
-    return qOk&&moOk&&fyOk&&stOk&&schoolOk&&fromOk&&toOk;
+    return engineOk&&qOk&&moOk&&fyOk&&stOk&&schoolOk&&fromOk&&toOk;
   });
 }
 
@@ -4809,13 +4872,14 @@ function pgHist(){
     <div class="stat"><span class="hist-stat-ico hist-ico-released">${ic("cloud",19)}</span><div class="sl-l">Released</div><div class="sv" style="font-size:16px;color:var(--pu)">${relCnt}</div></div>
     <div class="stat"><span class="hist-stat-ico hist-ico-sync">${ic("sync",19)}</span><div class="sl-l">Pending Sync</div><div class="sv" style="font-size:16px;color:var(--sk)">${pendCnt}</div></div>
   </div>`;
-  const filtersActive = HS.q||HS.fMo||HS.fYr||HS.fSt||HS.fSchool||HS.fFrom||HS.fTo;
+  const filtersActive = HS.q||HS.fMo||HS.fYr||HS.fSt||HS.fSchool||HS.fFrom||HS.fTo||HS.engineScope!=="all";
   const filterBar=`<div class="card hist-filter-card" style="margin-bottom:12px"><div class="cbd hist-filter-body" style="padding:13px 15px">
     <div class="hist-filter-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
       <span>&#128269; Search &amp; Filters</span>
       <span id="hist-filter-result-count" style="font-size:10.5px;color:var(--txl);font-weight:700">${fil.length} matching invoice${fil.length===1?"":"s"}</span>
     </div>
     <div class="hist-filter-primary">
+      <select class="fi" style="max-width:170px" aria-label="Invoice engine" onchange="HS.engineScope=this.value;HS.page=1;gP('history')"><option value="original"${HS.engineScope==="original"?" selected":""}>Original Invoices</option><option value="hybrid"${HS.engineScope==="hybrid"?" selected":""}>Hybrid Invoices</option><option value="all"${HS.engineScope==="all"?" selected":""}>All Invoices</option></select>
       <input id="history-search" class="fi hist-filter-search" style="max-width:240px" placeholder="Search invoice, school, amount..." value="${ec(HS.q)}" oninput="histSearchInput(this)"/>
       <select class="fi hist-filter-month" style="max-width:130px" onchange="HS.fMo=this.value;HS.page=1;gP('history')"><option value="">All Months</option>${moO}</select>
       <select class="fi hist-filter-fy" style="max-width:100px" onchange="HS.fYr=this.value;HS.page=1;gP('history')"><option value="">All FY</option>${yrO}</select>
@@ -4827,7 +4891,7 @@ function pgHist(){
       <input class="fi hist-filter-from" type="date" style="max-width:150px" value="${HS.fFrom}" aria-label="From date" onchange="HS.fFrom=this.value;HS.page=1;gP('history')"/>
       <span class="hist-filter-to">to</span>
       <input class="fi hist-filter-to-date" type="date" style="max-width:150px" value="${HS.fTo}" aria-label="To date" onchange="HS.fTo=this.value;HS.page=1;gP('history')"/>
-      ${filtersActive?`<button class="btn btn-g btn-sm hist-filter-clear" onclick="HS.q='';HS.fMo='';HS.fYr='';HS.fSt='';HS.fSchool='';HS.fFrom='';HS.fTo='';HS.page=1;gP('history')">&#8635; Clear Filters</button>`:""}
+      ${filtersActive?`<button class="btn btn-g btn-sm hist-filter-clear" onclick="HS.q='';HS.fMo='';HS.fYr='';HS.fSt='';HS.fSchool='';HS.fFrom='';HS.fTo='';HS.engineScope="all";HS.page=1;gP('history')">&#8635; Clear Filters</button>`:""}
     </div>
   </div></div>`;
   const toolbar=`<div class="hist-history-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px">
@@ -5099,7 +5163,7 @@ function pgHist(){
     </div>
   </div>`;
 
-  return `<div class="shd"><div><div class="stl">Invoice History</div><div class="sst">${A.invoices.length} total invoices · ${activeBillingMode()==="hybrid"?"Hybrid view — records without a Hybrid snapshot can be generated from the Hybrid action":"Original view — original invoice records"}</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="gP('dashboard')">&#8592; Back to Dashboard</button></div></div>
+  return `<div class="shd"><div><div class="stl">Invoice History</div><div class="sst">${A.invoices.length} total invoices · ${HS.engineScope==="all"?"All engines":HS.engineScope==="hybrid"?"Hybrid engine":"Original engine"} · ${activeBillingMode()==="hybrid"?"Hybrid view — records without a Hybrid snapshot can be generated from the Hybrid action":"Original view — original invoice records"}</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="gP('dashboard')">&#8592; Back to Dashboard</button></div></div>
   ${filterBar}<div id="hist-search-stats">${statsBar}</div>${toolbar}
   <div class="card" style="padding:11px 13px" ><div id="hist-search-results"><div id="hist-live-empty" style="display:none;padding:16px 10px;text-align:center;color:var(--txl);font-size:12px"><div style="font-weight:800;color:var(--tx);margin-bottom:3px">No matching invoices</div><div>Tap anywhere outside the search box to clear this search.</div><div id="hist-live-count" style="margin-top:4px"></div></div>${listHTML}${paginationBar}</div></div>
   ${vMod}${rMod}`;
@@ -5209,7 +5273,7 @@ function histExportExcel(){
   // "All Invoices" = no filter narrows the dataset — only then do the
   // last-saved/second-last-saved highlights apply, since they're meant to
   // show "what's newest overall", not "newest within this filtered slice".
-  const isAllInvoices = !HS.q && !HS.fMo && !HS.fYr && !HS.fSt && !HS.fSchool && !HS.fFrom && !HS.fTo;
+  const isAllInvoices = HS.engineScope==="all" && !HS.q && !HS.fMo && !HS.fYr && !HS.fSt && !HS.fSchool && !HS.fFrom && !HS.fTo;
   let lastSavedId=null, secondLastSavedId=null;
   if(isAllInvoices){
     const bySaved=[...rows].sort((a,b)=>String(b.savedAt||b.date||"").localeCompare(String(a.savedAt||a.date||"")));
@@ -5461,7 +5525,7 @@ function openInvoiceUndo(id){
   const opts=INV_UNDO_REASONS.map(r=>`<option value="${ec(r)}">${ec(r)}</option>`).join("");
   const dlg=document.createElement("div");dlg.className="ov";dlg.id="inv-undo-dlg";
   dlg.innerHTML=`<div class="modal" style="max-width:500px"><div class="mhd"><div><div class="mt">Undo Invoice Generation</div><div style="font-size:10.5px;color:var(--txl);margin-top:2px">${ec(inv.invNo)} · ${ec(inv.schoolName||"")}</div></div><button class="btn btn-g btn-sm" onclick="document.getElementById('inv-undo-dlg')?.remove()">&#10005;</button></div>
-  <div class="mbd"><div class="info inf-a" style="margin-bottom:12px"><b>This will restore the state before this invoice was generated.</b><br>The active invoice entry will be removed, its number will become available again, and the complete invoice snapshot will be retained in the Undo Archive and Audit trail.</div>
+  <div class="mbd"><div class="info inf-a" style="margin-bottom:12px"><b>This will restore the state before this invoice was generated.</b><br>The active invoice entry will be removed, its number will remain permanently reserved to prevent reuse; the complete invoice snapshot will be retained in the Undo Archive and Audit trail.</div>
   <label class="flbl">Reason *</label><select class="fi" id="inv-undo-reason">${opts}<option value="Other Reason">Other Reason</option></select>
   <label class="flbl" style="margin-top:10px">Custom Comment / Additional Details</label><textarea class="fi" id="inv-undo-comment" rows="3" placeholder="Optional additional details"></textarea></div>
   <div class="mft"><button class="btn btn-g" onclick="document.getElementById('inv-undo-dlg')?.remove()">Keep Invoice</button><button class="btn btn-am" onclick="confirmInvoiceUndo('${ec(id)}')">&#8630; Undo Generation</button></div></div>`;
@@ -5484,19 +5548,7 @@ function confirmInvoiceUndo(id){
   sv("dp",(A.dups||[]).filter(d=>d.invId!==id));
   sv("rv",(A.rv||[]).filter(x=>x!==id));
   if(A.flashId===id)A.flashId=null;
-  const usedCounter=invoiceCounterAnySeries(inv.invNo,A.series);
-  const previousSeries=inv.undoMeta?.seriesStateBefore;
-  const previousCounter=Number(inv.undoMeta?.seriesCounterBefore);
-  let restoredSeries=false;
-  if(previousSeries&&typeof previousSeries==="object"&&A.series.counter===usedCounter){
-    A.series={...A.series,...JSON.parse(JSON.stringify(previousSeries))};
-    sv("sr",A.series);
-    restoredSeries=true;
-  }else if(usedCounter!==null&&Number.isFinite(previousCounter)&&A.series.counter===usedCounter&&previousCounter<=usedCounter){
-    A.series.counter=previousCounter;
-    sv("sr",A.series);
-    restoredSeries=true;
-  }
+  // Deliberately do not roll back the shared invoice counter: archived numbers stay reserved.
   auditLog("UNDO_GENERATION","invoice",id,"Invoice generation undone: "+inv.invNo,{invoiceNo:inv.invNo,reason,comment,archivedAt:at,archiveId:archive.id,restoredPreviousState:true,restoredSeriesCounter:restoredSeries});
   document.getElementById("inv-undo-dlg")?.remove();
   toast("Invoice generation undone. Number is available again.","ok");
@@ -8089,7 +8141,12 @@ function loadPdfLibs(){
 // Prepared-PDF cache: the exact File generated here is reused by Share.
 const _invoicePdfCache=new Map();
 function invoicePdfCacheKey(inv){
-  return [inv?.id,inv?.invNo,inv?.date,inv?.net,inv?.status,inv?.revisedAt,inv?.updatedAt].join("|");
+  const snap=invoiceEngineOf(inv)==="hybrid"?mdmActiveHybridRevision(inv):null;
+  // Include the selected immutable Hybrid revision so switching revisions can
+  // never reuse a PDF prepared for a different set of rows/totals.
+  return [inv?.id,inv?.invNo,inv?.date,inv?.net,inv?.status,inv?.revisedAt,inv?.updatedAt,
+    snap?.revisionNo??"original",snap?.updatedAt||snap?.createdAt||"",snap?.sourceNet??"",
+    snap?.rows?.length??0].join("|");
 }
 function clearInvoicePdfCache(id){
   if(!id){_invoicePdfCache.clear();return;}
@@ -8139,7 +8196,7 @@ async function buildInvoicePdfFile(inv,opts={}){
   // screenshot is used.
   // ══════════════════════════════════════════════════════════════════
   const sch=opts.historicalSnapshot?{name:inv.schoolName||"",udise:inv.schoolUdise||"",address:inv.schoolAddress||"",mobile:inv.schoolMobile||""}:(A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:inv.schoolUdise||"",address:inv.schoolAddress||"",mobile:inv.schoolMobile||""});
-  const rows=(inv.billingModeAtCreation==="hybrid"&&Array.isArray(inv.hybridDisplayItems)?inv.hybridDisplayItems:(inv.mergedItems||[])), t=inv.mergedTotals||{}, f=A.firm||{}, S=A.sett||ST0;
+  const rows=(Array.isArray(inv.mergedItems)&&inv.mergedItems.length?inv.mergedItems:(inv.billingModeAtCreation==="hybrid"&&Array.isArray(inv.hybridDisplayItems)?inv.hybridDisplayItems:[])), t=inv.mergedTotals||{}, f=A.firm||{}, S=A.sett||ST0;
   const invType=inv.invoiceType||S.invoiceType||"tax_invoice";
   const filename=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net});
   const {jsPDF}=window.jspdf;
@@ -8159,7 +8216,7 @@ async function buildInvoicePdfFile(inv,opts={}){
     MEDIUM=invoiceThemeMedium(TH), LIGHT=hexToRgb(TH.highlight)||[214,226,240], GRID=hexToRgb(TH.border)||[204,214,227], OUTER_BORDER=(TH.borderMode||"black")==="black"?[0,0,0]:invoiceThemeDarkest(TH), TEXT=hexToRgb(smartHeaderText(TH.headerBg,TH.headerText))||[22,31,42], HEADER_TEXT=hexToRgb(smartHeaderText(rgbToHex(BAND),TH.headerText))||[255,255,255], WHITE=[255,255,255];
   const DATA_FONT=clampFontSize(TH.dataFontSize||7.25);
   const TABLE_FONT_SCALE=DATA_FONT/6.65;
-  const TABLE_HEADER_FONT=7*TABLE_FONT_SCALE;
+  const TABLE_HEADER_FONT=7.25*TABLE_FONT_SCALE;
   const font="helvetica";
   const setText=(c=TEXT)=>doc.setTextColor(c[0],c[1],c[2]);
   const setFill=(c)=>doc.setFillColor(c[0],c[1],c[2]);
@@ -8242,8 +8299,8 @@ async function buildInvoicePdfFile(inv,opts={}){
     if(i===4){
       // Unit legend is deliberately confined to the existing fifth-column header cell.
       // No column edges, row heights, invoice calculations or financial values change.
-      text("Unit",x+w/2,262.8,6.2*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
-      text("KG/GM/LTR",x+w/2,270.0,4.05*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
+      text("Unit",x+w/2,262.8,6.45*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
+      text("KG/GM/LTR",x+w/2,270.0,4.25*TABLE_FONT_SCALE,true,"center",HEADER_TEXT);
     } else if(parts.length===1)text(parts[0],x+w/2,265.15,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);
     else {text(parts[0],x+w/2,262.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);text(parts[1],x+w/2,269.65,TABLE_HEADER_FONT,true,"center",HEADER_TEXT);}
   }
@@ -8389,7 +8446,8 @@ async function buildInvoicePdfFile(inv,opts={}){
 
 async function prepareInvoicePdf(id,opts={}){
   const inv=A.invoices.find(i=>i.id===id); if(!inv)throw new Error("Invoice not found");
-  const file=await buildInvoicePdfFile(inv,opts);
+  const resolved=mdmInvoicePrintContext(inv);
+  const file=await buildInvoicePdfFile(resolved.invoice,{...opts,force:true});
   if(!fileMatchesInvoice(file,inv))throw new Error("Prepared PDF does not match invoice");
   return file;
 }
@@ -9685,7 +9743,7 @@ function fontSafeRange(){
   // Fixed master row geometry: 12.45pt row, 5pt horizontal padding.
   // The range is derived from the narrowest cells and current invoice data,
   // with explicit vertical and horizontal safety margins; geometry never moves.
-  const min=5.25,max=7.65,current=7.25;
+  const min=5.25,max=8.00,current=7.60;
   return {min,max,current};
 }
 function setLoginPattern(id){
@@ -10229,9 +10287,9 @@ function buildPrintHTML(bodyContent, title, pageSize, orientation) {
     .no-print, .topbar, .sidebar, .shell > aside { display: none !important; }
     ${css}
     /* Settings-driven product-table print typography; geometry remains locked. */
-    .print-scale-wrap .itbl{font-size:${(clampFontSize(invoiceTheme().dataFontSize||7.25)*1.075).toFixed(2)}px!important;}
-    .print-scale-wrap .itbl .ith{font-size:${(6.55*(clampFontSize(invoiceTheme().dataFontSize||7.25)/6.65)).toFixed(2)}px!important;}
-    .print-scale-wrap .itbl .itd{font-size:${(clampFontSize(invoiceTheme().dataFontSize||7.25)*1.075).toFixed(2)}px!important;}
+    .print-scale-wrap .itbl{font-size:${(clampFontSize(invoiceTheme().dataFontSize||7.60)*1.075).toFixed(2)}px!important;}
+    .print-scale-wrap .itbl .ith{font-size:${(6.85*(clampFontSize(invoiceTheme().dataFontSize||7.60)/6.65)).toFixed(2)}px!important;}
+    .print-scale-wrap .itbl .itd{font-size:${(clampFontSize(invoiceTheme().dataFontSize||7.60)*1.075).toFixed(2)}px!important;}
     /* ── Print-quality & pagination rules ── */
     .print-scale-wrap { zoom: ${zoom}; }
     table { border-collapse: collapse; }
@@ -11143,7 +11201,7 @@ async function hsPDF(id, tab, mode) {
       return;
     }catch(e){toast("Invoice PDF failed: "+(e.message||"Unknown error"),"err");return;}
   }
-  const sch=A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:"",address:"",mobile:""};const c={merged:inv.mergedItems,mTot:inv.mergedTotals,annexA:inv.annexA||[],annexB:inv.annexB||[],tA:inv.totalsA||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0},tB:inv.totalsB||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0}};
+  const sch=A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:"",address:"",mobile:""};const resolved=mdmInvoicePrintContext(inv);const c=resolved.calc;
   let body,docLabel="";if(tab==="annexA"){body=axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,inv,inv.invNo);docLabel=" - Annexure A";}else if(tab==="annexB"){body=axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,inv,inv.invNo);docLabel=" - Annexure B";}else if(tab==="annexC"){body=axCDoc(c,sch,inv,inv.invNo);docLabel=" - Annexure C";}else{body=gstSummaryDoc(c,sch,inv,inv.invNo);docLabel=" - GST Summary";}
   const title=fnBuildName("Invoice",{invNo:inv.invNo,schoolName:inv.schoolName,month:inv.month,year:inv.year,date:inv.date,net:inv.net}).replace(/\.pdf$/i,"")+docLabel;const fullHTML=buildPrintHTML(body,title,(A.as2||{}).pageSize,(A.as2||{}).orientation);const orig=document.title;document.title=title;toast("Opening print dialog — choose 'Save as PDF' to download","ok");printViaFrame(fullHTML,()=>{document.title=orig;});auditLog("PRINT","invoice",id,"Printed/exported: "+inv.invNo+docLabel,null);setTimeout(()=>trackPrint(id),800);
 }
@@ -11192,8 +11250,7 @@ function niPrAll(idOrNull) {
     const inv = A.invoices.find(i=>i.id===idOrNull);
     if(!inv||!inv.mergedItems){ toast("No data for this invoice","err"); return; }
     sch = A.schools.find(s=>s.id===inv.schoolId)||{name:inv.schoolName,udise:"",address:"",mobile:""};
-    c = {merged:inv.mergedItems, mTot:inv.mergedTotals, annexA:inv.annexA||[], annexB:inv.annexB||[],
-         tA:inv.totalsA||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0}, tB:inv.totalsB||{taxable:0,cgst:0,sgst:0,gross:0,roundOff:0,net:0}};
+    const resolved=mdmInvoicePrintContext(inv); c=resolved.calc;
     invNo = inv.invNo;
     form = inv;
   } else {
