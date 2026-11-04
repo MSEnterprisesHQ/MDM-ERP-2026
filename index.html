@@ -2993,6 +2993,33 @@ function niRevisionIdentityCard(){
   </div>`;
 }
 
+// Shared invoice PDF theme layer. One selected preset is applied to Original + Hybrid
+// and every document in the invoice pack (Master, Annexure A/B/C and GST Summary).
+function invoiceThemeDocumentStyle(){
+  const t=invoiceTheme(), fam=t._themeFamily||invoiceThemeFamilyForPreset(INVOICE_THEME_PRESETS[t.invoicePreset]||{seed:t.themeSeed||t.accent,mode:t.themeMode});
+  const dark=fam.dark||"#34495E", medium=fam.medium||"#D7DCE2", light=fam.light||"#F3F5F7";
+  const border=t.border||"#C5CAD1", text=smartHeaderText(dark,t.headerText||"auto");
+  return `<style class="invoice-theme-runtime-style">
+  .id .id-hd{border-bottom-color:${dark}!important}.id .id-fn,.id .id-st{color:${dark}!important;border-color:${dark}!important}
+  .id .id-gst{background:${light}!important;color:${dark}!important;border:1px solid ${border}!important}
+  .id .id-bch,.id .itbl .ith,.id .id-nl{background:${dark}!important;color:${text}!important;border-color:${dark}!important}
+  .id .id-meta,.id .id-bt,.id .id-ml,.id .id-mr{border-color:${border}!important}
+  .id .id-gl{border-bottom-color:${border}!important}.id .id-gl:nth-child(4){background:${light}!important}
+  .id .id-gl.id-nl{background:${dark}!important;color:${text}!important}
+  .id .itbl .itd{border-color:${border}!important}.id .itbl tbody tr.tr-tot,.id .itbl tbody tr[style*="F0F4F8"]{background:${light}!important}
+  .id .id-bk{background:${light}22!important;border-color:${border}!important}
+  .ax .ith,.ax .ax-table .ith{background:${dark}!important;color:${text}!important;border-color:${dark}!important}
+  .ax .itd,.ax .ax-table .itd{border-color:${border}!important}
+  .ax .ax-table tr[style*="F0F4F8"],.ax tr[style*="F0F4F8"]{background:${light}!important}
+  .ax>div[style*="border-bottom"]{border-bottom-color:${dark}!important}
+  .ax>div[style*="background:#F5F5F5"]{background:${light}!important;color:#111827!important}
+  .axc-doc{color:#17202B!important;background:#fff!important}.axc-doc .axc-head,.axc-doc .axc-meta{border-color:${border}!important}
+  .axc-doc .axc-section-title,.axc-doc .axc-table th{background:${dark}!important;color:${text}!important;border-color:${dark}!important}
+  .axc-doc .axc-table td{border-color:${border}!important}.axc-doc .axc-grand-total{background:${light}!important;border-color:${border}!important;color:#111827!important}
+  .axc-doc .axc-section{border-color:${border}!important}.axc-doc .axc-foot{border-color:${border}!important}
+  </style>`;
+}
+
 // ═══ INVOICE DOC - Master Template V1.0 ═══
 function invDoc(c,form,sch,invNo){
   form = form || {};
@@ -3037,7 +3064,7 @@ function invDoc(c,form,sch,invNo){
   const fontFace=fontDefs?`<style>${fontDefs}</style>`:"";
   const tableWeight=td.tableFontBold?700:(dataTextStyle==="bold"?700:400);
   const bodyStyle=`--td-hb-size:${Math.max(5,Math.min(14,Number(td.headerBodyFontSize)||7.2))}pt;--td-hb-weight:${td.headerBodyFontBold?700:400};--td-hb-family:'${headerBodyFamily}',Arial,sans-serif;--td-table-size:${clampFontSize(td.dataFontSize||7.6)}pt;--td-table-head-size:${(6.85*(clampFontSize(td.dataFontSize||7.6)/6.65)).toFixed(2)}pt;--td-table-weight:${tableWeight};--td-table-family:'${tableFamily}',Arial,sans-serif;`;
-  return `${fontFace}<div class="id data-style-${dataTextStyle}" style="${bodyStyle}">
+  return `${invoiceThemeDocumentStyle()}${fontFace}<div class="id data-style-${dataTextStyle}" style="${bodyStyle}">
     <div class="id-hd">
       <div class="id-st">Original Copy</div>
       <div class="id-fn" style="${headerStyle}">${ec(f.name)}</div>
@@ -3116,7 +3143,7 @@ function axDoc(rows,tot,title,sch,form,invNo){
     const sgstAmt=showSGST?item.sgst:0;
     const singleGst=showSingle?(item.cgst+item.sgst):0;
     ir+=`<tr><td class="itd" style="text-align:center">${i+1}</td><td class="itd" style="font-weight:600">${ec(item.name)}</td><td class="itd" style="text-align:center">${hsnVal(item)}</td><td class="itd" style="text-align:center">${item.unit}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.qty).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${(+item.rate).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${d2(item.gross).toFixed(2)}</td></tr>`;});
-  return `<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">${ec(title)}</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | UDISE: ${ec(sch?sch.udise:"")} | Month: ${ec(form.month)} ${ec(form.year)}</div></div><div style="display:flex;justify-content:space-between;padding:3px 10px;border-bottom:1px solid #888;font-size:9px;font-weight:700;background:#F5F5F5"><span>Invoice No: ${ec(invNo)}</span><span>Date: ${ec(form.date||"")}</span></div><table class="ax-table" style="width:100%;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:7%"><col style="width:34%"><col style="width:12%"><col style="width:9%"><col style="width:11%"><col style="width:13%"><col style="width:14%"></colgroup><thead><tr>${["Sr.No","Item Name","HSN/SAC","Unit","Quantity","Rate (\u20B9)","Amount (\u20B9)"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${ir}<tr style="background:#F0F4F8"><td colspan="6" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900;font-size:11px">${tot.net.toFixed(2)}</td></tr></tbody></table><div style="display:grid;grid-template-columns:1fr 1fr;padding:12px 10px 5px;border-top:1px solid #ddd"><div style="font-size:9px;font-style:italic;color:#555">${nw(tot.net)}</div><div style="text-align:right"><div style="height:34px;border-bottom:1px solid #999;margin-bottom:4px"></div><div style="font-size:8.5px">Authorised Signatory - ${ec(f.name)}</div></div></div></div>`;
+  return `${invoiceThemeDocumentStyle()}<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">${ec(title)}</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | UDISE: ${ec(sch?sch.udise:"")} | Month: ${ec(form.month)} ${ec(form.year)}</div></div><div style="display:flex;justify-content:space-between;padding:3px 10px;border-bottom:1px solid #888;font-size:9px;font-weight:700;background:#F5F5F5"><span>Invoice No: ${ec(invNo)}</span><span>Date: ${ec(form.date||"")}</span></div><table class="ax-table" style="width:100%;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:7%"><col style="width:34%"><col style="width:12%"><col style="width:9%"><col style="width:11%"><col style="width:13%"><col style="width:14%"></colgroup><thead><tr>${["Sr.No","Item Name","HSN/SAC","Unit","Quantity","Rate (\u20B9)","Amount (\u20B9)"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${ir}<tr style="background:#F0F4F8"><td colspan="6" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900;font-size:11px">${tot.net.toFixed(2)}</td></tr></tbody></table><div style="display:grid;grid-template-columns:1fr 1fr;padding:12px 10px 5px;border-top:1px solid #ddd"><div style="font-size:9px;font-style:italic;color:#555">${nw(tot.net)}</div><div style="text-align:right"><div style="height:34px;border-bottom:1px solid #999;margin-bottom:4px"></div><div style="font-size:8.5px">Authorised Signatory - ${ec(f.name)}</div></div></div></div>`;
 }
 function axCDoc(c,sch,form,invNo){
   // Combined Annexure C — A/B remain distinct sections.
@@ -3194,7 +3221,7 @@ function axCDoc(c,sch,form,invNo){
   if(!renderedPages.length){
     renderedPages.push(`<div class="axc-page" style="max-width:${Math.min(100,printableW)}mm">${pageHead()}<div class="axc-section-title">No annexure items</div><div class="axc-grand-total"><span>COMBINED TOTAL</span><strong>${totalNet.toFixed(2)}</strong></div><div class="axc-foot"><div>${nw(totalNet)}</div><div class="axc-sign"><div class="axc-sign-line"></div>Authorised Signatory - ${ec(f.name||'')}</div></div></div>`);
   }
-  return `<div class="ax axc-doc" style="max-width:${Math.min(100,printableW)}mm">${renderedPages.join('')}</div>`;
+  return `${invoiceThemeDocumentStyle()}<div class="ax axc-doc" style="max-width:${Math.min(100,printableW)}mm">${renderedPages.join('')}</div>`;
 }
 
 // ═══ SHELL ═══
@@ -3488,7 +3515,7 @@ function gP(p){
     // Keep a rendering exception from leaving the entire application content blank.
     console.error("Page render failed:",p,renderError);
     const detail=String(renderError&&renderError.message||renderError).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    pc.innerHTML='<div class="card" role="alert" style="border:1px solid var(--rd);margin:12px"><div class="cbd"><div style="font-weight:800;color:var(--rd);font-size:15px">This page could not be rendered</div><div style="margin-top:6px;color:var(--tx)">Your saved invoice data has not been changed. Return to the previous page and try again.</div><details style="margin-top:10px"><summary style="cursor:pointer">Technical details</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px">'+detail+'</pre></details><button class="btn btn-g" style="margin-top:10px" onclick="gP(&quot;masterrevision&quot;)">Return to Revision Control</button></div></div>';
+    pc.innerHTML='<div class="card" role="alert" style="border:1px solid var(--rd);margin:12px"><div class="cbd"><div style="font-weight:800;color:var(--rd);font-size:15px">This page could not be rendered</div><div style="margin-top:6px;color:var(--tx)">Your saved invoice data has not been changed. Return to the previous page and try again.</div><details style="margin-top:10px"><summary style="cursor:pointer">Technical details</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px">'+detail+'</pre></details><button class="btn btn-g" style="margin-top:10px" onclick="gP(&quot;${ec(A._prevPage||"dashboard")}&quot;)">Return to Previous Page</button></div></div>';
   }
   // Post-render hooks
   if(p==="settings"){setTimeout(()=>{try{bindThemePicker();}catch(e){console.warn("Theme picker init",e);}},30);}
@@ -4834,11 +4861,23 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
     const sourceRate=Number(r.rate)||0;
     const sourceTaxable=money(r.taxable??(qty*sourceRate));
     const sourceCgst=money(r.cgst),sourceSgst=money(r.sgst);
+    // Hybrid Add/Deduct is an independent gross adjustment attached to the
+    // selected item. Keep it outside the quantity × visible-rate calculation
+    // so the optimizer can never absorb or rewrite it.
+    const independentAdjustmentGross=money(Number(r.independentAdjustmentAmount)||0);
+    const sourceGstRate=Math.max(0,Number(r.gst)||0);
+    const adjustmentTaxable=independentAdjustmentGross?(sourceGstRate>0?money(independentAdjustmentGross/(1+sourceGstRate/100)):independentAdjustmentGross):0;
+    const adjustmentCgst=independentAdjustmentGross&&sourceGstRate>0?money(adjustmentTaxable*(sourceGstRate/2)/100):0;
+    const adjustmentSgst=independentAdjustmentGross&&sourceGstRate>0?money(adjustmentTaxable*(sourceGstRate/2)/100):0;
+    const baseSourceTaxable=money(sourceTaxable-adjustmentTaxable);
+    const baseSourceCgst=money(sourceCgst-adjustmentCgst);
+    const baseSourceSgst=money(sourceSgst-adjustmentSgst);
+    if(baseSourceTaxable < -0.005 || baseSourceCgst < -0.005 || baseSourceSgst < -0.005) throw new Error("Hybrid adjustment exceeds the selected item's available amount: "+(r.name||r.id));
     let normalizedGrams=Number(result.normalizedGrams??result.actualGrams??0);
     let normalizedQuantity=Number(result.normalizedQuantity??qty);
     let normalizedUnit=result.normalizedUnit||unit;
     let zeroFloorFallback=false;
-    if(result.eligible&&qty>0&&sourceTaxable>0&&normalizedGrams===0){
+    if(result.eligible&&qty>0&&baseSourceTaxable>0&&normalizedGrams===0){
       normalizedGrams=Number(result.actualGrams)||0;
       normalizedUnit=(unit==="LTR"||unit==="ML")?"LTR":(mode==="KG_ONLY"||result.ruleId==="lpg"?"KG":(normalizedGrams<1000?"GM":"KG"));
       normalizedQuantity=(unit==="LTR"||unit==="ML")?normalizedGrams/1000:(normalizedUnit==="KG"?normalizedGrams/1000:normalizedGrams);
@@ -4846,20 +4885,23 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
     }
     if(!Number.isFinite(normalizedQuantity)||normalizedQuantity<0)throw new Error("Invalid Hybrid quantity for "+(r.name||r.id));
     const billedQuantity=normalizedQuantity,billedUnit=normalizedUnit;
-    const exactRateFromSource=normalizedQuantity>0?sourceTaxable/normalizedQuantity:0;
+    const exactRateFromSource=normalizedQuantity>0?baseSourceTaxable/normalizedQuantity:0;
     const rateInSourceUnit=(unit==="KG"&&normalizedUnit==="GM")?exactRateFromSource*1000:
       ((unit==="LTR"&&normalizedUnit==="ML")?exactRateFromSource*1000:exactRateFromSource);
     const displayRate=roundDisplayRate(rateInSourceUnit);
     const billingRate=(unit==="KG"&&normalizedUnit==="GM")?displayRate/1000:
       ((unit==="LTR"&&normalizedUnit==="ML")?displayRate/1000:displayRate);
-    const displayTaxable=money(billedQuantity*billingRate);
-    const sourceTaxRate=sourceTaxable>0?(sourceCgst+sourceSgst)/sourceTaxable:0;
-    const displayGstTotal=money(displayTaxable*sourceTaxRate);
-    const sourceGstTotal=money(sourceCgst+sourceSgst);
-    const displayCgst=sourceGstTotal>0?money(displayGstTotal*(sourceCgst/sourceGstTotal)):0;
-    const displaySgst=money(displayGstTotal-displayCgst);
+    const baseDisplayTaxable=money(billedQuantity*billingRate);
+    const sourceGstTotal=money(baseSourceCgst+baseSourceSgst);
+    const sourceTaxRate=baseSourceTaxable>0?sourceGstTotal/baseSourceTaxable:0;
+    const baseDisplayGstTotal=money(baseDisplayTaxable*sourceTaxRate);
+    const baseDisplayCgst=sourceGstTotal>0?money(baseDisplayGstTotal*(baseSourceCgst/sourceGstTotal)):0;
+    const baseDisplaySgst=money(baseDisplayGstTotal-baseDisplayCgst);
+    const displayTaxable=money(baseDisplayTaxable+adjustmentTaxable);
+    const displayCgst=money(baseDisplayCgst+adjustmentCgst);
+    const displaySgst=money(baseDisplaySgst+adjustmentSgst);
     const multiplication=money(billedQuantity* billingRate);
-    if(Math.abs(multiplication-displayTaxable)>0.001)throw new Error("Hybrid displayed rate does not reconcile for "+(r.name||r.id));
+    if(Math.abs(multiplication-baseDisplayTaxable)>0.001)throw new Error("Hybrid displayed rate does not reconcile for "+(r.name||r.id));
     let comparableSourceRate=sourceRate;
     if(unit==="KG"&&normalizedUnit==="GM")comparableSourceRate=sourceRate/1000;
     else if(unit==="GM"&&normalizedUnit==="KG")comparableSourceRate=sourceRate*1000;
@@ -4874,10 +4916,12 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
       sourceRate,sourceRateInHybridUnit:comparableSourceRate,displayRate,billingRate,
       rateRoundingDelta:rateAdjustment,sourceTaxable,displayTaxable,taxableRoundingDelta:money(displayTaxable-sourceTaxable),
       sourceCgst,sourceSgst,displayCgst,displaySgst,
+      rateCalculatedTaxable:baseDisplayTaxable,adjustmentTaxable,adjustmentCgst,adjustmentSgst,
+      independentAdjustmentGross,adjustmentTreatment:independentAdjustmentGross?"SEPARATE_FROM_QTY_RATE_AND_OPTIMIZER":"NONE",
       rateRoundingMode:"HYBRID_VISIBLE_RATE_IS_BILLING_RATE",taxableRoundingMode:"BILLED_QUANTITY_X_VISIBLE_RATE",
-      billingQuantity:billedQuantity,billingUnit:billedUnit,billingRate,billingTaxable:displayTaxable,
+      billingQuantity:billedQuantity,billingUnit:billedUnit,billingRate,billingTaxable:baseDisplayTaxable,
       rateBasisUnit:normalizedUnit,ratePrecision:2,sourceQuantityTimesRate:money(qty*sourceRate),
-      hybridQuantityTimesRate:multiplication,autoAdjustmentAmount:money(displayTaxable-sourceTaxable),
+      hybridQuantityTimesRate:multiplication,autoAdjustmentAmount:money(baseDisplayTaxable-baseSourceTaxable),
       autoAdjustment:true,zeroFloorFallback,redistributionPolicy:"SETTINGS_ALLOWLIST_ONLY",
       redistributionApplied:false,netPayableImpact:money(displayTaxable+displayCgst+displaySgst-(sourceTaxable+sourceCgst+sourceSgst)),
       independentAdjustmentAmount:money(Number(r.independentAdjustmentAmount)||0),
@@ -4896,7 +4940,7 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
   // never copy them into Hybrid totals to disguise a mismatch.
   const roundOff=sourceRoundOff;
   const hybridNet=money(hybridGross+roundOff);
-  const rateFailures=rows.filter(r=>Math.abs(money(r.billedQuantity*r.billingRate)-r.displayTaxable)>0.001);
+  const rateFailures=rows.filter(r=>Math.abs(money(r.billedQuantity*r.billingRate)-Number(r.rateCalculatedTaxable??r.displayTaxable))>0.001);
   if(rateFailures.length)throw new Error("Hybrid reverse calculation failed for: "+rateFailures.map(r=>r.name).join(", "));
   const diffs={taxable:money(hybridTaxableTotal-sourceTaxableTotal),cgst:money(hybridCgstTotal-sourceCgstTotal),sgst:money(hybridSgstTotal-sourceSgstTotal),gross:money(hybridGross-sourceGross),net:money(hybridNet-sourceNet)};
   const financialMatch=Object.values(diffs).every(v=>Math.abs(v)<0.01);
@@ -4917,7 +4961,7 @@ function hybridLivePreviewHTML(calc){
       window.MDM_V7_APPLIED_SOURCE_SIGNATURE=mdmV7SourceSignature(calc.merged);
       window.MDM_V7_AUTO_STATUS={status:auto.status,optionCount:auto.proposals.length,at:new Date().toISOString()};
     }
-    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">${modeLabel(snap.displayMode)} · ${auto.status==="USER_APPROVED"?"Smart Optimizer · User Approved":(auto.status==="AUTO_RECONCILED"?"Smart Optimizer · Exact Match":"Reconciliation Pending")}</span></div><div class="cbd"><div class="info ${auto.status==="AUTO_RECONCILED"?"inf-g":"inf-b"}" style="margin-bottom:9px">${auto.status==="USER_APPROVED"?"Your selected Smart Optimizer option is applied to this active Hybrid draft. The Original calculation remains unchanged; this approved Hybrid snapshot will be saved with the invoice.":(auto.status==="AUTO_RECONCILED"?"Smart Optimizer automatically absorbed the final plus/minus difference in the Green Veg Mix / enabled eligible items using a joint quantity + daily-rate adjustment. Original Gross, GST and Net Payable are now exactly matched.":"Hybrid Quantity follows the approved item rules. The Smart Optimizer will analyze the final residual before save. If no valid exact solution exists, saving remains blocked.")}</div><div class="info inf-g" style="margin-bottom:9px">${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹${Number(snap.reconciliation.differenceAfter||0).toFixed(2)}.</div>${(snap.optimizer?.autoApplied||auto.status==="USER_APPROVED")?`<section class="mdm-v7-recon" style="margin:10px 0;border:1.5px solid var(--nv2);border-radius:10px;padding:12px"><div class="mdm-v7-title">Optimizer Activity · ${auto.status==="USER_APPROVED"?"User Approved":"Applied Automatically"}</div><div class="mdm-v7-sub">Exact audit of the applied adjustment; Original invoice remains unchanged.</div><div class="mdm-v7-stats"><div><small>Difference Before</small><b>${mdmV7INR(snap.reconciliation.differenceBefore||0)}</b></div><div><small>Difference After</small><b>${mdmV7INR(snap.reconciliation.differenceAfter||0)}</b></div><div><small>Adjusted Item(s)</small><b>${hybridEsc((snap.optimizer.adjustedItems||[]).map(a=>a.name).join(", ")||snap.reconciliation.adjustmentItemName||"—")}</b></div></div><div style="overflow:auto;margin-top:9px"><table class="dt"><thead><tr><th>Item</th><th class="num">Qty Before</th><th class="num">Qty Applied</th><th class="num">Rate Before</th><th class="num">Rate Applied</th><th class="num">Taxable Before</th><th class="num">Taxable Applied</th></tr></thead><tbody>${(snap.optimizer.adjustedItems||[]).map(a=>`<tr><td>${hybridEsc(a.name)}</td><td class="num">${hybridEsc(a.fromQuantity)}</td><td class="num"><b>${hybridEsc(a.toQuantity)}</b></td><td class="num">${mdmV7INR(a.fromRate)}</td><td class="num"><b>${mdmV7INR(a.toRate)}</b></td><td class="num">${mdmV7INR(a.fromTaxable)}</td><td class="num"><b>${mdmV7INR(a.toTaxable)}</b></td></tr>`).join("")}</tbody></table></div><div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:12px"><span>Original Gross: <b>${mdmV7INR(snap.sourceGross)}</b></span><span>Hybrid Gross: <b>${mdmV7INR(snap.hybridGross)}</b></span><span>Original Net: <b>${mdmV7INR(snap.sourceNet)}</b></span><span>Hybrid Net: <b>${mdmV7INR(snap.hybridNet)}</b></span></div></section>`:`<div class="info inf-b" style="margin:9px 0"><b>Optimizer adjustment not applied.</b> Residual difference: ${mdmV7INR(snap.reconciliation?.differenceBefore??(snap.sourceNet-snap.hybridNet))}. See Smart Reconciliation Optimizer below for analysis and status.</div>`}<div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Actual Qty</th><th class="num">Normalized Qty</th><th class="num">Billed Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.actualQuantity)} ${hybridEsc(r.actualUnit)}</td><td class="num"><b>${hybridEsc(r.normalizedQuantity)} ${hybridEsc(r.normalizedUnit)}</b></td><td class="num"><b>${hybridEsc(r.billedQuantity)} ${hybridEsc(r.billedUnit)}</b></td><td>${hybridEsc(r.actualUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.actualUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(2)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b></td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
+    return `<div class="card" style="margin:12px 0;border:1.5px solid var(--nv2)"><div class="chd"><span class="cht">Hybrid Quantity Preview</span><span class="bdg bn">${modeLabel(snap.displayMode)} · ${auto.status==="USER_APPROVED"?"Smart Optimizer · User Approved":(auto.status==="AUTO_RECONCILED"?"Smart Optimizer · Exact Match":"Reconciliation Pending")}</span></div><div class="cbd"><div class="info ${auto.status==="AUTO_RECONCILED"?"inf-g":"inf-b"}" style="margin-bottom:9px">${auto.status==="USER_APPROVED"?"Your selected Smart Optimizer option is applied to this active Hybrid draft. The Original calculation remains unchanged; this approved Hybrid snapshot will be saved with the invoice.":(auto.status==="AUTO_RECONCILED"?"Smart Optimizer automatically absorbed the final plus/minus difference in the Green Veg Mix / enabled eligible items using a joint quantity + daily-rate adjustment. Original Gross, GST and Net Payable are now exactly matched.":"Hybrid Quantity follows the approved item rules. The Smart Optimizer will analyze the final residual before save. If no valid exact solution exists, saving remains blocked.")}</div><div class="info inf-g" style="margin-bottom:9px">${Number(snap.reconciliation.rowsPassed||0)} of ${Number(snap.reconciliation.rowsChecked||0)} item rows reconciled. Item-wise taxable difference: ₹${Number(snap.reconciliation.differenceAfter||0).toFixed(2)}.</div>${(snap.optimizer?.autoApplied||auto.status==="USER_APPROVED")?`<section class="mdm-v7-recon" style="margin:10px 0;border:1.5px solid var(--nv2);border-radius:10px;padding:12px"><div class="mdm-v7-title">Optimizer Activity · ${auto.status==="USER_APPROVED"?"User Approved":"Applied Automatically"}</div><div class="mdm-v7-sub">Exact audit of the applied adjustment; Original invoice remains unchanged.</div><div class="mdm-v7-stats"><div><small>Difference Before</small><b>${mdmV7INR(snap.reconciliation.differenceBefore||0)}</b></div><div><small>Difference After</small><b>${mdmV7INR(snap.reconciliation.differenceAfter||0)}</b></div><div><small>Adjusted Item(s)</small><b>${hybridEsc((snap.optimizer.adjustedItems||[]).map(a=>a.name).join(", ")||snap.reconciliation.adjustmentItemName||"—")}</b></div></div><div style="overflow:auto;margin-top:9px"><table class="dt"><thead><tr><th>Item</th><th class="num">Qty Before</th><th class="num">Qty Applied</th><th class="num">Rate Before</th><th class="num">Rate Applied</th><th class="num">Taxable Before</th><th class="num">Taxable Applied</th></tr></thead><tbody>${(snap.optimizer.adjustedItems||[]).map(a=>`<tr><td>${hybridEsc(a.name)}</td><td class="num">${hybridEsc(a.fromQuantity)}</td><td class="num"><b>${hybridEsc(a.toQuantity)}</b></td><td class="num">${mdmV7INR(a.fromRate)}</td><td class="num"><b>${mdmV7INR(a.toRate)}</b></td><td class="num">${mdmV7INR(a.fromTaxable)}</td><td class="num"><b>${mdmV7INR(a.toTaxable)}</b></td></tr>`).join("")}</tbody></table></div><div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;font-size:12px"><span>Original Gross: <b>${mdmV7INR(snap.sourceGross)}</b></span><span>Hybrid Gross: <b>${mdmV7INR(snap.hybridGross)}</b></span><span>Original Net: <b>${mdmV7INR(snap.sourceNet)}</b></span><span>Hybrid Net: <b>${mdmV7INR(snap.hybridNet)}</b></span></div></section>`:`<div class="info inf-b" style="margin:9px 0"><b>Optimizer adjustment not applied.</b> Residual difference: ${mdmV7INR(snap.reconciliation?.differenceBefore??(snap.sourceNet-snap.hybridNet))}. See Smart Reconciliation Optimizer below for analysis and status.</div>`}<div class="tw"><table class="dt"><thead><tr><th>Item</th><th class="num">Actual Qty</th><th class="num">Normalized Qty</th><th class="num">Billed Qty</th><th>Unit<br><small style="font-size:9px;font-weight:600">KG / GM / LTR</small></th><th class="num">Original Rate</th><th class="num">Hybrid Rate<br><small>Per displayed unit</small></th><th class="num">Original Taxable</th><th class="num">Hybrid Taxable<br><small>Exact item taxable</small></th><th>Rule / Status</th></tr></thead><tbody>${snap.rows.map(r=>`<tr><td>${hybridEsc(r.name)}</td><td class="num">${hybridEsc(r.actualQuantity)} ${hybridEsc(r.actualUnit)}</td><td class="num"><b>${hybridEsc(r.normalizedQuantity)} ${hybridEsc(r.normalizedUnit)}</b></td><td class="num"><b>${hybridEsc(r.billedQuantity)} ${hybridEsc(r.billedUnit)}</b></td><td>${hybridEsc(r.actualUnit)}${r.normalizedUnit&&r.normalizedUnit!==r.actualUnit?" → "+hybridEsc(r.normalizedUnit):""}</td><td class="num">₹${Number(r.sourceRate||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayRate??0).toFixed(2)}</b></td><td class="num">₹${Number(r.sourceTaxable||0).toFixed(2)}</td><td class="num"><b>₹${Number(r.displayTaxable??0).toFixed(2)}</b>${Number(r.independentAdjustmentGross||0)!==0?`<br><small>Incl. ${Number(r.independentAdjustmentGross)>0?"+":"−"}₹${Math.abs(Number(r.independentAdjustmentGross)).toFixed(2)} adjustment</small>`:""}</td><td>${r.eligible?hybridEsc(r.ruleId):"Excluded · "+hybridEsc(r.reason)}</td></tr>`).join("")}</tbody></table></div><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:9px;font-size:12px"><span>Original Net Payable: <b>${R(calc.mTot?.net||0)}</b></span><span>Hybrid Taxable Match: <b>₹${Number(snap.reconciledDisplayTaxableTotal||0).toFixed(2)}</b></span></div></div></div>`;
   }catch(e){return `<div class="info inf-r" style="margin:10px 0"><b>Hybrid preview unavailable:</b> ${hybridEsc(e.message||e)}. Existing Original calculation is unaffected.</div>`;}
 }
 
@@ -4955,7 +4999,7 @@ function mdmV7Verify(){
     const temp={id:"LIVE-V7-VERIFY",invNo:niResolvedInvNo(false)||"Draft",net:Number(original.net)||0,taxable:Number(original.taxable)||0,cgst:Number(original.cgst)||0,sgst:Number(original.sgst)||0,roundOff:Number(original.roundOff)||0,mergedTotals:{taxable:Number(original.taxable)||0,cgst:Number(original.cgst)||0,sgst:Number(original.sgst)||0,roundOff:Number(original.roundOff)||0,net:Number(original.net)||0},mergedItems:calc.merged};
     const baseSnap=hybridMakeSnapshot(temp,hybridUnitDisplayMode());
     const sig=mdmV7SourceSignature(calc.merged);
-    const approved=window.MDM_V7_APPLIED_SNAPSHOT&&window.MDM_V7_APPLIED_SOURCE_SIGNATURE===sig?JSON.parse(JSON.stringify(window.MDM_V7_APPLIED_SNAPSHOT)):null;
+    const approved=typeof mdmV7GetAppliedSnapshot==="function"?mdmV7GetAppliedSnapshot(calc.merged):(window.MDM_V7_APPLIED_SNAPSHOT&&window.MDM_V7_APPLIED_SOURCE_SIGNATURE===sig?JSON.parse(JSON.stringify(window.MDM_V7_APPLIED_SNAPSHOT)):null);
     const auto=approved?{status:"APPROVED",snapshot:approved}:mdmV7AutoReconcileSnapshot(baseSnap,hybridReconEligible());
     const snap=auto.snapshot||baseSnap;
     if(auto.status==="AUTO_RECONCILED"){
@@ -4967,20 +5011,26 @@ function mdmV7Verify(){
     const hyCg=mdmV7Money(snap.rows.reduce((a,r)=>a+r.displayCgst,0));
     const hySg=mdmV7Money(snap.rows.reduce((a,r)=>a+r.displaySgst,0));
     const hyGross=mdmV7Money(hyTax+hyCg+hySg);
-    const hyNet=mdmV7Money(hyGross+(Number(original.roundOff)||0));
+    const hyRoundOff=mdmV7Money(snap.hybridRoundOff??snap.sourceRoundOff??0);
+    const hyNet=mdmV7Money(hyGross+hyRoundOff);
     const origGross=mdmV7Money(original.gross??original.grand??(Number(original.taxable||0)+Number(original.cgst||0)+Number(original.sgst||0)));
+    const origRoundOff=mdmV7Money(original.roundOff||0);
     const origNet=mdmV7Money(original.net);
     const diff=mdmV7Money(hyNet-origNet);
     const grossDiff=mdmV7Money(hyGross-origGross);
+    const roundOffDiff=mdmV7Money(hyRoundOff-origRoundOff);
     const rowTaxDiff=mdmV7Money(hyTax-mdmV7Money(original.taxable));
+    const cgstDiff=mdmV7Money(hyCg-mdmV7Money(original.cgst));
+    const sgstDiff=mdmV7Money(hySg-mdmV7Money(original.sgst));
     const gstDiff=mdmV7Money((hyCg+hySg)-((Number(original.cgst)||0)+(Number(original.sgst)||0)));
-    const pass=Math.abs(diff)<0.01&&Math.abs(grossDiff)<0.01&&Math.abs(rowTaxDiff)<0.01&&Math.abs(gstDiff)<0.01&&["RECONCILED","RECONCILED_BY_SMART_OPTIMIZER"].includes(snap.reconciliation.status)&&snap.reconciliation.financialMatch===true;
+    // Strict paise-level lock: taxable, each GST component, gross, round-off and net must all match.
+    const pass=[diff,grossDiff,roundOffDiff,rowTaxDiff,cgstDiff,sgstDiff].every(v=>v===0)&&["RECONCILED","RECONCILED_BY_SMART_OPTIMIZER"].includes(snap.reconciliation.status)&&snap.reconciliation.financialMatch===true;
     put("mdm-v7-original-net",mdmV7INR(origNet));put("mdm-v7-hybrid-net",mdmV7INR(hyNet));put("mdm-v7-net-diff",mdmV7INR(diff));
     put("mdm-v7-hybrid-gross",mdmV7INR(hyGross));
     put("mdm-v7-gross-diff",mdmV7INR(grossDiff));
     put("mdm-v7-verify-state",pass?"VERIFIED · MATCH":"MISMATCH · BLOCKED");
-    out.hidden=false;out.innerHTML=`<div class="info ${pass?"inf-g":"inf-r"}"><b>${pass?"Original and Hybrid financial totals match.":"Verification failed. Do not proceed."}</b><br>${snap.optimizer?.autoApplied?"Smart Optimizer automatically absorbed the final difference in Green Veg Mix / enabled items. ":""}Gross difference: ${mdmV7INR(grossDiff)} · Taxable difference: ${mdmV7INR(rowTaxDiff)} · GST difference: ${mdmV7INR(gstDiff)} · Net Payable difference: ${mdmV7INR(diff)}<br>Rows checked: ${snap.reconciliation.rowsChecked} · Rows reconciled: ${snap.reconciliation.rowsPassed}</div>`;
-    window.MDM_V7_VERIFICATION={passed:pass,originalGross:origGross,hybridGross:hyGross,grossDifference:grossDiff,originalNet:origNet,hybridNet:hyNet,netDifference:diff,taxableDifference:rowTaxDiff,gstDifference:gstDiff,checkedAt:new Date().toISOString()};
+    out.hidden=false;out.innerHTML=`<div class="info ${pass?"inf-g":"inf-r"}"><b>${pass?"All Original and Hybrid financial values match exactly.":"Verification failed. Do not proceed."}</b><br>${snap.optimizer?.autoApplied?"Smart Optimizer automatically absorbed the final difference in Green Veg Mix / enabled items. ":""}Taxable Δ: ${mdmV7INR(rowTaxDiff)} · CGST Δ: ${mdmV7INR(cgstDiff)} · SGST Δ: ${mdmV7INR(sgstDiff)}<br>Gross Δ: ${mdmV7INR(grossDiff)} · Round Off Δ: ${mdmV7INR(roundOffDiff)} · Net Payable Δ: ${mdmV7INR(diff)}<br>Rows checked: ${snap.reconciliation.rowsChecked} · Rows reconciled: ${snap.reconciliation.rowsPassed}</div>`;
+    window.MDM_V7_VERIFICATION={passed:pass,originalGross:origGross,hybridGross:hyGross,grossDifference:grossDiff,originalRoundOff:origRoundOff,hybridRoundOff:hyRoundOff,roundOffDifference:roundOffDiff,originalNet:origNet,hybridNet:hyNet,netDifference:diff,taxableDifference:rowTaxDiff,cgstDifference:cgstDiff,sgstDifference:sgstDiff,gstDifference:gstDiff,checkedAt:new Date().toISOString(),approvedSnapshotUsed:!!approved};
     return pass;
   }catch(e){out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Verification unavailable:</b> ${hybridEsc(e.message||e)}</div>`;put("mdm-v7-verify-state","ERROR · BLOCKED");return false;}
 }
@@ -5043,7 +5093,7 @@ function mdmV7Solve(baseSnap,eligibleIds){
   const adjSet=new Set(adjustable.map(x=>x.i));
   const fixed=rows.reduce((a,r,i)=>{if(!adjSet.has(i)){a.t+=cents(r.displayTaxable);a.cg+=cents(r.displayCgst);a.sg+=cents(r.displaySgst);}return a;},{t:0,cg:0,sg:0});
   const goal={t:targets.tax-fixed.t,cg:targets.cg-fixed.cg,sg:targets.sg-fixed.sg};
-  let beam=[{t:0,cg:0,sg:0,chosen:[],cost:0}];
+  let beam=[{t:0,cg:0,sg:0,chosen:[],cost:0}],emptySearch=null;
   for(let gi=0;gi<groups.length;gi++){
     const g=groups[gi],next=[],seen=new Map();
     for(const st of beam){
@@ -5093,6 +5143,10 @@ function mdmV7Solve(baseSnap,eligibleIds){
         const key=n.t+"|"+n.cg+"|"+n.sg,old=seen.get(key);if(!old||n.cost<old.cost)seen.set(key,n);
       }
     }
+    if(!seen.size&&!emptySearch){
+      const g=groups[gi],needTax=goal.t-(beam[0]?.t||0),needCg=goal.cg-(beam[0]?.cg||0),needSg=goal.sg-(beam[0]?.sg||0);
+      emptySearch={category:g.category,itemName:g.row?.name||"",reason:g.category==="green_veg_mix"&&needTax<=0?"FIXED_ROWS_EXCEED_TARGET":"NO_CANDIDATE_WITHIN_ALLOWED_QUANTITY_RATE_AND_EXACT_GST_RULES",residual:{taxablePaise:needTax,cgstPaise:needCg,sgstPaise:needSg},candidateCount:g.candidates?.length||0};
+    }
     next.push(...seen.values());
     next.sort((a,b)=>{
       const score=x=>Math.abs(x.t-goal.t)*4+Math.abs(x.cg-goal.cg)*2+Math.abs(x.sg-goal.sg)*2+x.cost;
@@ -5101,7 +5155,7 @@ function mdmV7Solve(baseSnap,eligibleIds){
     beam=next.slice(0,3500);
   }
   const exact=beam.filter(x=>x.t===goal.t&&x.cg===goal.cg&&x.sg===goal.sg).sort((a,b)=>a.cost-b.cost).slice(0,3);
-  return {status:exact.length?"SOLVED":"NO_EXACT_SOLUTION",options:exact.map((x,idx)=>({id:"OPT-"+(idx+1),cost:x.cost,rows:x.chosen,totals:{tax:x.t+fixed.t,cg:x.cg+fixed.cg,sg:x.sg+fixed.sg,gross:x.t+x.cg+x.sg+fixed.t+fixed.cg+fixed.sg,net:x.t+x.cg+x.sg+fixed.t+fixed.cg+fixed.sg+cents(baseSnap.sourceRoundOff)}})),eligibleRows:adjustable.length,searchStates:beam.length,targets,primaryAbsorptionItem:"green_veg_mix",primaryRateAndQuantityOptimization:true};
+  return {status:exact.length?"SOLVED":"NO_EXACT_SOLUTION",options:exact.map((x,idx)=>({id:"OPT-"+(idx+1),cost:x.cost,rows:x.chosen,totals:{tax:x.t+fixed.t,cg:x.cg+fixed.cg,sg:x.sg+fixed.sg,gross:x.t+x.cg+x.sg+fixed.t+fixed.cg+fixed.sg,net:x.t+x.cg+x.sg+fixed.t+fixed.cg+fixed.sg+cents(baseSnap.sourceRoundOff)}})),eligibleRows:adjustable.length,searchStates:beam.length,targets,diagnostics:emptySearch,primaryAbsorptionItem:"green_veg_mix",primaryRateAndQuantityOptimization:true};
 }
 function mdmV7BuildProposal(baseSnap,option){
   const copy=JSON.parse(JSON.stringify(baseSnap));
@@ -5110,8 +5164,8 @@ function mdmV7BuildProposal(baseSnap,option){
   copy.hybridTaxableTotal=sum("displayTaxable");copy.roundedTaxableTotal=copy.hybridTaxableTotal;copy.reconciledDisplayTaxableTotal=copy.hybridTaxableTotal;
   copy.hybridCgstTotal=sum("displayCgst");copy.hybridSgstTotal=sum("displaySgst");copy.hybridGross=mdmV7Money(copy.hybridTaxableTotal+copy.hybridCgstTotal+copy.hybridSgstTotal);
   copy.hybridRoundOff=mdmV7Money(copy.sourceRoundOff);copy.hybridNet=mdmV7Money(copy.hybridGross+copy.hybridRoundOff);copy.financialImpact=mdmV7Money(copy.hybridNet-copy.sourceNet);copy.allocatedAmount=copy.sourceNet;copy.redistributionApplied=true;
-  const diffs={taxable:mdmV7Money(copy.hybridTaxableTotal-copy.sourceTaxableTotal),cgst:mdmV7Money(copy.hybridCgstTotal-copy.sourceCgstTotal),sgst:mdmV7Money(copy.hybridSgstTotal-copy.sourceSgstTotal),gross:mdmV7Money(copy.hybridGross-copy.sourceGross),net:mdmV7Money(copy.hybridNet-copy.sourceNet)};
-  const lineFailures=copy.rows.filter(r=>Math.abs(mdmV7Money(Number(r.billedQuantity)*Number(r.billingRate)-Number(r.displayTaxable)))>=0.01);
+  const diffs={taxable:mdmV7Money(copy.hybridTaxableTotal-copy.sourceTaxableTotal),cgst:mdmV7Money(copy.hybridCgstTotal-copy.sourceCgstTotal),sgst:mdmV7Money(copy.hybridSgstTotal-copy.sourceSgstTotal),gross:mdmV7Money(copy.hybridGross-copy.sourceGross),roundOff:mdmV7Money(copy.hybridRoundOff-copy.sourceRoundOff),net:mdmV7Money(copy.hybridNet-copy.sourceNet)};
+  const lineFailures=copy.rows.filter(r=>Math.abs(mdmV7Money(Number(r.billedQuantity)*Number(r.billingRate)-Number(r.rateCalculatedTaxable??r.displayTaxable)))>=0.01);
   const pass=Object.values(diffs).every(v=>Math.abs(v)<0.01)&&lineFailures.length===0;
   copy.reconciliation={...(copy.reconciliation||{}),status:pass?"RECONCILED_BY_SMART_OPTIMIZER":"MISMATCH_BLOCKED",financialMatch:pass,differences:diffs,differenceBefore:mdmV7Money(baseSnap.sourceNet-baseSnap.hybridNet),differenceAfter:diffs.net,adjustmentItemId:option.rows.map(x=>copy.rows[x.index].id).join(","),adjustmentItemName:option.rows.map(x=>copy.rows[x.index].name).join(", "),adjustmentAmount:mdmV7Money(copy.hybridNet-baseSnap.hybridNet),method:"BOUNDED_BEAM_SEARCH_ALLOWLIST_ONLY_VISIBLE_RATE_AND_QUANTITY",redistributionApplied:true,rowsChecked:copy.rows.length,rowsPassed:copy.rows.length-lineFailures.length};
   copy.optimizer={engine:"MDM-V7-BOUNDED-BEAM",optionId:option.id,objective:"MINIMIZE_COMBINED_QUANTITY_AND_DAILY_RATE_MOVEMENT_THEN_EXACT_LOCKED_FINANCIAL_MATCH",primaryAbsorptionItem:"green_veg_mix",rateAndQuantityOptimizedTogether:true,adjustmentMode:"JOINT_PERCENTAGE_MINIMIZATION",applied:false,createdAt:new Date().toISOString(),adjustedItems:option.rows.map(x=>({id:x.row.id,name:x.row.name,category:x.category,fromQuantity:baseSnap.rows[x.index].billedQuantity,toQuantity:x.row.billedQuantity,fromRate:baseSnap.rows[x.index].displayRate,toRate:x.row.displayRate,fromTaxable:baseSnap.rows[x.index].displayTaxable,toTaxable:x.row.displayTaxable}))};
@@ -5129,11 +5183,11 @@ function mdmV7Analyze(){
     const proposals=(result.options||[]).map(o=>({option:o,proposal:mdmV7BuildProposal(base,o)})).filter(x=>x.proposal);
     window.MDM_V7_OPTIMIZER={status:proposals.length?"SOLVED":"NO_EXACT_SOLUTION",validOptions:proposals.length,applyEnabled:proposals.length>0,eligibleItems:eligible.slice(),eligibleRows:result.eligibleRows||0,searchStates:result.searchStates||0,proposals,baseSnapshot:base,policy:"SAVED_ALLOWLIST_ONLY_EXACT_LINE_AND_INVOICE_RECONCILIATION",analyzedAt:new Date().toISOString()};
     put("mdm-v7-recon-state",proposals.length?"EXACT SOLUTION FOUND":"NO EXACT SOLUTION");put("mdm-v7-diff",mdmV7INR(base.sourceNet-base.hybridNet));put("mdm-v7-options",proposals.length+" valid options");put("mdm-v7-action",proposals.length?"Ready for approval":"Apply blocked");
-    const html=proposals.length?`<div class="info inf-g" style="margin:9px 0"><b>${proposals.length} mathematically valid option(s)</b><label class="flbl" style="display:block;margin-top:9px">Choose optimization strategy</label><select id="mdm-v7-option-select" class="fi" onchange="mdmV7PreviewOption(Number(this.value))">${proposals.map((x,i)=>`<option value="${i}">Option ${i+1} · ${i===0?"Lowest combined movement":"Alternative valid solution"} · Net ${mdmV7INR(x.proposal.hybridNet)}</option>`).join("")}</select><div id="mdm-v7-option-detail" style="margin-top:8px"></div><button class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmV7Apply(Number(document.getElementById('mdm-v7-option-select')?.value||0))">Apply Selected Option</button></div>`:`<div class="info inf-b"><b>No exact proposal found.</b><br>Eligible categories: ${labels.length?labels.map(hybridEsc).join(", "):"None"}. Checked ${result.searchStates||0} bounded search states across ${result.eligibleRows||0} eligible rows. No quantities or rates were changed. Enable additional permitted categories or review source data; no approximate result will be applied.</div>`;
+    const html=proposals.length?`<div class="info inf-g" style="margin:9px 0"><b>${proposals.length} mathematically valid option(s)</b><label class="flbl" style="display:block;margin-top:9px">Choose optimization strategy</label><select id="mdm-v7-option-select" class="fi" onchange="mdmV7PreviewOption(Number(this.value))">${proposals.map((x,i)=>`<option value="${i}">Option ${i+1} · ${i===0?"Lowest combined movement":"Alternative valid solution"} · Net ${mdmV7INR(x.proposal.hybridNet)}</option>`).join("")}</select><div id="mdm-v7-option-detail" style="margin-top:8px"></div><button class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmV7Apply(Number(document.getElementById('mdm-v7-option-select')?.value||0))">Apply Selected Option</button></div>`:`<div class="info inf-b"><b>No exact proposal found — Apply is unavailable.</b><br>Eligible categories: ${labels.length?labels.map(hybridEsc).join(", "):"None"}. Checked ${result.searchStates||0} bounded search states across ${result.eligibleRows||0} eligible rows. ${result.diagnostics?.reason==="FIXED_ROWS_EXCEED_TARGET"?"The non-adjustable rows already exceed the Original taxable target; the currently permitted item cannot absorb the difference safely.":"No permitted quantity/rate candidate satisfies the exact taxable + CGST + SGST targets within the approved movement limits."}<br>No quantities or rates were changed. Review the eligible-item allowlist and source item values; no approximate result will be applied.<br><button type="button" class="btn btn-g btn-sm" style="margin-top:9px" disabled title="No exact, independently validated proposal exists">Apply Selected Option — Blocked</button></div>`;
     out.hidden=false;out.innerHTML=html;if(proposals.length)mdmV7PreviewOption(0);
   }catch(e){console.error("Hybrid optimizer failed",e);put("mdm-v7-recon-state","SOLVER ERROR · BLOCKED");put("mdm-v7-options","0 valid options");put("mdm-v7-action","Apply blocked");out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Optimizer could not complete safely:</b> ${hybridEsc(e.message||e)}. No values changed.</div>`;window.MDM_V7_OPTIMIZER={status:"ERROR",validOptions:0,applyEnabled:false,error:String(e.message||e)};}
 }
-function mdmV7PreviewOption(index){const e=window.MDM_V7_OPTIMIZER?.proposals?.[Number(index)];const host=document.getElementById("mdm-v7-option-detail");if(!e||!host)return;const p=e.proposal;host.innerHTML=`<b>Hybrid Gross:</b> ${mdmV7INR(p.hybridGross)} · <b>Net:</b> ${mdmV7INR(p.hybridNet)}<br><b>Items adjusted:</b> ${p.optimizer.adjustedItems.map(a=>`${hybridEsc(a.name)}: Qty ${hybridEsc(a.fromQuantity)} → ${hybridEsc(a.toQuantity)}; Rate ${mdmV7INR(a.fromRate)} → ${mdmV7INR(a.toRate)}`).join("; ")}<br><small>Exact line-level and invoice-level checks required before Apply.</small>`;}
+function mdmV7PreviewOption(index){const e=window.MDM_V7_OPTIMIZER?.proposals?.[Number(index)];const host=document.getElementById("mdm-v7-option-detail");if(!e||!host)return;const p=e.proposal;host.innerHTML=`<b>Hybrid Gross:</b> ${mdmV7INR(p.hybridGross)} · <b>Round Off:</b> ${mdmV7INR(p.hybridRoundOff)} · <b>Net:</b> ${mdmV7INR(p.hybridNet)}<br><b>Exact targets:</b> Taxable, CGST, SGST, Gross, Round Off and Net Payable must each match to ₹0.00.<br><b>Items adjusted:</b> ${p.optimizer.adjustedItems.map(a=>`${hybridEsc(a.name)}: Qty ${hybridEsc(a.fromQuantity)} → ${hybridEsc(a.toQuantity)}; Rate ${mdmV7INR(a.fromRate)} → ${mdmV7INR(a.toRate)}`).join("; ")}<br><small>Exact line-level and invoice-level checks required before Apply.</small>`;}
 function mdmV7Apply(index){
   const state=window.MDM_V7_OPTIMIZER,entry=state?.proposals?.[Number(index)];
   if(!entry?.proposal||!state.applyEnabled){toast("No validated optimizer proposal is available","err");return false;}
@@ -5143,7 +5197,8 @@ function mdmV7Apply(index){
   if(sourceSig!==expected){toast("Source invoice changed after analysis. Re-run optimizer.","err");return false;}
   if(!p.reconciliation?.financialMatch||p.reconciliation.status!=="RECONCILED_BY_SMART_OPTIMIZER"){toast("Final reconciliation gate failed. Apply blocked.","err");return false;}
   const sums={tax:mdmV7Money(p.rows.reduce((a,r)=>a+r.displayTaxable,0)),cg:mdmV7Money(p.rows.reduce((a,r)=>a+r.displayCgst,0)),sg:mdmV7Money(p.rows.reduce((a,r)=>a+r.displaySgst,0))};
-  if(sums.tax!==p.sourceTaxableTotal||sums.cg!==p.sourceCgstTotal||sums.sg!==p.sourceSgstTotal||mdmV7Money(sums.tax+sums.cg+sums.sg)!==p.sourceGross||mdmV7Money(sums.tax+sums.cg+sums.sg+p.sourceRoundOff)!==p.sourceNet){toast("Independent final totals check failed. Apply blocked.","err");return false;}
+  const finalGross=mdmV7Money(sums.tax+sums.cg+sums.sg),finalRoundOff=mdmV7Money(p.hybridRoundOff),finalNet=mdmV7Money(finalGross+finalRoundOff);
+  if(sums.tax!==p.sourceTaxableTotal||sums.cg!==p.sourceCgstTotal||sums.sg!==p.sourceSgstTotal||finalGross!==p.sourceGross||finalRoundOff!==p.sourceRoundOff||finalNet!==p.sourceNet){toast("Independent exact check failed: Taxable / CGST / SGST / Gross / Round Off / Net must all match to ₹0.00. Apply blocked.","err");return false;}
   p.optimizer.applied=true;p.optimizer.appliedAt=new Date().toISOString();p.optimizer.appliedBy="USER_APPROVAL";p.optimizer.autoApplied=false;
   // Bind the approved proposal to this exact active draft. Do not mutate NI.calc.merged:
   // that remains the immutable Original calculation; the approved Hybrid snapshot is a separate layer.
@@ -9987,7 +10042,26 @@ const INVOICE_THEME_PRESETS={
   lightSky:{name:"Light Sky · Black Text",seed:"#DCEBFA",text:"#111827",border:"#AFC7E2",mode:"light"},
   lightSage:{name:"Light Sage · Black Text",seed:"#DDEDE4",text:"#111827",border:"#B5D2C0",mode:"light"},
   lightSkyPlus:{name:"Sky Blue · Deeper Light · Black Text",seed:"#B8D3F0",text:"#111827",border:"#91B5DE",mode:"light"},
-  lightSagePlus:{name:"Fresh Green · Deeper Light · Black Text",seed:"#B7D8C3",text:"#111827",border:"#8FBDA0",mode:"light"}
+  lightSagePlus:{name:"Fresh Green · Deeper Light · Black Text",seed:"#B7D8C3",text:"#111827",border:"#8FBDA0",mode:"light"},
+  mistGray:{name:"Lite Gray · Mist",seed:"#D9DEE5",text:"#111827",border:"#B8C0CA",mode:"light"},
+  silverGray:{name:"Lite Gray · Silver",seed:"#C8CDD4",text:"#111827",border:"#AAB2BC",mode:"light"},
+  pearlGray:{name:"Lite Gray · Pearl",seed:"#E5E7EB",text:"#111827",border:"#C5CAD1",mode:"light"},
+  greyChalk:{name:"Grey Palette 01 · Chalk",seed:"#D3D3D3",text:"#111827",border:"#B8B8B8",mode:"light"},
+  greyCharcoal:{name:"Grey Palette 02 · Charcoal",seed:"#41494C",text:"auto",border:"#303639",mode:"dark"},
+  greyBlueSlate:{name:"Grey Palette 03 · Blue Slate",seed:"#708191",text:"auto",border:"#586A79",mode:"dark"},
+  greyLavender:{name:"Grey Palette 04 · Lavender Gray",seed:"#989BAC",text:"auto",border:"#777B90",mode:"dark"},
+  greyGraphite:{name:"Grey Palette 05 · Graphite",seed:"#555555",text:"auto",border:"#3F3F3F",mode:"dark"},
+  greySage:{name:"Grey Palette 06 · Sage Gray",seed:"#B4BEB5",text:"#111827",border:"#98A69B",mode:"light"},
+  greyStorm:{name:"Grey Palette 07 · Storm",seed:"#6F7E83",text:"auto",border:"#536268",mode:"dark"},
+  greyAsh:{name:"Grey Palette 08 · Ash",seed:"#848482",text:"auto",border:"#666664",mode:"dark"},
+  greyDust:{name:"Grey Palette 09 · Dusty Lavender",seed:"#8E92AD",text:"auto",border:"#70758F",mode:"dark"},
+  greyWarmPearl:{name:"Grey Palette 10 · Warm Pearl",seed:"#DCD8D5",text:"#111827",border:"#BFBAB6",mode:"light"},
+  greyTaupe:{name:"Grey Palette 11 · Taupe",seed:"#AA9B88",text:"#111827",border:"#8E806E",mode:"light"},
+  greyLilac:{name:"Grey Palette 12 · Lilac Gray",seed:"#C4C3D1",text:"#111827",border:"#A8A7B8",mode:"light"},
+  greyMushroom:{name:"Grey Palette 13 · Mushroom",seed:"#CAC1BC",text:"#111827",border:"#ADA39D",mode:"light"},
+  greyStone:{name:"Grey Palette 14 · Stone",seed:"#CFCFC7",text:"#111827",border:"#B3B3AA",mode:"light"},
+  greyMistStone:{name:"Grey Palette 15 · Mist Stone",seed:"#CFCFC7",text:"#111827",border:"#B3B3AA",mode:"light"},
+  greyIce:{name:"Grey Palette 16 · Ice Gray",seed:"#EBEBEB",text:"#111827",border:"#D0D0D0",mode:"light"}
 };
 function hexToRgb(h){h=String(h||"").trim().replace(/^#/i,"");if(h.length===3)h=h.split("").map(x=>x+x).join("");if(!/^[0-9a-f]{6}$/i.test(h))return null;return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
 function rgbToHex(rgb){return "#"+rgb.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("").toUpperCase();}
@@ -10167,7 +10241,7 @@ function renderThemeDesignCard(){
     return `<button type="button" class="theme-preset" style="opacity:.5;border-style:dashed" onclick="toast('Pick a color below, then tap Save as Custom ${n}','warn')"><div class="theme-swatch"><span style="background:var(--bd)"></span><span style="background:var(--bd)"></span><span style="background:var(--bd)"></span></div><div class="theme-preset-name">Custom ${n}</div><div class="theme-preset-note">Not set yet</div></button>`;
   }).join("");
   return `<div class="card theme-section"><div class="chd"><span class="cht">🎨 Theme Design</span></div><div class="cbd">
-    <div style="font-size:12px;color:var(--txl);margin-bottom:12px">Theme customization is isolated from the locked Master Invoice geometry. Application appearance and Invoice PDF theme are independent.</div>
+    <div style="font-size:12px;color:var(--txl);margin-bottom:12px">Theme customization is isolated from the locked Master Invoice geometry. Application appearance and Invoice PDF theme are independent. The 16-shade Grey Reference Palette is available below with the existing invoice presets.</div>
     <div style="font-size:12px;font-weight:800;color:var(--tx);margin-bottom:8px">Invoice Header Presets</div><div style="font-size:10.5px;color:var(--txl);line-height:1.4;margin:-2px 0 8px">Each preset is a single reference color. The engine automatically generates and maps Dark = all major invoice headers, Medium = Amount in Words + Net Payable, and Light = Amount in Words content card.</div>
     <div class="theme-preset-grid">${presets}${customPresets}</div>
     <div style="margin-top:14px;font-size:12px;font-weight:800;color:var(--tx)">Custom Theme</div>
@@ -10284,17 +10358,26 @@ function saveHybridReconSettings(){
   try{localStorage.setItem(HYB_RECON_PREF_KEY,JSON.stringify(selected));const el=document.getElementById("hyb-recon-save-state");if(el)el.textContent=selected.length+" eligible item(s) saved";toast("Hybrid reconciliation settings saved","ok");return true;}catch(e){toast("Unable to save reconciliation settings: "+(e.message||e),"err");return false;}
 }
 
+function safeSettingsSection(renderer,label){
+  try{return typeof renderer==="function"?renderer():"";}
+  catch(err){
+    console.error("Settings section render failed:",label,err);
+    const msg=String(err&&err.message||err||"Unknown error").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `<section class="card" role="alert" style="margin-bottom:14px;border:1px solid var(--rd)"><div class="cbd"><b style="color:var(--rd)">${label} temporarily unavailable</b><div style="font-size:11px;color:var(--txl);margin-top:5px">Other Settings remain available. Technical detail: ${msg}</div></div></section>`;
+  }
+}
+
 function pgSett() {
   const S = A.sett||ST0;
-  const f = A.firm;
-  const sr = A.series;
+  const f = A.firm||{};
+  const sr = A.series||{prefix:"MSE",fy:"2526",sep:"-",counter:0,digits:3};
   return `
   <div class="shd"><div><div class="stl">Settings</div><div class="sst">All configurable values in one place</div></div></div>
 
-  ${renderThemeDesignCard()}
+  ${safeSettingsSection(renderThemeDesignCard,"Theme Design")}
 
   <!-- HYBRID ENGINE RECONCILIATION ELIGIBILITY -->
-  ${renderHybridReconSettingsCard()}
+  ${safeSettingsSection(renderHybridReconSettingsCard,"Hybrid Reconciliation Settings")}
 
   <!-- FIRM DETAILS -->
   <div class="card" style="margin-bottom:14px">
@@ -11716,7 +11799,7 @@ function gstSummaryDoc(c, sch, form, invNo){
   form = form || {};
   const f=A.firm, t=c.mTot;
   const rows = c.merged.map((item,i)=>`<tr><td class="itd" style="text-align:center">${i+1}</td><td class="itd" style="font-weight:600">${ec(item.name)}</td><td class="itd" style="text-align:center">${ec(item.head||"")}</td><td class="itd" style="text-align:center">${item.gst||0}%</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.taxable).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.cgst).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.sgst).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${d2(item.gross).toFixed(2)}</td></tr>`).join("");
-  return `<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">GST Summary</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | Invoice: ${ec(invNo)} | ${ec(form.month)} ${ec(form.year)}</div></div><table style="width:100%;border-collapse:collapse"><thead><tr>${["Sr.No","Item","Head","GST%","Taxable","CGST","SGST","Gross"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${rows}<tr style="background:#F0F4F8"><td colspan="4" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900">${t.gross.toFixed(2)}</td></tr></tbody></table><div style="display:flex;justify-content:flex-end;padding:10px"><div style="text-align:right"><div style="font-size:9px;color:#555">Round Off: ${t.roundOff>=0?"+":""}${t.roundOff.toFixed(2)}</div><div style="font-size:12px;font-weight:900;color:#1E3A5F;margin-top:2px">Net Payable: ${t.net.toFixed(2)}</div></div></div></div>`;
+  return `${invoiceThemeDocumentStyle()}<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">GST Summary</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | Invoice: ${ec(invNo)} | ${ec(form.month)} ${ec(form.year)}</div></div><table style="width:100%;border-collapse:collapse"><thead><tr>${["Sr.No","Item","Head","GST%","Taxable","CGST","SGST","Gross"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${rows}<tr style="background:#F0F4F8"><td colspan="4" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900">${t.gross.toFixed(2)}</td></tr></tbody></table><div style="display:flex;justify-content:flex-end;padding:10px"><div style="text-align:right"><div style="font-size:9px;color:#555">Round Off: ${t.roundOff>=0?"+":""}${t.roundOff.toFixed(2)}</div><div style="font-size:12px;font-weight:900;color:#1E3A5F;margin-top:2px">Net Payable: ${t.net.toFixed(2)}</div></div></div></div>`;
 }
 
 // ── Print Tracking (spec item 9) ──────────────────────────
@@ -15764,6 +15847,6 @@ v2.8 — Definitive flat-light header + school category correction
 
 <!-- v4.61.75: constrain minimalist message expansion to current modal + 148px and keep expanded view persistent until Restore or Close. -->
 
-<!-- VERSION 7 HYBRID GUARDED RELEASE CANDIDATE v4.61.90 / HYB-1.4.2-V7. Original calc() preserved. -->
+<!-- VERSION 7 HYBRID GUARDED RELEASE CANDIDATE v4.62.16 / HYB-1.4.2-V7. Original calc() preserved. -->
 
 <!-- v4.62.15: Smart Optimizer user-approved proposal is now bound to the active Hybrid draft, displayed in live preview, and persisted as the saved Hybrid revision after independent totals validation. Original NI.calc remains unchanged. -->
