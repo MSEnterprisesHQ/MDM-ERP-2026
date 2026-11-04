@@ -10087,10 +10087,15 @@ function invoiceThemeLightFamily(seedHex){
 }
 function invoiceThemeFamilyForPreset(p){return p?.mode==="light"?invoiceThemeLightFamily(p.seed):invoiceThemeFamily(p?.seed);}
 function customThemeFamily(primary,secondary,tertiary){
+  // All rgbToHex inputs must be RGB arrays. Persisted custom colors are HEX strings.
+  // Older builds passed HEX strings directly, causing "rgb.map is not a function"
+  // when Settings rendered a saved Custom Theme.
   const p=hexToRgb(primary)||[154,184,214];
-  const autoSecondary=rgbToHex(mixRgb(p,[255,255,255],.40));
-  const autoTertiary=rgbToHex(mixRgb(p,[255,255,255],.70));
-  return {seed:rgbToHex(p),dark:rgbToHex(primary||p),medium:secondary&&hexToRgb(secondary)?rgbToHex(secondary):autoSecondary,light:tertiary&&hexToRgb(tertiary)?rgbToHex(tertiary):autoTertiary};
+  const s=hexToRgb(secondary);
+  const t=hexToRgb(tertiary);
+  const autoSecondary=mixRgb(p,[255,255,255],.40);
+  const autoTertiary=mixRgb(p,[255,255,255],.70);
+  return {seed:rgbToHex(p),dark:rgbToHex(p),medium:rgbToHex(s||autoSecondary),light:rgbToHex(t||autoTertiary)};
 }
 function invoiceTheme(){
   let durableTypography={};try{durableTypography=JSON.parse(localStorage.getItem("mdm_invoice_typography_theme_v1")||"{}");}catch(_){durableTypography={};}
