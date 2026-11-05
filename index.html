@@ -2655,6 +2655,14 @@ function invoiceNetAfterRoundOff(gross, enabled=true){
   const ro=invoiceRoundOff(g,enabled);
   return {gross:g,roundOff:ro,net:Number((g+ro).toFixed(2))};
 }
+// v4.62.34 (display only): signed Round Off text. + when it raises Net Payable, - when it lowers it, none at 0.00.
+// opts.cur adds the rupee symbol (HTML); opts.ascii keeps a plain hyphen (PDF base fonts have no U+2212 / rupee glyph).
+function mdmSignedRoundOff(v,opts){
+  opts=opts||{};const n=Math.round((Number(v)||0)*100)/100;
+  const body=Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(n===0)return (opts.cur?"\u20B9":"")+body;
+  return (n>0?"+":(opts.ascii?"-":"\u2212"))+(opts.cur?"\u20B9":"")+body;
+}
 // One financial authority for Original and Hybrid: derive Round Off only from the
 // final Gross and the Original invoice's saved round-off setting.
 function mdmCanonicalInvoiceTotals(gross, enabled=true){
@@ -3133,7 +3141,7 @@ function invDoc(c,form,sch,invNo){
         <div class="id-gl"><span>Add : CGST</span><span style="font-family:monospace">${t.cgst.toFixed(2)}</span></div>
         <div class="id-gl"><span>Add : SGST</span><span style="font-family:monospace">${t.sgst.toFixed(2)}</span></div>
         <div class="id-gl"><span>Gross Amount</span><span style="font-family:monospace;font-weight:600">${t.gross.toFixed(2)}</span></div>
-        ${S.roundOff?`<div class="id-gl"><span>Round Off</span><span style="font-family:monospace;color:#E8621A">${t.roundOff>=0?"+":""}${t.roundOff.toFixed(2)}</span></div>`:""}
+        ${S.roundOff?`<div class="id-gl"><span>Round Off</span><span style="font-family:monospace;color:#E8621A">${mdmSignedRoundOff(t.roundOff)}</span></div>`:""}
         <div class="id-gl id-nl"><span>Net Payble Amount</span><span style="font-family:monospace">${t.net.toFixed(2)}</span></div>
         <div style="margin-top:9px;text-align:center;font-weight:900;font-size:11.5px;color:#0F1C2E">${ec(f.name)}</div>
         <div class="id-sg">
@@ -4203,7 +4211,7 @@ function pgNew(){
     else if(NI.tab==="annexA")tc=axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,NI,nxt);
     else if(NI.tab==="annexB")tc=axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,NI,nxt);
     else if(NI.tab==="annexC")tc=axCDoc(c,sch,NI,nxt);
-    else tc=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Item</th><th>Head</th><th>GST%</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Gross</th></tr></thead><tbody>${c.merged.map((item,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:600">${ec(item.name)}</td><td><span class="bdg bn">${item.head}</span></td><td><span class="bdg ${item.gst>0?"bo":"bs"}">${item.gst}%</span></td><td class="num">${R(item.taxable)}</td><td class="num">${R(item.cgst)}</td><td class="num">${R(item.sgst)}</td><td class="num" style="font-weight:700">${R(item.gross)}</td></tr>`).join("")}<tr class="tr-tot"><td colspan="4" style="text-align:right;font-weight:700">TOTAL</td><td class="num">${R(t.taxable)}</td><td class="num">${R(t.cgst)}</td><td class="num">${R(t.sgst)}</td><td class="num">${R(t.gross)}</td></tr><tr><td colspan="7" style="text-align:right;padding:5px 10px">Round Off</td><td class="num" style="color:var(--sf)">${t.roundOff>=0?"+":""}${R(t.roundOff)}</td></tr><tr style="background:#FEF6F0"><td colspan="7" style="text-align:right;font-weight:800;color:var(--sf);font-size:13px;padding:6px 10px">NET PAYABLE = ALLOCATION &#10003;</td><td class="num" style="font-size:14px;font-weight:900;color:var(--sf)">${R(t.net)}</td></tr></tbody></table></div>`;
+    else tc=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Item</th><th>Head</th><th>GST%</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Gross</th></tr></thead><tbody>${c.merged.map((item,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:600">${ec(item.name)}</td><td><span class="bdg bn">${item.head}</span></td><td><span class="bdg ${item.gst>0?"bo":"bs"}">${item.gst}%</span></td><td class="num">${R(item.taxable)}</td><td class="num">${R(item.cgst)}</td><td class="num">${R(item.sgst)}</td><td class="num" style="font-weight:700">${R(item.gross)}</td></tr>`).join("")}<tr class="tr-tot"><td colspan="4" style="text-align:right;font-weight:700">TOTAL</td><td class="num">${R(t.taxable)}</td><td class="num">${R(t.cgst)}</td><td class="num">${R(t.sgst)}</td><td class="num">${R(t.gross)}</td></tr><tr><td colspan="7" style="text-align:right;padding:5px 10px">Round Off</td><td class="num" style="color:var(--sf)">${mdmSignedRoundOff(t.roundOff,{cur:true})}</td></tr><tr style="background:#FEF6F0"><td colspan="7" style="text-align:right;font-weight:800;color:var(--sf);font-size:13px;padding:6px 10px">NET PAYABLE = ALLOCATION &#10003;</td><td class="num" style="font-size:14px;font-weight:900;color:var(--sf)">${R(t.net)}</td></tr></tbody></table></div>`;
     const has15 = String(NI.s15||"").trim()!=="", has68 = String(NI.s68||"").trim()!=="";
     calcH=`<div class="stats s4" style="margin-bottom:13px"><div class="stat"><div class="sl-l">&#128104;&#8205;&#127891; Total Students</div><div style="font-size:11.5px;line-height:1.65;margin-top:3px"><div style="display:flex;justify-content:space-between"><span style="color:var(--txl)">Classes 1-5</span><span style="font-weight:700">${has15?s15:"&mdash;"}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--txl)">Classes 6-8</span><span style="font-weight:700">${has68?s68:"&mdash;"}</span></div><div style="display:flex;justify-content:space-between;border-top:1px solid var(--bd);margin-top:3px;padding-top:3px"><span style="font-weight:700">Total</span><span style="font-weight:800;color:var(--sf)">${s15+s68}</span></div></div></div><div class="stat"><div class="sl-l">Taxable Value</div><div class="sv" style="font-size:17px">${R(t.taxable)}</div></div><div class="stat"><div class="sl-l">Total GST</div><div class="sv" style="font-size:17px">${R(d2(t.cgst+t.sgst))}</div><div class="ss">CGST + SGST</div></div><div class="stat hi"><div class="sl-l">Net Payable</div><div class="sv" style="color:var(--sf);font-size:17px">${R(t.net)}</div><div class="ss" style="color:var(--gn)">= Approved Allocation &#10003;</div></div></div><div class="card ni-invoice-tools-card"><div class="tabs no-print ni-preview-tabs">${tabs.map(t=>`<div class="tab${NI.tab===t.id?" on":""}" onclick="NI.tab='${t.id}';gP('new')">${t.l}</div>`).join("")}</div></div><div class="card ni-preview-card"><div class="ni-preview-viewport"><div class="ni-preview-document">${tc}</div></div><div class="cft no-print ni-preview-actions-responsive"><button class="btn btn-p" onclick="niExportGate('merged')">&#8595; Invoice PDF</button><button class="btn btn-n btn-sm" onclick="niExportGate('annexA')">&#8595; Ann. A (1–5)</button><button class="btn btn-n btn-sm" onclick="niExportGate('annexB')">&#8595; Ann. B (6–8)</button><button class="btn btn-n btn-sm" onclick="niExportGate('annexC')">&#8595; Ann. C (Combined)</button><button class="btn btn-am btn-sm" onclick="niExportGate('gst')">&#8595; GST Summary</button><button class="btn btn-t btn-sm" onclick="niExportGateAll()">&#8595; Full Pack</button><div style="flex:1"></div>${NI.saved?`<span class="bdg bg" style="font-size:12px">&#10003; Saved</span>${activeBillingMode()==="hybrid"&&A.invoices.find(i=>i.id===A.flashId)?.hybridModel?`<button class="btn btn-p btn-sm" onclick="hybridOpen('${A.flashId}')">Open Hybrid Annexures</button>`:""}`:`<button class="btn btn-s btn-sm" onclick="niVerifyOpen()" ${niIsGeneratedFresh()?"":"disabled title='Fetch, then Generate Invoice before saving'"}>&#128190; Save Invoice</button>`}</div></div>`;
     calcH+=hybridLivePreviewHTML(NI.calc);
@@ -5105,21 +5113,24 @@ function mdmV7Candidate(row,qty,rateOverride){
   const money=mdmV7Money, unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||"KG").toUpperCase();
   const factor=(unit==="GM"||unit==="G"||unit==="ML")?0.001:1;
   const baseQty=Number((Number(qty)*factor).toFixed(6));if(!(baseQty>0))return null;
-  const sourceTax=money(row.sourceTaxable),normalizedRate=mdmV7RoundRate(sourceTax/baseQty);
+  // v4.62.34: a row that carries the independent Add/Deduct adjustment keeps it OUTSIDE the quantity x rate search.
+  // Base source amounts exclude the adjustment; the adjustment components are re-added unchanged (applied exactly once).
+  const adjT=money(row.adjustmentTaxable),adjC=money(row.adjustmentCgst),adjS=money(row.adjustmentSgst);
+  const sourceTax=money(money(row.sourceTaxable)-adjT),normalizedRate=mdmV7RoundRate(sourceTax/baseQty);
   const rate=rateOverride==null?normalizedRate:Number(Number(rateOverride).toFixed(6));
   if(!(rate>0))return null;
   const taxable=money(baseQty*rate);
-  const sourceGST=money((Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0));
+  const sourceGST=money((Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0)-adjC-adjS);
   // Tax treatment/rate comes from the invoice row snapshot, never from an item-name assumption.
   const treatment=String(row.taxTreatment||row.gstTreatment||row.taxability||'').toLowerCase();
   const explicitRate=Number(row.gstRate??row.gstPercent??row.gst??row.taxRate);
   const isNonTaxable=['exempt','nil_rated','nil-rated','non_gst','non-gst','non_gst_supply'].includes(treatment);
   const gstRate=isNonTaxable?0:(Number.isFinite(explicitRate)&&explicitRate>=0?explicitRate/100:(sourceTax>0?sourceGST/sourceTax:0));
   const gst=money(taxable*gstRate);
-  const sourceCG=Number(row.sourceCgst)||0,sourceSG=Number(row.sourceSgst)||0,ratio=sourceGST>0?sourceCG/sourceGST:0.5;
+  const sourceCG=(Number(row.sourceCgst)||0)-adjC,sourceSG=(Number(row.sourceSgst)||0)-adjS,ratio=sourceGST>0?sourceCG/sourceGST:0.5;
   const cgst=money(gst*ratio),sgst=money(gst-cgst);
   return {...row,normalizedQuantity:qty,billedQuantity:qty,display:unit==="GM"||unit==="G"?String(qty)+" GM":unit==="ML"?String(qty)+" ML":String(qty)+" "+unit,
-    displayRate:rate,billingRate:rate*factor,rateBasisUnit:unit,displayTaxable:taxable,billingTaxable:taxable,rateCalculatedTaxable:taxable,displayCgst:cgst,displaySgst:sgst,
+    displayRate:rate,billingRate:rate*factor,rateBasisUnit:unit,displayTaxable:money(taxable+adjT),billingTaxable:taxable,rateCalculatedTaxable:taxable,displayCgst:money(cgst+adjC),displaySgst:money(sgst+adjS),
     hybridQuantityTimesRate:taxable,autoAdjustmentAmount:money(taxable-sourceTax),netPayableImpact:money(taxable+gst-sourceTax-sourceGST),
     rateRoundingDelta:money(rate-(Number(row.sourceRateInHybridUnit)||normalizedRate)),normalizedGrams:(unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000,adjustmentGrams:((unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000)-(Number(row.actualQuantity)||0)*((String(row.actualUnit||"").toUpperCase()==="GM"||String(row.actualUnit||"").toUpperCase()==="G"||String(row.actualUnit||"").toUpperCase()==="ML")?1:1000),autoAdjustment:true,redistributionApplied:true,optimizerAdjusted:true,optimizerRateAdjusted:rateOverride!=null};
 }
@@ -5155,6 +5166,7 @@ function mdmExactItemConfig(row,mode){
 // taxable, and for each candidate rate derive the quantity; test the neighbours at display precision
 // through the real line calculation (mdmV7Candidate). Not a brute-force over arbitrary combinations.
 function solveExactAdjustment(targetGrossC,cfg,row){
+  const adjKeepC=mdmExC(row&&row.adjustmentTaxable)+mdmExC(row&&row.adjustmentCgst)+mdmExC(row&&row.adjustmentSgst);
   const out={status:"NO_EXACT_SOLUTION",candidates:[],tested:0,targetGrossC,cfg,reason:null,reasonCode:null,nextPrecision:null,nearest:null};
   if(!(targetGrossC>0)){out.reasonCode="TARGET_NOT_POSITIVE";out.reason="Fixed rows already consume the whole Original Gross; the required line gross is "+mdmExINR(targetGrossC)+".";return out;}
   if(!(cfg.q0>0&&cfg.rate0>0)){out.reasonCode="INVALID_BASELINE";out.reason="Baseline quantity/rate of the adjustment item is not positive.";return out;}
@@ -5176,7 +5188,7 @@ function solveExactAdjustment(targetGrossC,cfg,row){
       if(!nearest||d<nearest.d)nearest={d,q,r,grossC:gr};
       if(d>1)return;                                   // cheap integer pre-filter (tolerates half-paise float ties)
       const c=mdmV7Candidate(row,q,r);if(!c)return;     // the real line calculation decides
-      const lineC=mdmExC(c.displayTaxable)+mdmExC(c.displayCgst)+mdmExC(c.displaySgst);
+      const lineC=mdmExC(c.displayTaxable)+mdmExC(c.displayCgst)+mdmExC(c.displaySgst)-adjKeepC;   // base part only
       if(lineC!==targetGrossC)return;
       const qtyPct=Math.abs(q-cfg.q0)/cfg.q0*100,ratePct=Math.abs(r-cfg.rate0)/cfg.rate0*100;
       const onGrid=Math.abs(r*2-Math.round(r*2))<1e-9;found.push({qty:q,rate:r,row:c,itemGrossC:lineC,qtyPct,ratePct,combined:qtyPct+ratePct,onGrid,score:qtyPct+ratePct+(onGrid?0:2),natural:mdmExDecimals(q)+mdmExDecimals(r)});
@@ -5231,7 +5243,7 @@ function validateExactReconciliation(original,proposed,ctx){
   add("ITEM_ARITHMETIC",arithBad.length===0,arithBad.length?"Invalid line arithmetic: "+arithBad.join(","):"All lines valid");
   // GST integrity of every changed row against its SAVED tax configuration.
   const gstBad=[];prows.forEach((r,i)=>{const o=orows[i];if(!o||!changed.includes(String(r.id)))return;
-    const cfg=mdmExactItemConfig(o,"auto"),tc=mdmExC(r.displayTaxable),exp=Math.round(tc*cfg.gstRate),got=mdmExC(r.displayCgst)+mdmExC(r.displaySgst);
+    const cfg=mdmExactItemConfig(o,"auto"),aT=mdmExC(r.adjustmentTaxable),tc=mdmExC(r.displayTaxable)-aT,exp=Math.round(tc*cfg.gstRate),got=mdmExC(r.displayCgst)+mdmExC(r.displaySgst)-mdmExC(r.adjustmentCgst)-mdmExC(r.adjustmentSgst);
     if(got!==exp||String(r.taxTreatment)!==String(o.taxTreatment)||Number(r.gstRate)!==Number(o.gstRate))gstBad.push(String(r.id));});
   add("GST_INTEGRITY",gstBad.length===0,gstBad.length?"GST invalid on: "+gstBad.join(","):"GST per saved configuration");
   const ids=prows.map(r=>String(r.id)),adj=prows.filter(r=>r.optimizerAdjusted).length,origAdj=orows.filter(r=>r.optimizerAdjusted).length;
@@ -5247,7 +5259,7 @@ function validateExactReconciliation(original,proposed,ctx){
       sgst:Number(((prows.reduce((a,r)=>a+mdmExC(r.displaySgst),0)-orows.reduce((a,r)=>a+mdmExC(r.sourceSgst),0))/100).toFixed(2))},changedIds:changed,validatedAt:new Date().toISOString(),engine:MDM_EXACT_VERSION};
 }
 function mdmExactEligibleIndex(rows){
-  return rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==="green_veg_mix"&&Number(x.r.sourceTaxable??x.r.displayTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount??x.r.independentAdjustmentGross)||0)<0.005)[0]||null;
+  return rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==="green_veg_mix"&&Number(x.r.sourceTaxable??x.r.displayTaxable)-(Number(x.r.adjustmentTaxable)||0)>0)[0]||null;
 }
 // Target = Original Gross − Fixed (non-adjustable) rows' Gross, in integer paise.
 function mdmExactTarget(base){
@@ -5259,7 +5271,7 @@ function mdmExactTarget(base){
 function mdmV7Solve(baseSnap,eligibleIds,mode){
   const t=mdmExactTarget(baseSnap);
   if(!t)return {status:"NO_ELIGIBLE_ROWS",options:[],eligibleRows:0,searchStates:0,diagnostics:{reason:"NO_ELIGIBLE_GREEN_VEG_MIX"}};
-  const cfg=mdmExactItemConfig(t.row,mode||"auto"),sol=solveExactAdjustment(t.targetItemGrossC,cfg,t.row);
+  const cfg=mdmExactItemConfig(t.row,mode||"auto"),adjKeepC=mdmExC(t.row.adjustmentTaxable)+mdmExC(t.row.adjustmentCgst)+mdmExC(t.row.adjustmentSgst),sol=solveExactAdjustment(t.targetItemGrossC-adjKeepC,cfg,t.row);
   const options=sol.candidates.map((c,i)=>({id:"OPT-"+(i+1),cost:c.combined,rows:[{index:t.index,category:"green_veg_mix",row:c.row,move:Math.abs(c.qty-cfg.q0),rateMove:Math.abs(c.rate-cfg.rate0),qtyPct:c.qtyPct,ratePct:c.ratePct}],totals:{gross:t.targetItemGrossC,net:mdmExC(baseSnap.sourceNet)}}));
   return {status:options.length?"SOLVED":"NO_EXACT_SOLUTION",options,eligibleRows:1,searchStates:sol.tested,solver:sol,target:t,cfg,
     targets:{gross:mdmExC(baseSnap.sourceGross),roundOff:mdmExC(baseSnap.sourceRoundOff),net:mdmExC(baseSnap.sourceNet)},
@@ -7162,7 +7174,7 @@ function pgAud(){
     <tr><td>Add: CGST</td><td class="num">${R(inv.cgst||0)}</td></tr>
     <tr><td>Add: SGST</td><td class="num">${R(inv.sgst||0)}</td></tr>
     <tr><td>Gross Amount</td><td class="num">${R(d2((inv.taxable||0)+(inv.cgst||0)+(inv.sgst||0)))}</td></tr>
-    <tr><td>Round Off</td><td class="num" style="color:var(--sf)">${(inv.roundOff||0)>=0?"+":""}${R(inv.roundOff||0)}</td></tr>
+    <tr><td>Round Off</td><td class="num" style="color:var(--sf)">${mdmSignedRoundOff(inv.roundOff||0,{cur:true})}</td></tr>
     <tr class="tr-tot"><td style="font-weight:800;color:var(--sf)">NET PAYABLE = APPROVED ALLOCATION &#10003;</td><td class="num" style="font-size:16px;color:var(--sf)">${R(inv.net||0)}</td></tr>
     </tbody></table><div class="info inf-g" style="margin-top:10px">&#10003; Net Payable matches Approved Allocation. Audit-compliant.</div></div></div>
     <div style="display:flex;gap:8px"><button class="btn btn-n" onclick="hsPDF('${inv.id}')">&#8595; Print Invoice PDF</button><button class="btn btn-g" onclick="shrInv('${inv.id}')">Share</button></div>`;
@@ -9088,7 +9100,7 @@ async function buildInvoicePdfFileCore(inv,opts={}){
   text("Add : CGST",316,651.05+bottomTextShift,8);text(money(t.cgst),rightValueX,651.05+bottomTextShift,8,false,"right");
   text("Add : SGST",316,666.05+bottomTextShift,8);text(money(t.sgst),rightValueX,666.05+bottomTextShift,8,false,"right");
   text("Gross Amount",316,682.85+bottomTextShift,8.2,true);text(money(t.gross),rightValueX,682.85+bottomTextShift,8.2,true,"right");
-  text("Round Off",316,697.15+bottomTextShift,7.9);text(money(t.roundOff),rightValueX,697.15+bottomTextShift,7.9,false,"right");
+  text("Round Off",316,697.15+bottomTextShift,7.9);text(mdmSignedRoundOff(t.roundOff,{ascii:true}),rightValueX,697.15+bottomTextShift,7.9,false,"right");
   rect(312.19,710.83+bottomCardShift,252.26,16.19,MEDIUM,null,0);
   text("Net Payable Amount",315.43,713.05+bottomTextShift,9.1,true);text(money(t.net),561.37,712.85+bottomTextShift,9.1,true,"right",TEXT);
 
@@ -12172,7 +12184,7 @@ function gstSummaryDoc(c, sch, form, invNo){
   form = form || {};
   const f=A.firm, t=c.mTot;
   const rows = c.merged.map((item,i)=>`<tr><td class="itd" style="text-align:center">${i+1}</td><td class="itd" style="font-weight:600">${ec(item.name)}</td><td class="itd" style="text-align:center">${ec(item.head||"")}</td><td class="itd" style="text-align:center">${item.gst||0}%</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.taxable).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.cgst).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.sgst).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${d2(item.gross).toFixed(2)}</td></tr>`).join("");
-  return `${invoiceThemeDocumentStyle()}<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">GST Summary</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | Invoice: ${ec(invNo)} | ${ec(form.month)} ${ec(form.year)}</div></div><table style="width:100%;border-collapse:collapse"><thead><tr>${["Sr.No","Item","Head","GST%","Taxable","CGST","SGST","Gross"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${rows}<tr style="background:#F0F4F8"><td colspan="4" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900">${t.gross.toFixed(2)}</td></tr></tbody></table><div style="display:flex;justify-content:flex-end;padding:10px"><div style="text-align:right"><div style="font-size:9px;color:#555">Round Off: ${t.roundOff>=0?"+":""}${t.roundOff.toFixed(2)}</div><div style="font-size:12px;font-weight:900;color:#1E3A5F;margin-top:2px">Net Payable: ${t.net.toFixed(2)}</div></div></div></div>`;
+  return `${invoiceThemeDocumentStyle()}<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">GST Summary</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | Invoice: ${ec(invNo)} | ${ec(form.month)} ${ec(form.year)}</div></div><table style="width:100%;border-collapse:collapse"><thead><tr>${["Sr.No","Item","Head","GST%","Taxable","CGST","SGST","Gross"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${rows}<tr style="background:#F0F4F8"><td colspan="4" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900">${t.gross.toFixed(2)}</td></tr></tbody></table><div style="display:flex;justify-content:flex-end;padding:10px"><div style="text-align:right"><div style="font-size:9px;color:#555">Round Off: ${mdmSignedRoundOff(t.roundOff)}</div><div style="font-size:12px;font-weight:900;color:#1E3A5F;margin-top:2px">Net Payable: ${t.net.toFixed(2)}</div></div></div></div>`;
 }
 
 // ── Print Tracking (spec item 9) ──────────────────────────
@@ -16225,4 +16237,3 @@ v2.8 — Definitive flat-light header + school category correction
 <!-- VERSION 7 HYBRID GUARDED RELEASE CANDIDATE v4.62.29 / HYB-1.4.2-V7. Original calc() preserved. -->
 
 <!-- v4.62.15: Smart Optimizer user-approved proposal is now bound to the active Hybrid draft, displayed in live preview, and persisted as the saved Hybrid revision after independent totals validation. Original NI.calc remains unchanged. -->
-
