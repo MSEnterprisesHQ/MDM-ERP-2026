@@ -1,4 +1,4 @@
-<!-- MDM ERP v4.62.34: Hybrid save final-verification now uses the same Original gross as Analyze & Compare (mergedTotals.gross, not head-level inv.grand) with structured diagnostics; Theme Engine save now persists through sv() (IndexedDB+cloud) so it no longer reverts on reload; Master Revision Control gains CURRENT APPLIED THEMES (revision-specific). Previously v4.62.33 (EXACT-1.0.0): target-based exact solver + single shared validator; spurious half-paise line check removed. Previously v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
+<!-- MDM ERP v4.62.33 (EXACT-1.0.0): target-based exact solver + single shared validator; spurious half-paise line check removed. Previously v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
 BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
@@ -78,7 +78,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>MDM ERP v4.62.34 — Hybrid save verification + theme persistence fix</title>
+<title>MDM ERP v4.62.35 — Fuel Mode Integration Fix</title>
 <!-- v4.61.37: Revision-mode identity isolation; new-invoice numbering allocation unchanged. -->
 <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
@@ -2655,14 +2655,6 @@ function invoiceNetAfterRoundOff(gross, enabled=true){
   const ro=invoiceRoundOff(g,enabled);
   return {gross:g,roundOff:ro,net:Number((g+ro).toFixed(2))};
 }
-// v4.62.34 (display only): signed Round Off text. + when it raises Net Payable, - when it lowers it, none at 0.00.
-// opts.cur adds the rupee symbol (HTML); opts.ascii keeps a plain hyphen (PDF base fonts have no U+2212 / rupee glyph).
-function mdmSignedRoundOff(v,opts){
-  opts=opts||{};const n=Math.round((Number(v)||0)*100)/100;
-  const body=Math.abs(n).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(n===0)return (opts.cur?"\u20B9":"")+body;
-  return (n>0?"+":(opts.ascii?"-":"\u2212"))+(opts.cur?"\u20B9":"")+body;
-}
 // One financial authority for Original and Hybrid: derive Round Off only from the
 // final Gross and the Original invoice's saved round-off setting.
 function mdmCanonicalInvoiceTotals(gross, enabled=true){
@@ -2682,7 +2674,7 @@ const __calcS15=Number.parseFloat(s15)||0,__calcS68=Number.parseFloat(s68)||0;
     if(i.head!=="fuel" && i.id!=="i21") return i;
     const chosen=selectedFuelProfile(master.lpg),p=chosen.profile;
     if(!(Number(p.rate)>0)) return {...i,active:false};
-    return {...i,id:"i21",name:p.label,unit:"Kg",rate:Number(p.rate),gst:fuelTaxRate(p),taxTreatment:p.taxTreatment||"taxable",taxMode:p.taxMode||"inclusive",hsn:(p.hsn|| (chosen.key==="firewood"?"":i.hsn)),netCylinderWeight:Number(p.netWeight)||0,selectedFuel:chosen.key,active:true};
+    return {...i,id:"i21",name:p.label,unit:p.unit||"Kg",rate:Number(p.rate),gst:fuelTaxRate(p),taxTreatment:p.taxTreatment||"taxable",taxMode:p.taxMode||"inclusive",hsn:(p.hsn|| (chosen.key==="firewood"?"":i.hsn)),netCylinderWeight:chosen.key==="firewood"?0:(Number(p.netWeight)||0),selectedFuel:chosen.key,active:true};
   }).filter(i=>i.active);
   function bR(stu,vk){if(!stu)return[];const rows=[];master.heads.forEach(h=>{const hv=h[vk]||0;if(!hv)return;const hB=d2(stu*hv);const hi=act.filter(i=>i.head===h.id);const td=hi.reduce((s,i)=>s+i.dist,0)||1;hi.forEach(item=>{const iB=d2(hB*(item.dist/td));const gRate=String(item.taxTreatment||"taxable")==="taxable"?Math.max(0,Number(item.gst)||0):0;const exclusive=item.head==="fuel"&&item.taxMode==="exclusive";const tax=exclusive?iB:(gRate>0?d2(iB/(1+gRate/100)):iB);const cg=d2(tax*(gRate/2)/100),sg=cg,gr=exclusive?d2(tax+cg+sg):d2(tax+cg+sg);rows.push({...item,gst:gRate,qty:d3(iB/item.rate),taxable:tax,cgst:cg,sgst:sg,gross:gr});});});return rows;}
   const r15=bR(__calcS15,"v15"),r68=bR(__calcS68,"v68");
@@ -3141,7 +3133,7 @@ function invDoc(c,form,sch,invNo){
         <div class="id-gl"><span>Add : CGST</span><span style="font-family:monospace">${t.cgst.toFixed(2)}</span></div>
         <div class="id-gl"><span>Add : SGST</span><span style="font-family:monospace">${t.sgst.toFixed(2)}</span></div>
         <div class="id-gl"><span>Gross Amount</span><span style="font-family:monospace;font-weight:600">${t.gross.toFixed(2)}</span></div>
-        ${S.roundOff?`<div class="id-gl"><span>Round Off</span><span style="font-family:monospace;color:#E8621A">${mdmSignedRoundOff(t.roundOff)}</span></div>`:""}
+        ${S.roundOff?`<div class="id-gl"><span>Round Off</span><span style="font-family:monospace;color:#E8621A">${t.roundOff>=0?"+":""}${t.roundOff.toFixed(2)}</span></div>`:""}
         <div class="id-gl id-nl"><span>Net Payble Amount</span><span style="font-family:monospace">${t.net.toFixed(2)}</span></div>
         <div style="margin-top:9px;text-align:center;font-weight:900;font-size:11.5px;color:#0F1C2E">${ec(f.name)}</div>
         <div class="id-sg">
@@ -3325,31 +3317,6 @@ function setBillingMode(next){
     return false;
   }
 }
-// ── v4.62.34: ONE source of truth for the Original gross used by Hybrid snapshots ──
-// Analyze & Compare (hybridLivePreviewHTML / mdmV7Verify / exact solver) measures the Original gross as
-// calc.mTot.gross = Σ per-item (taxable + CGST + SGST). Save, however, builds inv.grand from the head-level
-// back-calculation (a15 + a68 + aFr + adjustment), which can differ by paise. Verifying the approved snapshot
-// (which reconciles to mTot.gross) against inv.grand therefore failed GROSS_EQUAL / ROUNDOFF_EQUAL at save.
-// The Original target is the invoice's own merged item totals; inv.grand is only a fallback.
-function mdmHybridSourceGross(inv){
-  const m=inv&&inv.mergedTotals,money=v=>Math.round((Number(v)||0)*100)/100;
-  if(m&&m.gross!=null&&Number.isFinite(Number(m.gross)))return money(m.gross);
-  if(inv&&Array.isArray(inv.mergedItems)&&inv.mergedItems.length)return money(inv.mergedItems.reduce((a,r)=>a+Math.round(((Number(r.taxable)||0)+(Number(r.cgst)||0)+(Number(r.sgst)||0))*100),0)/100);
-  return money(inv?.grand??0);
-}
-function mdmHybridVerifyDiag(inv,snap,v,srcGross,extra){
-  try{
-    const c=x=>Number(x||0).toFixed(6),pc=v?.proposedC||{},oc=v?.originalC||{};
-    const d={invoiceId:inv?.id,invoiceNo:inv?.invNo,engine:"HYBRID",optimizerMode:snap?.optimizer?.mode||snap?.optimizer?.appliedBy||null,
-      approvalStatus:snap?.optimizer?.applied?"Approved":"Pending",snapshotRevision:snap?.revisionNo??null,
-      itemCount:{expected:(inv?.mergedItems||[]).length,actual:(snap?.rows||[]).length},
-      originalGross:c(oc.gross/100),approvedGross:c(pc.gross/100),invoiceGrandField:c(inv?.grand),mergedTotalsGross:c(inv?.mergedTotals?.gross),canonicalSourceGross:c(srcGross),
-      originalRoundOff:c(oc.roundOff/100),approvedRoundOff:c(pc.roundOff/100),
-      grossDifference:c(v?.diffs?.gross),roundOffDifference:c(v?.diffs?.roundOff),netDifference:c(v?.diffs?.net),
-      checks:(v?.checks||[]).map(k=>k.id+":"+(k.ok?"PASS":"FAIL")+(k.ok?"":" ("+k.detail+")")),...(extra||{})};
-    window.MDM_LAST_HYBRID_VERIFY_DIAG=d;console.error("[MDM Hybrid final verification FAILED]",d);return d;
-  }catch(_){return null;}
-}
 function hybridEnsureSnapshot(inv,approvedSnapshot=null){
   if(!inv||!Array.isArray(inv.mergedItems))return inv;
   if(!window.MDMHybridQuantityEngine||typeof hybridMakeSnapshot!=="function")throw new Error("Hybrid quantity engine is not ready");
@@ -3357,23 +3324,19 @@ function hybridEnsureSnapshot(inv,approvedSnapshot=null){
   const approved=approvedSnapshot||(typeof mdmV7GetAppliedSnapshot==="function"?mdmV7GetAppliedSnapshot(inv.mergedItems):null);
   const snap=approved&&approved.reconciliation?.financialMatch&&approved.reconciliation?.status==="RECONCILED_BY_SMART_OPTIMIZER"
     ?JSON.parse(JSON.stringify(approved))
-    :hybridMakeSnapshot({...inv,grand:mdmHybridSourceGross(inv)},hybridUnitDisplayMode());
+    :hybridMakeSnapshot(inv,hybridUnitDisplayMode());
   if(approved){
     snap.sourceInvoiceId=inv.id;snap.sourceInvoiceNo=inv.invNo;snap.sourceSavedAt=inv.savedAt||null;
-    const sourceGross=mdmHybridSourceGross(inv),sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
+    const sourceGross=mdmV7Money(inv.grand??inv.mergedTotals?.gross??0),sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
     snap.roundOffEnabled=sourceEnabled;snap.sourceGross=sourceFinancials.gross;snap.sourceRoundOff=sourceFinancials.roundOff;snap.sourceNet=sourceFinancials.net;snap.hybridRoundOff=sourceFinancials.roundOff;snap.hybridNet=sourceFinancials.net;
     snap.sourceInvoiceSnapshot={...(snap.sourceInvoiceSnapshot||{}),id:inv.id,invNo:inv.invNo,date:inv.date,month:inv.month,year:inv.year,schoolId:inv.schoolId,schoolName:inv.schoolName,schoolAddress:inv.schoolAddress,schoolUdise:inv.schoolUdise,schoolBlock:inv.schoolBlock,schoolDistrict:inv.schoolDistrict,schoolMobile:inv.schoolMobile,invoiceType:inv.invoiceType,roundOffEnabled:sourceEnabled,grand:sourceGross,taxable:Number(inv.taxable)||0,cgst:Number(inv.cgst)||0,sgst:Number(inv.sgst)||0,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net,mergedTotals:{...(inv.mergedTotals||{}),gross:sourceGross,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net},mergedItems:inv.mergedItems.map(r=>({...r}))};
     const gross=mdmV7Money((snap.rows||[]).reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0)/100);
     // Independent final re-verification through the ONE shared validator against a fresh Original baseline.
-    const fresh=hybridMakeSnapshot({...inv,grand:sourceGross},hybridUnitDisplayMode());fresh.roundOffEnabled=sourceEnabled;
+    const fresh=hybridMakeSnapshot(inv,hybridUnitDisplayMode());fresh.roundOffEnabled=sourceEnabled;
     fresh.sourceGross=sourceFinancials.gross;fresh.sourceRoundOff=sourceFinancials.roundOff;fresh.sourceNet=sourceFinancials.net;
     fresh.sourceInvoiceSnapshot={...(fresh.sourceInvoiceSnapshot||{}),roundOffEnabled:sourceEnabled,mergedItems:inv.mergedItems.map(r=>({...r}))};
     const v=validateExactReconciliation(fresh,snap,{currentSignature:mdmV7SourceSignature(inv.mergedItems),approvedIds:(snap.optimizer?.adjustedItems||[]).map(x=>x.id)});
-    if(gross!==sourceGross||!v.ok){
-      const diag=mdmHybridVerifyDiag(inv,snap,v,sourceGross,{snapshotRowGross:gross.toFixed(6),grossVsInvoice:(gross-sourceGross).toFixed(6)});
-      const why=(v.checks||[]).filter(k=>!k.ok).map(k=>k.id+" — "+k.detail).concat(v.ok&&gross!==sourceGross?["GROSS_VS_INVOICE — snapshot gross "+gross.toFixed(2)+" vs invoice gross "+sourceGross.toFixed(2)]:[]).join("; ");
-      throw new Error("Approved optimizer snapshot failed final verification ("+(v.ok?"GROSS_VS_INVOICE":v.failed.join(", "))+": "+why+"); save blocked. Re-run Analyze & Compare.");
-    }
+    if(gross!==mdmV7Money(inv.grand??inv.mergedTotals?.gross)||!v.ok)throw new Error("Approved optimizer snapshot failed final verification ("+(v.ok?"GROSS_VS_INVOICE":v.failed.join(", "))+"); save blocked. Re-run Analyze & Compare.");
   }
   const old=inv.hybridModel||{schema:"MDM-HYBRID-MODEL",schemaVersion:3,activeRevision:0,revisions:[],createdAt:snap.createdAt};
   const revisions=Array.isArray(old.revisions)?old.revisions.slice():[];
@@ -4211,13 +4174,14 @@ function pgNew(){
     else if(NI.tab==="annexA")tc=axDoc(c.annexA,c.tA,"Annexure A - Class 1 to 5",sch,NI,nxt);
     else if(NI.tab==="annexB")tc=axDoc(c.annexB,c.tB,"Annexure B - Class 6 to 8",sch,NI,nxt);
     else if(NI.tab==="annexC")tc=axCDoc(c,sch,NI,nxt);
-    else tc=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Item</th><th>Head</th><th>GST%</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Gross</th></tr></thead><tbody>${c.merged.map((item,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:600">${ec(item.name)}</td><td><span class="bdg bn">${item.head}</span></td><td><span class="bdg ${item.gst>0?"bo":"bs"}">${item.gst}%</span></td><td class="num">${R(item.taxable)}</td><td class="num">${R(item.cgst)}</td><td class="num">${R(item.sgst)}</td><td class="num" style="font-weight:700">${R(item.gross)}</td></tr>`).join("")}<tr class="tr-tot"><td colspan="4" style="text-align:right;font-weight:700">TOTAL</td><td class="num">${R(t.taxable)}</td><td class="num">${R(t.cgst)}</td><td class="num">${R(t.sgst)}</td><td class="num">${R(t.gross)}</td></tr><tr><td colspan="7" style="text-align:right;padding:5px 10px">Round Off</td><td class="num" style="color:var(--sf)">${mdmSignedRoundOff(t.roundOff,{cur:true})}</td></tr><tr style="background:#FEF6F0"><td colspan="7" style="text-align:right;font-weight:800;color:var(--sf);font-size:13px;padding:6px 10px">NET PAYABLE = ALLOCATION &#10003;</td><td class="num" style="font-size:14px;font-weight:900;color:var(--sf)">${R(t.net)}</td></tr></tbody></table></div>`;
+    else tc=`<div class="tw"><table class="dt"><thead><tr><th>#</th><th>Item</th><th>Head</th><th>GST%</th><th class="num">Taxable</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Gross</th></tr></thead><tbody>${c.merged.map((item,i)=>`<tr><td style="color:var(--txl)">${i+1}</td><td style="font-weight:600">${ec(item.name)}</td><td><span class="bdg bn">${item.head}</span></td><td><span class="bdg ${item.gst>0?"bo":"bs"}">${item.gst}%</span></td><td class="num">${R(item.taxable)}</td><td class="num">${R(item.cgst)}</td><td class="num">${R(item.sgst)}</td><td class="num" style="font-weight:700">${R(item.gross)}</td></tr>`).join("")}<tr class="tr-tot"><td colspan="4" style="text-align:right;font-weight:700">TOTAL</td><td class="num">${R(t.taxable)}</td><td class="num">${R(t.cgst)}</td><td class="num">${R(t.sgst)}</td><td class="num">${R(t.gross)}</td></tr><tr><td colspan="7" style="text-align:right;padding:5px 10px">Round Off</td><td class="num" style="color:var(--sf)">${t.roundOff>=0?"+":""}${R(t.roundOff)}</td></tr><tr style="background:#FEF6F0"><td colspan="7" style="text-align:right;font-weight:800;color:var(--sf);font-size:13px;padding:6px 10px">NET PAYABLE = ALLOCATION &#10003;</td><td class="num" style="font-size:14px;font-weight:900;color:var(--sf)">${R(t.net)}</td></tr></tbody></table></div>`;
     const has15 = String(NI.s15||"").trim()!=="", has68 = String(NI.s68||"").trim()!=="";
     calcH=`<div class="stats s4" style="margin-bottom:13px"><div class="stat"><div class="sl-l">&#128104;&#8205;&#127891; Total Students</div><div style="font-size:11.5px;line-height:1.65;margin-top:3px"><div style="display:flex;justify-content:space-between"><span style="color:var(--txl)">Classes 1-5</span><span style="font-weight:700">${has15?s15:"&mdash;"}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--txl)">Classes 6-8</span><span style="font-weight:700">${has68?s68:"&mdash;"}</span></div><div style="display:flex;justify-content:space-between;border-top:1px solid var(--bd);margin-top:3px;padding-top:3px"><span style="font-weight:700">Total</span><span style="font-weight:800;color:var(--sf)">${s15+s68}</span></div></div></div><div class="stat"><div class="sl-l">Taxable Value</div><div class="sv" style="font-size:17px">${R(t.taxable)}</div></div><div class="stat"><div class="sl-l">Total GST</div><div class="sv" style="font-size:17px">${R(d2(t.cgst+t.sgst))}</div><div class="ss">CGST + SGST</div></div><div class="stat hi"><div class="sl-l">Net Payable</div><div class="sv" style="color:var(--sf);font-size:17px">${R(t.net)}</div><div class="ss" style="color:var(--gn)">= Approved Allocation &#10003;</div></div></div><div class="card ni-invoice-tools-card"><div class="tabs no-print ni-preview-tabs">${tabs.map(t=>`<div class="tab${NI.tab===t.id?" on":""}" onclick="NI.tab='${t.id}';gP('new')">${t.l}</div>`).join("")}</div></div><div class="card ni-preview-card"><div class="ni-preview-viewport"><div class="ni-preview-document">${tc}</div></div><div class="cft no-print ni-preview-actions-responsive"><button class="btn btn-p" onclick="niExportGate('merged')">&#8595; Invoice PDF</button><button class="btn btn-n btn-sm" onclick="niExportGate('annexA')">&#8595; Ann. A (1–5)</button><button class="btn btn-n btn-sm" onclick="niExportGate('annexB')">&#8595; Ann. B (6–8)</button><button class="btn btn-n btn-sm" onclick="niExportGate('annexC')">&#8595; Ann. C (Combined)</button><button class="btn btn-am btn-sm" onclick="niExportGate('gst')">&#8595; GST Summary</button><button class="btn btn-t btn-sm" onclick="niExportGateAll()">&#8595; Full Pack</button><div style="flex:1"></div>${NI.saved?`<span class="bdg bg" style="font-size:12px">&#10003; Saved</span>${activeBillingMode()==="hybrid"&&A.invoices.find(i=>i.id===A.flashId)?.hybridModel?`<button class="btn btn-p btn-sm" onclick="hybridOpen('${A.flashId}')">Open Hybrid Annexures</button>`:""}`:`<button class="btn btn-s btn-sm" onclick="niVerifyOpen()" ${niIsGeneratedFresh()?"":"disabled title='Fetch, then Generate Invoice before saving'"}>&#128190; Save Invoice</button>`}</div></div>`;
     calcH+=hybridLivePreviewHTML(NI.calc);
   }
   return `<div class="shd"><div><div class="stl">New Invoice</div><div class="sst">Fetch, verify and save a fresh invoice calculation</div><div class="info ${activeBillingMode()==="hybrid"?"inf-b":"inf-g"}" style="margin:8px 0 10px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><span><b>${activeBillingMode()==="hybrid"?"HYBRID MODE ACTIVE":"ORIGINAL MODE ACTIVE"}</b> · ${activeBillingMode()==="hybrid"?"Existing ERP quantity is passed through the separate Hybrid rounding layer; Net Payable is unchanged.":"Existing invoice generation and calculation workflow is active and unchanged."}</span><span style="font-size:10px;font-weight:800">GLOBAL MODE</span></div><div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;padding:10px 13px;background:var(--card);border:1.5px solid var(--bd);border-radius:10px;align-items:center">
   <span style="font-size:11px;font-weight:700;color:var(--txl);margin-right:4px">Invoice Controls:</span>
+  ${niFuelControlHTML()}
   <div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--bd);border-radius:7px;cursor:pointer;background:var(--slx)" onclick="niHsnToggle(!NI.hsnOn)">
     <label class="tog" style="pointer-events:none;transform:scale(0.85)"><input type="checkbox" id="ni-hsn" ${NI.hsnOn?"checked":""}><span class="tog-s"></span></label>
     <span style="font-size:11.5px;font-weight:700;color:var(--tx)">HSN</span>
@@ -4538,6 +4502,32 @@ function niAmountAdjustmentValue(){
   const v=Number.parseFloat(NI.adjustmentAmount||"0");
   return Number.isFinite(v)&&v>0?d2(v)*(NI.adjustmentSign==="minus"?-1:1):0;
 }
+// Invoice Control fuel selector writes to the same central A.lpg configuration
+// used by Admin Control and both calculation engines. Historical invoice edits
+// remain locked to their saved calculation snapshot.
+function niSetFuelMode(key){
+  if(NI?.editId){toast("Historical invoice fuel is locked to its saved snapshot.","warn");gP("new");return;}
+  if(String(A.currentUser?.role||"").toLowerCase()!=="admin"){toast("Administrator access required to change the active fuel mode.","err");gP("new");return;}
+  if(!["domestic","commercial","firewood"].includes(String(key)))return;
+  const profiles=fuelProfilesWithDefaults(A.lpg||{}),profile=profiles[key];
+  if(!(Number(profile?.rate)>0)){toast("Configure a valid rate for this fuel in Admin Control before selecting it.","err");gP("new");return;}
+  if((A.lpg?.selectedFuel||"domestic")===key)return;
+  const before=JSON.parse(JSON.stringify(A.lpg||{}));
+  const updated={...(A.lpg||{}),fuelProfiles:profiles,selectedFuel:key,lastUpdated:new Date().toISOString(),updatedBy:A.currentUser?.name||"admin"};
+  sv("lpg",updated);A.lpg=updated;
+  auditLog("UPDATE","fuel","fuel-settings","Active fuel mode changed from Invoice Control",{before,after:updated});
+  NI.calc=null;NI.calcSignature=null;NI.calcMasterSnapshot=null;NI.generated=false;NI.generatedSignature=null;NI.saved=false;
+  NI.hybridAppliedSnapshot=null;NI.hybridAppliedSourceSignature="";NI.hybridAppliedAt=null;
+  window.MDM_V7_APPLIED_SNAPSHOT=null;window.MDM_V7_APPLIED_SOURCE_SIGNATURE="";
+  niSyncGenerateButton();gP("new");
+  toast("Fuel mode updated to "+profile.label+". Fetch / Recalculate the invoice.","ok");
+}
+function niFuelControlHTML(){
+  const cfg=NI?.editId?invoiceCalcContext(A.invoices.find(x=>String(x.id)===String(NI.editId))||{}).lpg:(A.lpg||{});
+  const active=selectedFuelProfile(cfg).key,profiles=fuelProfilesWithDefaults(cfg),isAdmin=String(A.currentUser?.role||"").toLowerCase()==="admin"&&!NI?.editId;
+  const options=[ ["domestic","Domestic LPG · 14.2 KG"],["commercial","Commercial LPG · 19 KG"],["firewood","Firewood"] ];
+  return `<div style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--bd);border-radius:7px;background:var(--slx)"><span style="font-size:11.5px;font-weight:700;color:var(--txl)">Fuel:</span>${isAdmin?`<select aria-label="Active fuel mode" title="Changes the central saved fuel mode for new invoices" style="border:none;background:transparent;font-size:11.5px;font-weight:700;color:var(--sf);padding:0;cursor:pointer;max-width:190px" onchange="niSetFuelMode(this.value)">${options.map(([k,label])=>`<option value="${k}" ${active===k?"selected":""}>${label}</option>`).join("")}</select>`:`<b style="font-size:11.5px;color:var(--sf)">${ec(profiles[active]?.label||active)}</b>`}</div>`;
+}
 function niInputSignature(){
   const settings=A.sett||ST0||{};
   return JSON.stringify({
@@ -4548,7 +4538,8 @@ function niInputSignature(){
     notes:String(NI.notes??""),doShuffle:!!NI.doShuffle,manualNum:String(NI.manualNum??""),autoAllocate:!!NI.autoAllocate,autoStrategy:String(NI.autoStrategy||"next"),
     r15:Number(A.rates?.r15)||0,r68:Number(A.rates?.r68)||0,
     gstMode:settings.gstMode||"cgst_sgst",invoiceType:settings.invoiceType||"tax_invoice",
-    roundOff:settings.roundOff!==false,hsnOn:!!NI.hsnOn
+    roundOff:settings.roundOff!==false,hsnOn:!!NI.hsnOn,
+    fuel:{selectedFuel:A.lpg?.selectedFuel||"domestic",profiles:Object.fromEntries(["domestic","commercial","firewood"].map(k=>{const p=A.lpg?.fuelProfiles?.[k]||{};return [k,{rate:Number(p.rate)||0,unit:p.unit||"Kg",netWeight:Number(p.netWeight)||0,gst:Number(p.gst)||0,taxTreatment:p.taxTreatment||"taxable",taxMode:p.taxMode||"inclusive",hsn:p.hsn||""}]}))}
   });
 }
 function niCalcIsFresh(){return !!(NI.calc && NI.calcSignature && NI.calcSignature===niInputSignature());}
@@ -4933,7 +4924,11 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
   const rows=inv.mergedItems.map(r=>{
     const qty=Number(r.qty);if(!Number.isFinite(qty)||qty<0)throw new Error("Invalid quantity for "+(r.name||r.id));
     const unit=hybridUnitFor(r);
-    const result=eng.normalize({itemId:String(r.id||""),actualQuantity:qty,unit,displayMode:mode});
+    // i21 is the shared Fuel row in the Original invoice model. Resolve its
+    // Hybrid normalization rule from the invoice's saved fuel mode, not from the
+    // static legacy ITEM_RULE (which maps i21 to LPG for backward compatibility).
+    const fuelRule=String(r.head||"")==="fuel"?(r.selectedFuel==="firewood"?"firewood":"lpg"):undefined;
+    const result=eng.normalize({itemId:String(r.id||""),ruleId:fuelRule,actualQuantity:qty,unit,displayMode:mode});
     const sourceRate=Number(r.rate)||0;
     const sourceTaxable=money(r.taxable??(qty*sourceRate));
     const sourceCgst=money(r.cgst),sourceSgst=money(r.sgst);
@@ -4955,7 +4950,7 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
     let zeroFloorFallback=false;
     if(result.eligible&&qty>0&&baseSourceTaxable>0&&normalizedGrams===0){
       normalizedGrams=Number(result.actualGrams)||0;
-      normalizedUnit=(unit==="LTR"||unit==="ML")?"LTR":(mode==="KG_ONLY"||result.ruleId==="lpg"?"KG":(normalizedGrams<1000?"GM":"KG"));
+      normalizedUnit=(unit==="LTR"||unit==="ML")?"LTR":(mode==="KG_ONLY"||result.ruleId==="lpg"||result.ruleId==="firewood"?"KG":(normalizedGrams<1000?"GM":"KG"));
       normalizedQuantity=(unit==="LTR"||unit==="ML")?normalizedGrams/1000:(normalizedUnit==="KG"?normalizedGrams/1000:normalizedGrams);
       zeroFloorFallback=true;
     }
@@ -4984,7 +4979,7 @@ function hybridMakeSnapshot(inv,displayMode=hybridUnitDisplayMode()){
     else if(unit==="LTR"&&normalizedUnit==="ML")comparableSourceRate=sourceRate/1000;
     else if(unit==="ML"&&normalizedUnit==="LTR")comparableSourceRate=sourceRate*1000;
     const rateAdjustment=Number((displayRate-comparableSourceRate).toFixed(2));
-    const qtyDisplay=result.eligible?(result.ruleId==="oil"?((normalizedGrams/1000).toFixed(3).replace(/\.000$/,""))+" LTR":eng.formatWeight(normalizedGrams,mode)):(qty+" "+unit);
+    const qtyDisplay=result.eligible?(result.ruleId==="oil"?((normalizedGrams/1000).toFixed(3).replace(/\.000$/,""))+" LTR":eng.formatWeight(normalizedGrams,(result.ruleId==="lpg"||result.ruleId==="firewood")?"KG_ONLY":mode)):(qty+" "+unit);
     return {id:String(r.id||""),name:String(r.name||r.id||"Item"),head:String(r.head||""),dist:Number(r.dist)||0,
       actualQuantity:qty,actualUnit:unit,sourceQuantity:qty,sourceUnit:unit,
       normalizedQuantity,normalizedUnit,billedQuantity,billedUnit,eligible:!!result.eligible,ruleId:result.ruleId||"excluded",
@@ -5113,24 +5108,21 @@ function mdmV7Candidate(row,qty,rateOverride){
   const money=mdmV7Money, unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||"KG").toUpperCase();
   const factor=(unit==="GM"||unit==="G"||unit==="ML")?0.001:1;
   const baseQty=Number((Number(qty)*factor).toFixed(6));if(!(baseQty>0))return null;
-  // v4.62.34: a row that carries the independent Add/Deduct adjustment keeps it OUTSIDE the quantity x rate search.
-  // Base source amounts exclude the adjustment; the adjustment components are re-added unchanged (applied exactly once).
-  const adjT=money(row.adjustmentTaxable),adjC=money(row.adjustmentCgst),adjS=money(row.adjustmentSgst);
-  const sourceTax=money(money(row.sourceTaxable)-adjT),normalizedRate=mdmV7RoundRate(sourceTax/baseQty);
+  const sourceTax=money(row.sourceTaxable),normalizedRate=mdmV7RoundRate(sourceTax/baseQty);
   const rate=rateOverride==null?normalizedRate:Number(Number(rateOverride).toFixed(6));
   if(!(rate>0))return null;
   const taxable=money(baseQty*rate);
-  const sourceGST=money((Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0)-adjC-adjS);
+  const sourceGST=money((Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0));
   // Tax treatment/rate comes from the invoice row snapshot, never from an item-name assumption.
   const treatment=String(row.taxTreatment||row.gstTreatment||row.taxability||'').toLowerCase();
   const explicitRate=Number(row.gstRate??row.gstPercent??row.gst??row.taxRate);
   const isNonTaxable=['exempt','nil_rated','nil-rated','non_gst','non-gst','non_gst_supply'].includes(treatment);
   const gstRate=isNonTaxable?0:(Number.isFinite(explicitRate)&&explicitRate>=0?explicitRate/100:(sourceTax>0?sourceGST/sourceTax:0));
   const gst=money(taxable*gstRate);
-  const sourceCG=(Number(row.sourceCgst)||0)-adjC,sourceSG=(Number(row.sourceSgst)||0)-adjS,ratio=sourceGST>0?sourceCG/sourceGST:0.5;
+  const sourceCG=Number(row.sourceCgst)||0,sourceSG=Number(row.sourceSgst)||0,ratio=sourceGST>0?sourceCG/sourceGST:0.5;
   const cgst=money(gst*ratio),sgst=money(gst-cgst);
   return {...row,normalizedQuantity:qty,billedQuantity:qty,display:unit==="GM"||unit==="G"?String(qty)+" GM":unit==="ML"?String(qty)+" ML":String(qty)+" "+unit,
-    displayRate:rate,billingRate:rate*factor,rateBasisUnit:unit,displayTaxable:money(taxable+adjT),billingTaxable:taxable,rateCalculatedTaxable:taxable,displayCgst:money(cgst+adjC),displaySgst:money(sgst+adjS),
+    displayRate:rate,billingRate:rate*factor,rateBasisUnit:unit,displayTaxable:taxable,billingTaxable:taxable,rateCalculatedTaxable:taxable,displayCgst:cgst,displaySgst:sgst,
     hybridQuantityTimesRate:taxable,autoAdjustmentAmount:money(taxable-sourceTax),netPayableImpact:money(taxable+gst-sourceTax-sourceGST),
     rateRoundingDelta:money(rate-(Number(row.sourceRateInHybridUnit)||normalizedRate)),normalizedGrams:(unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000,adjustmentGrams:((unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000)-(Number(row.actualQuantity)||0)*((String(row.actualUnit||"").toUpperCase()==="GM"||String(row.actualUnit||"").toUpperCase()==="G"||String(row.actualUnit||"").toUpperCase()==="ML")?1:1000),autoAdjustment:true,redistributionApplied:true,optimizerAdjusted:true,optimizerRateAdjusted:rateOverride!=null};
 }
@@ -5166,7 +5158,6 @@ function mdmExactItemConfig(row,mode){
 // taxable, and for each candidate rate derive the quantity; test the neighbours at display precision
 // through the real line calculation (mdmV7Candidate). Not a brute-force over arbitrary combinations.
 function solveExactAdjustment(targetGrossC,cfg,row){
-  const adjKeepC=mdmExC(row&&row.adjustmentTaxable)+mdmExC(row&&row.adjustmentCgst)+mdmExC(row&&row.adjustmentSgst);
   const out={status:"NO_EXACT_SOLUTION",candidates:[],tested:0,targetGrossC,cfg,reason:null,reasonCode:null,nextPrecision:null,nearest:null};
   if(!(targetGrossC>0)){out.reasonCode="TARGET_NOT_POSITIVE";out.reason="Fixed rows already consume the whole Original Gross; the required line gross is "+mdmExINR(targetGrossC)+".";return out;}
   if(!(cfg.q0>0&&cfg.rate0>0)){out.reasonCode="INVALID_BASELINE";out.reason="Baseline quantity/rate of the adjustment item is not positive.";return out;}
@@ -5188,7 +5179,7 @@ function solveExactAdjustment(targetGrossC,cfg,row){
       if(!nearest||d<nearest.d)nearest={d,q,r,grossC:gr};
       if(d>1)return;                                   // cheap integer pre-filter (tolerates half-paise float ties)
       const c=mdmV7Candidate(row,q,r);if(!c)return;     // the real line calculation decides
-      const lineC=mdmExC(c.displayTaxable)+mdmExC(c.displayCgst)+mdmExC(c.displaySgst)-adjKeepC;   // base part only
+      const lineC=mdmExC(c.displayTaxable)+mdmExC(c.displayCgst)+mdmExC(c.displaySgst);
       if(lineC!==targetGrossC)return;
       const qtyPct=Math.abs(q-cfg.q0)/cfg.q0*100,ratePct=Math.abs(r-cfg.rate0)/cfg.rate0*100;
       const onGrid=Math.abs(r*2-Math.round(r*2))<1e-9;found.push({qty:q,rate:r,row:c,itemGrossC:lineC,qtyPct,ratePct,combined:qtyPct+ratePct,onGrid,score:qtyPct+ratePct+(onGrid?0:2),natural:mdmExDecimals(q)+mdmExDecimals(r)});
@@ -5243,7 +5234,7 @@ function validateExactReconciliation(original,proposed,ctx){
   add("ITEM_ARITHMETIC",arithBad.length===0,arithBad.length?"Invalid line arithmetic: "+arithBad.join(","):"All lines valid");
   // GST integrity of every changed row against its SAVED tax configuration.
   const gstBad=[];prows.forEach((r,i)=>{const o=orows[i];if(!o||!changed.includes(String(r.id)))return;
-    const cfg=mdmExactItemConfig(o,"auto"),aT=mdmExC(r.adjustmentTaxable),tc=mdmExC(r.displayTaxable)-aT,exp=Math.round(tc*cfg.gstRate),got=mdmExC(r.displayCgst)+mdmExC(r.displaySgst)-mdmExC(r.adjustmentCgst)-mdmExC(r.adjustmentSgst);
+    const cfg=mdmExactItemConfig(o,"auto"),tc=mdmExC(r.displayTaxable),exp=Math.round(tc*cfg.gstRate),got=mdmExC(r.displayCgst)+mdmExC(r.displaySgst);
     if(got!==exp||String(r.taxTreatment)!==String(o.taxTreatment)||Number(r.gstRate)!==Number(o.gstRate))gstBad.push(String(r.id));});
   add("GST_INTEGRITY",gstBad.length===0,gstBad.length?"GST invalid on: "+gstBad.join(","):"GST per saved configuration");
   const ids=prows.map(r=>String(r.id)),adj=prows.filter(r=>r.optimizerAdjusted).length,origAdj=orows.filter(r=>r.optimizerAdjusted).length;
@@ -5259,7 +5250,7 @@ function validateExactReconciliation(original,proposed,ctx){
       sgst:Number(((prows.reduce((a,r)=>a+mdmExC(r.displaySgst),0)-orows.reduce((a,r)=>a+mdmExC(r.sourceSgst),0))/100).toFixed(2))},changedIds:changed,validatedAt:new Date().toISOString(),engine:MDM_EXACT_VERSION};
 }
 function mdmExactEligibleIndex(rows){
-  return rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==="green_veg_mix"&&Number(x.r.sourceTaxable??x.r.displayTaxable)-(Number(x.r.adjustmentTaxable)||0)>0)[0]||null;
+  return rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==="green_veg_mix"&&Number(x.r.sourceTaxable??x.r.displayTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount??x.r.independentAdjustmentGross)||0)<0.005)[0]||null;
 }
 // Target = Original Gross − Fixed (non-adjustable) rows' Gross, in integer paise.
 function mdmExactTarget(base){
@@ -5271,7 +5262,7 @@ function mdmExactTarget(base){
 function mdmV7Solve(baseSnap,eligibleIds,mode){
   const t=mdmExactTarget(baseSnap);
   if(!t)return {status:"NO_ELIGIBLE_ROWS",options:[],eligibleRows:0,searchStates:0,diagnostics:{reason:"NO_ELIGIBLE_GREEN_VEG_MIX"}};
-  const cfg=mdmExactItemConfig(t.row,mode||"auto"),adjKeepC=mdmExC(t.row.adjustmentTaxable)+mdmExC(t.row.adjustmentCgst)+mdmExC(t.row.adjustmentSgst),sol=solveExactAdjustment(t.targetItemGrossC-adjKeepC,cfg,t.row);
+  const cfg=mdmExactItemConfig(t.row,mode||"auto"),sol=solveExactAdjustment(t.targetItemGrossC,cfg,t.row);
   const options=sol.candidates.map((c,i)=>({id:"OPT-"+(i+1),cost:c.combined,rows:[{index:t.index,category:"green_veg_mix",row:c.row,move:Math.abs(c.qty-cfg.q0),rateMove:Math.abs(c.rate-cfg.rate0),qtyPct:c.qtyPct,ratePct:c.ratePct}],totals:{gross:t.targetItemGrossC,net:mdmExC(baseSnap.sourceNet)}}));
   return {status:options.length?"SOLVED":"NO_EXACT_SOLUTION",options,eligibleRows:1,searchStates:sol.tested,solver:sol,target:t,cfg,
     targets:{gross:mdmExC(baseSnap.sourceGross),roundOff:mdmExC(baseSnap.sourceRoundOff),net:mdmExC(baseSnap.sourceNet)},
@@ -6433,48 +6424,6 @@ function mrChangeRevisionTheme(id){
   document.getElementById('mr-theme-revision-modal')?.remove();const ov=document.createElement('div');ov.className='ov';ov.id='mr-theme-revision-modal';ov.onclick=e=>{if(e.target===ov)ov.remove();};
   ov.innerHTML=`<div class="modal" style="max-width:520px"><div class="mhd"><div class="mt">Create Theme Revision — ${ec(inv.invNo)}</div><button class="btn btn-g btn-sm" onclick="document.getElementById('mr-theme-revision-modal')?.remove()">Close</button></div><div class="mbd"><div class="info inf-b">Creates a new immutable revision. Existing invoice data and earlier revision themes remain unchanged.</div><label class="flbl">Choose invoice theme</label><select class="fi" id="mr-theme-revision-select">${presets}</select><div class="sac" style="margin-top:12px"><button class="btn btn-p" onclick="mrSaveThemeRevision('${String(id).replace(/'/g,"\'")}')">Create Theme Revision</button></div></div></div>`;document.body.appendChild(ov);
 }
-// ── v4.62.34: Master Revision Control — CURRENT APPLIED THEMES (revision-specific theme) ──
-// themeKey: ""  = keep each invoice's own theme (default, nothing changes)
-//           "__current__" = snapshot the currently saved Theme Engine configuration into the new revision
-//           <preset id>   = a preset from the existing Theme Engine (INVOICE_THEME_PRESETS)
-// The theme is stored ON the revised invoice's new revision (themeBefore/themeAfter) and as invoiceThemeOverride, so
-// older revisions, other invoices and historical PDFs are never touched and the global saved theme is not modified.
-function mrThemeOverrideFor(key){
-  if(!key)return null;
-  if(key==="__current__"){
-    const t=invoiceTheme?invoiceThemeBaseSaved():null;if(!t)return null;
-    const keep=["invoicePreset","themeSeed","themeMode","customTheme","customPrimary","customSecondary","customTertiary","customSecondaryManual","customTertiaryManual","headerBg","accent","highlight","border","headerText","borderMode"];
-    const o={};keep.forEach(k=>{if(t[k]!==undefined)o[k]=t[k];});return o;
-  }
-  const preset=(typeof INVOICE_THEME_PRESETS!=="undefined")&&INVOICE_THEME_PRESETS[key];if(!preset)return null;
-  return {invoicePreset:key,themeSeed:preset.seed,themeMode:preset.mode||"dark",customTheme:false};
-}
-function invoiceThemeBaseSaved(){
-  // The saved (non-revision) theme, ignoring any transient __MDM_INVOICE_THEME_OVERRIDE.
-  const prior=window.__MDM_INVOICE_THEME_OVERRIDE;window.__MDM_INVOICE_THEME_OVERRIDE=null;
-  try{return invoiceTheme();}finally{window.__MDM_INVOICE_THEME_OVERRIDE=prior;}
-}
-function mrThemeLabel(key){
-  if(!key)return "Keep each invoice's existing theme";
-  if(key==="__current__")return "Current saved theme ("+mrThemeName(invoiceThemeBaseSaved())+")";
-  return (INVOICE_THEME_PRESETS[key]?.name)||key;
-}
-function mrThemeName(t){const p=t&&INVOICE_THEME_PRESETS[t.invoicePreset];return p?.name||(t?.invoicePreset==="custom"?"Custom theme":"Theme");}
-function mrSetBulkTheme(v){MR.themeKey=v||"";gP("masterrevision");}
-function mrThemeSectionHTML(){
-  try{
-    const saved=invoiceThemeBaseSaved(),sel=MR.themeKey||"";
-    const effective=sel?(sel==="__current__"?saved:(()=>{const p=INVOICE_THEME_PRESETS[sel];if(!p)return saved;const f=invoiceThemeFamilyForPreset(p);return {headerBg:f.light,accent:f.dark,headerText:p.text,border:p.border};})()):null;
-    const sw=t=>t?`<span style="display:inline-block;min-width:150px;padding:8px 12px;border-radius:8px;background:${ec(t.headerBg)};color:${ec(t.headerText||"#111")};border:2px solid ${ec(t.accent||t.border||"#999")};font-weight:700;font-size:12px">MS ENTERPRISES · Invoice</span>`:`<span class="bdg bn">No theme change</span>`;
-    const opts=Object.entries(INVOICE_THEME_PRESETS||{}).map(([k,v])=>`<option value="${ec(k)}" ${sel===k?"selected":""}>${ec(v.name||k)}</option>`).join("");
-    return `<div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">CURRENT APPLIED THEMES</span><span class="bdg bn">Revision-specific</span></div><div class="cbd">
-      <div class="info inf-b" style="margin-bottom:10px">The theme chosen here is stored with each <b>new</b> revision in this batch only. Earlier revisions, other invoices and already-generated PDFs keep their original appearance, and the globally saved Theme Engine setting is not modified.</div>
-      <div class="fg fg3"><div class="fc"><label class="flbl">Current applied theme (saved)</label><div>${sw(saved)}<div style="font-size:11px;margin-top:4px">${ec(mrThemeName(saved))}</div></div></div>
-      <div class="fc"><label class="flbl">Theme for new revision</label><select class="fi" onchange="mrSetBulkTheme(this.value)"><option value="" ${sel===""?"selected":""}>Keep each invoice's existing theme</option><option value="__current__" ${sel==="__current__"?"selected":""}>Current saved theme (snapshot)</option>${opts}</select></div>
-      <div class="fc"><label class="flbl">Preview</label><div>${sw(effective)}</div></div></div>
-      <div class="sac" style="margin-top:10px"><button class="btn btn-g btn-sm" onclick="mrSetBulkTheme('__current__')">Reset to current saved theme</button><button class="btn btn-g btn-sm" onclick="mrSetBulkTheme('')">Keep existing themes</button><span class="bdg bn">Selected: ${ec(mrThemeLabel(sel))}</span></div></div></div>`;
-  }catch(e){return "";}
-}
 function mrSaveThemeRevision(id){
   if(!mrCanManage()){toast('Administrator access is required.','err');return;}
   const inv=(A.invoices||[]).find(x=>String(x.id)===String(id));const key=document.getElementById('mr-theme-revision-select')?.value;const preset=INVOICE_THEME_PRESETS?.[key];if(!inv||!preset){toast('Select a valid theme.','err');return;}
@@ -6484,7 +6433,7 @@ function mrSaveThemeRevision(id){
   const revision={revisionNo,by:A.currentUser?.name||'Administrator',at:now,reason:'Invoice theme changed',operation:'theme_change',detail:`Theme changed to ${preset.name||key}`,beforeNet:Number(inv.net)||0,afterNet:Number(inv.net)||0,delta:0,before,after,themeBefore:inv.invoiceThemeOverride||null,themeAfter:themeOverride};
   const updated={...inv,invoiceThemeOverride:themeOverride,revisions:[...(inv.revisions||[]),revision],revisionCurrent:revisionNo,updatedAt:now,revisedAt:now,status:'revised',revisionStatus:mrInvoiceShared(inv)?'RE_SHARE_PENDING':(inv.issuedAt?'RE_ISSUE_PENDING':'REVISED_NOT_SHARED'),reSharePending:mrInvoiceShared(inv),recallPending:mrInvoiceShared(inv),reIssuePending:!!inv.issuedAt,revisionEvents:[...(inv.revisionEvents||[]),{type:'THEME_REVISION_CREATED',at:now,revisionNo,theme:key,by:A.currentUser?.name||'Administrator'}]};
   const next=(A.invoices||[]).map(x=>String(x.id)===String(id)?updated:x);try{localStorage.setItem('iv',JSON.stringify(next));const check=JSON.parse(localStorage.getItem('iv')||'null');if(!Array.isArray(check)||!check.some(x=>String(x.id)===String(id)&&Number(x.revisions?.length)===revisionNo))throw new Error('Invoice revision storage verification failed');}catch(e){toast('Theme revision was not saved: '+(e.message||'storage error'),'err');return;}
-  A.invoices=next;try{sv('iv',next);}catch(_e){console.warn('Theme revision sv() mirror failed',_e);}auditLog('THEME_REVISION','invoice',id,`Theme revision ${revisionNo}: ${preset.name||key}`,{revisionNo,theme:key});document.getElementById('mr-theme-revision-modal')?.remove();toast(`Theme revision ${revisionNo} saved. Financial amounts were not changed.`,'ok');gP('masterrevision');
+  A.invoices=next;auditLog('THEME_REVISION','invoice',id,`Theme revision ${revisionNo}: ${preset.name||key}`,{revisionNo,theme:key});document.getElementById('mr-theme-revision-modal')?.remove();toast(`Theme revision ${revisionNo} saved. Financial amounts were not changed.`,'ok');gP('masterrevision');
 }
 
 function mrLifecycleHTML(inv){
@@ -6643,7 +6592,7 @@ function mrCommitPreview(){
   if(pv.errors?.length){toast("Fix all preview errors before applying the batch.","err");return;}
   const changedResults=pv.results.filter(x=>!x.calc.skip);const ids=changedResults.map(x=>x.inv.id);if(!ids.length){toast("No invoice changes to save.","warn");return;}
   const totalBefore=pv.results.reduce((s,x)=>s+(Number(x.inv.net)||0),0),totalAfter=pv.results.reduce((s,x)=>s+(Number(x.calc.after.net)||0),0);
-  const confirmText=`Apply ${pv.rule.mode.toUpperCase()} revision to ${ids.length} invoice(s)?\n\nOld total: ₹${mrMoney(totalBefore)}\nNew total: ₹${mrMoney(totalAfter)}\nDifference: ₹${mrMoney(totalAfter-totalBefore)}\n\nTheme for new revision: ${mrThemeLabel(MR.themeKey||"")}\nOriginal snapshots will be retained.`;
+  const confirmText=`Apply ${pv.rule.mode.toUpperCase()} revision to ${ids.length} invoice(s)?\n\nOld total: ₹${mrMoney(totalBefore)}\nNew total: ₹${mrMoney(totalAfter)}\nDifference: ₹${mrMoney(totalAfter-totalBefore)}\n\nOriginal snapshots will be retained.`;
   if(!confirm(confirmText))return;
   for(const x of pv.results){
     const current=A.invoices.find(i=>i.id===x.inv.id);
@@ -6652,18 +6601,7 @@ function mrCommitPreview(){
     if(!current||JSON.stringify(mrSnapshot(current))!==JSON.stringify(x.calc.before)||revisionHistoryChanged||originalSnapshotChanged){MR.preview=null;gP("masterrevision");toast("Invoice data or revision history changed after preview. Please build a fresh preview before confirming.","err");return;}
   }
   const now=new Date().toISOString(),batch={id:pv.rule.batchId,createdAt:now,by:A.currentUser?.name||"Administrator",reason:pv.rule.reason,operation:pv.specialFruitMode?"egg_fruit_toggle":pv.rule.mode,month:MR.periodMode==="date"?"Custom Date Range":`${MR.fromMonth||"Start"} ${MR.fromYear||""} – ${MR.toMonth||"End"} ${MR.toYear||""}`,year:MR.periodMode==="date"?`${MR.fromDate||"Start"} to ${MR.toDate||"End"}`:"Range",periodMode:MR.periodMode,fromDate:MR.fromDate||"",toDate:MR.toDate||"",fromMonth:MR.fromMonth||"",fromYear:MR.fromYear||"",toMonth:MR.toMonth||"",toYear:MR.toYear||"",schoolCategory:MR.bulkCategory||"All",schoolId:MR.bulkSchoolId||"All",invoiceIds:ids,totalBefore:d2(totalBefore),totalAfter:d2(totalAfter),delta:d2(totalAfter-totalBefore),status:"saved_local",syncStatus:"queued_or_local_only",itemName:pv.specialFruitMode?"Egg / Fruits":(pv.rule.customName||pv.rule.item?.name||""),details:changedResults.map(x=>({invoiceId:x.inv.id,invNo:x.inv.invNo,beforeNet:x.inv.net,afterNet:x.calc.after.net,delta:x.calc.delta,revisionNo:x.calc.after.revisions.length,detail:x.calc.detail}))};
-  const __themeKey=MR.themeKey||"",__themeOv=mrThemeOverrideFor(__themeKey);
-  if(__themeKey&&!__themeOv){toast("Selected revision theme is unavailable. Choose a valid theme or keep existing themes.","err");return;}
-  if(__themeOv){batch.themeKey=__themeKey;batch.themeApplied=__themeOv;}
-  const replacements=new Map(changedResults.map(x=>{
-    let after=x.calc.after;
-    if(__themeOv){
-      const revs=(after.revisions||[]).slice(),last=revs.length-1;
-      if(last>=0)revs[last]={...revs[last],themeBefore:after.invoiceThemeOverride||null,themeAfter:{...__themeOv},themeKey:__themeKey};
-      after={...after,invoiceThemeOverride:{...__themeOv},revisions:revs};
-    }
-    return [x.inv.id,after];
-  }));
+  const replacements=new Map(changedResults.map(x=>[x.inv.id,x.calc.after]));
   const nextInvoices=A.invoices.map(inv=>replacements.get(inv.id)||inv);
   const nextBatches=[...(A.mrb||[]),batch].slice(-300);
   // Persist both keys with verification and best-effort rollback before touching live state.
@@ -6683,8 +6621,6 @@ function mrCommitPreview(){
     MR.preview=null;gP("masterrevision");toast("Bulk revision was not applied because storage verification failed. Check available browser storage and restore from backup if needed.","err");return;
   }
   A.invoices=nextInvoices;A.mrb=nextBatches;
-  // v4.62.34: also route through sv() so IndexedDB + cloud queue get the same data (direct localStorage writes were overwritten by IDB hydration on reload).
-  try{sv("iv",nextInvoices);sv("mrb",nextBatches);}catch(_svErr){console.warn("Bulk revision sv() mirror failed",_svErr);}
   auditLog("BULK_REVISION","invoice_batch",batch.id,`Master revision ${batch.id}: ${batch.operation}, ${ids.length} invoices`,batch);
   MR.preview=null;MR.selectedIds=[];toast(`Revision batch applied to ${ids.length} invoice(s).`,"ok");gP("masterrevision");
 }
@@ -6806,7 +6742,6 @@ function pgMasterRevision(){
   </div>
 </div><div class="sac" style="margin:10px 0"><button class="btn btn-g btn-sm" onclick="mrSelectAll(true)">Select all matching</button><button class="btn btn-g btn-sm" onclick="mrSelectAll(false)">Clear selection</button><span class="bdg bn">${ids.size} selected</span>${mrRevisionPrefs().egg?`<button class="btn btn-g btn-sm" onclick="mrQuickExclude('fruit')" ${ids.size?"":"disabled"}>Quick Exclude: Egg / Fruit</button><button class="btn btn-p btn-sm" onclick="mrPreviewFruitToggles()" ${ids.size?"":"disabled"}>Preview Egg/Fruit ON/OFF</button>`:""}${mrRevisionPrefs().fuel?`<button class="btn btn-g btn-sm" onclick="mrQuickExclude('fuel')" ${ids.size?"":"disabled"}>Quick Exclude: LPG / Firewood</button>`:""}</div><div class="tw"><table class="dt"><thead><tr><th><input type="checkbox" aria-label="Select all" ${filtered.length&&filtered.every(i=>ids.has(i.id))?"checked":""} onchange="mrSelectAll(this.checked)"/></th><th>Invoice</th><th>Month / Year</th><th>School</th><th class="num">Students</th><th class="num">Net Payable</th><th>Egg/Fruit OFF</th><th>Delivery / Revision</th></tr></thead><tbody>${filtered.length?filtered.map(inv=>`<tr><td><input type="checkbox" ${ids.has(inv.id)?"checked":""} onchange="mrToggleInvoice('${inv.id}',this.checked)"/></td><td><b>${ec(inv.invNo)}</b><div style="font-size:10px;color:var(--txl)">${ec(inv.date||"")}</div></td><td>${ec(mrMonthYear(inv))}</td><td>${ec(inv.schoolName||"")}</td><td class="num">${(Number(inv.s15)||0)+(Number(inv.s68)||0)}</td><td class="num">${mrMoney(inv.net)}</td><td><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" aria-label="Exclude Egg/Fruit from ${ec(inv.invNo)}" ${((MR.fruitOffIds||[]).includes(inv.id))?"checked":""} onchange="mrToggleFruitOff('${inv.id}',this.checked)"/> OFF</label></td><td>${mrLifecycleHTML(inv)}${(inv.revisions||[]).length?`<div style="font-size:10px;color:var(--txl);margin-top:3px">Current Revision ${(inv.revisions||[]).length}</div>`:""}</td></tr>`).join(""):`<tr><td colspan="8">No matching invoices.</td></tr>`}</tbody></table></div></div></div>
   <div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">2. Configure Revision Rule</span><span class="bdg bn">${ids.size} target invoice(s)</span></div><div class="cbd"><div class="fg fg3"><div class="fc"><label class="flbl">Operation</label><select class="fi" id="mr-mode" onchange="mrOnModeChange(this.value)"><option value="add" ${mode==="add"?"selected":""}>Add new item to old invoices</option><option value="exclude" ${mode==="exclude"?"selected":""}>Exclude / remove item</option><option value="update" ${mode==="update"?"selected":""}>Change existing item rate / GST</option></select></div><div class="fc"><label class="flbl">Existing Item (optional for custom add)</label><select class="fi" id="mr-item" onchange="mrOnItemChange(this.value)">${itemOpts}</select></div><div class="fc"><label class="flbl">New Item Name (for custom item)</label><input class="fi" id="mr-name" value="${ec(MR.customName)}" oninput="MR.customName=this.value;mrInvalidatePreview()" placeholder="e.g. Parle-G"/></div></div><div class="fg fg3" style="margin-top:10px"><div class="fc"><label class="flbl">Unit</label><input class="fi" id="mr-unit" value="${ec(MR.unit||"Pcs")}" oninput="MR.unit=this.value;mrInvalidatePreview()"/></div><div class="fc"><label class="flbl">Quantity per child (Add)</label><input class="fi" type="number" min="0.001" step="0.001" id="mr-qty" value="${ec(MR.qtyPerChild||"1")}" oninput="MR.qtyPerChild=this.value;mrInvalidatePreview()"/></div><div class="fc"><label class="flbl">Unit Rate</label><input class="fi" type="number" min="0" step="0.01" id="mr-rate" value="${ec(MR.rate)}" oninput="MR.rate=this.value;mrInvalidatePreview()" placeholder="Enter historical rate"/></div></div><div class="fg fg3" style="margin-top:10px"><div class="fc"><label class="flbl">GST Rate (%)</label><input class="fi" type="number" min="0" max="100" step="0.01" id="mr-gst" value="${ec(MR.gst??"0")}" oninput="MR.gst=this.value;mrInvalidatePreview()"/></div><div class="fc"><label class="flbl">GST Treatment</label><select class="fi" id="mr-tax-treatment" onchange="MR.taxTreatment=this.value;mrInvalidatePreview()"><option value="" ${!MR.taxTreatment?"selected":""}>Select historical treatment…</option><option value="taxable" ${MR.taxTreatment==="taxable"?"selected":""}>Taxable</option><option value="exempt" ${MR.taxTreatment==="exempt"?"selected":""}>Exempt</option><option value="nil_rated" ${MR.taxTreatment==="nil_rated"?"selected":""}>Nil-rated</option><option value="non_gst" ${MR.taxTreatment==="non_gst"?"selected":""}>Non-GST</option></select></div><div class="fc"><label class="flbl">HSN / SAC</label><input class="fi" id="mr-hsn" value="${ec(MR.hsn||"")}" oninput="MR.hsn=this.value;mrInvalidatePreview()" placeholder="Applicable classification"/></div><div class="fc"><label class="flbl">Price Includes GST?</label><select class="fi" id="mr-taxmode" onchange="MR.taxMode=this.value;mrInvalidatePreview()"><option value="" ${!MR.taxMode?"selected":""}>Select historical price basis…</option><option value="inclusive" ${MR.taxMode!=="exclusive"?"selected":""}>Yes — inclusive</option><option value="exclusive" ${MR.taxMode==="exclusive"?"selected":""}>No — add GST on top</option></select></div><div class="fc"><label class="flbl">Revision Reason / Authority</label><input class="fi" id="mr-reason" value="${ec(MR.reason)}" oninput="MR.reason=this.value;mrInvalidatePreview()" placeholder="Notification / reason / reference"/></div></div><div class="info inf-b" style="margin-top:10px">For historical additions, verify the rate, HSN/SAC and GST treatment applicable to the selected billing period. Item Master values are not used as historical truth. Enter the documented historical rate, GST rate, GST treatment and price basis yourself. This batch applies one rule to every selected invoice, so split the batch if rates or tax treatment differed by period. Exclude removes the item only from the new revision; the original snapshot stays intact.</div><div class="sac" style="margin-top:12px"><button class="btn btn-p" onclick="mrBuildPreview()" ${ids.size?"":"disabled"}>Preview Changes</button><button class="btn btn-g" onclick="MR.preview=null;gP('masterrevision')">Reset Preview</button></div></div></div>
-  ${mrThemeSectionHTML()}
   ${preview}
   <div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">Recent Master Revision Batches</span><span class="bdg bn">${batchRows.length}</span></div><div class="cbd"><div class="tw"><table class="dt"><thead><tr><th>Batch ID</th><th>Created</th><th>Operation</th><th>Reason</th><th>Invoices</th><th class="num">Difference</th><th>Status</th></tr></thead><tbody>${batchRows.length?batchRows.map(b=>`<tr><td><b>${ec(b.id)}</b></td><td>${b.createdAt?new Date(b.createdAt).toLocaleString("en-IN"):"-"}</td><td>${ec(b.operation||"")}</td><td>${ec(b.reason||"")}</td><td>${(b.invoiceIds||[]).length}</td><td class="num">${mrMoney(b.delta)}</td><td>${ec(b.status||"saved_local")}<div style="font-size:10px;color:var(--txl)">Check Backup &amp; Sync for cloud acknowledgement</div></td></tr>`).join(""):`<tr><td colspan="7">No master revision batches yet.</td></tr>`}</tbody></table></div></div></div>`;
 }
@@ -7174,7 +7109,7 @@ function pgAud(){
     <tr><td>Add: CGST</td><td class="num">${R(inv.cgst||0)}</td></tr>
     <tr><td>Add: SGST</td><td class="num">${R(inv.sgst||0)}</td></tr>
     <tr><td>Gross Amount</td><td class="num">${R(d2((inv.taxable||0)+(inv.cgst||0)+(inv.sgst||0)))}</td></tr>
-    <tr><td>Round Off</td><td class="num" style="color:var(--sf)">${mdmSignedRoundOff(inv.roundOff||0,{cur:true})}</td></tr>
+    <tr><td>Round Off</td><td class="num" style="color:var(--sf)">${(inv.roundOff||0)>=0?"+":""}${R(inv.roundOff||0)}</td></tr>
     <tr class="tr-tot"><td style="font-weight:800;color:var(--sf)">NET PAYABLE = APPROVED ALLOCATION &#10003;</td><td class="num" style="font-size:16px;color:var(--sf)">${R(inv.net||0)}</td></tr>
     </tbody></table><div class="info inf-g" style="margin-top:10px">&#10003; Net Payable matches Approved Allocation. Audit-compliant.</div></div></div>
     <div style="display:flex;gap:8px"><button class="btn btn-n" onclick="hsPDF('${inv.id}')">&#8595; Print Invoice PDF</button><button class="btn btn-g" onclick="shrInv('${inv.id}')">Share</button></div>`;
@@ -8849,19 +8784,7 @@ function invoicePdfCacheKey(inv){
   // never reuse a PDF prepared for a different set of rows/totals.
   return [inv?.id,inv?.invNo,inv?.date,inv?.net,inv?.status,inv?.revisedAt,inv?.updatedAt,
     snap?.revisionNo??"original",snap?.updatedAt||snap?.createdAt||"",snap?.sourceNet??"",
-    snap?.rows?.length??0,mdmEffectiveThemeSig(inv,snap)].join("|");
-}
-// v4.62.34: effective-theme signature so a theme / revision-theme change can never reuse a stale cached PDF.
-function mdmEffectiveThemeOverride(inv,snap){
-  const caller=window.__MDM_INVOICE_THEME_OVERRIDE;                  // set by historical-snapshot rendering
-  if(caller&&typeof caller==="object")return caller;
-  const s=snap===undefined?(invoiceEngineOf(inv)==="hybrid"?mdmActiveHybridRevision(inv):null):snap;
-  return (s&&s.invoiceThemeOverride)||inv?.invoiceThemeOverride||null;   // revision's own theme, else invoice's
-}
-function mdmEffectiveThemeSig(inv,snap){
-  let o=mdmEffectiveThemeOverride(inv,snap),src="rev";
-  if(!o){src="saved";const t=A.sett?.themeDesign||{};o={};Object.keys(t).forEach(k=>{if(typeof t[k]!=="string"||t[k].length<80)o[k]=t[k];});}
-  const j=src+JSON.stringify(o);let h=0;for(let i=0;i<j.length;i++)h=(h*31+j.charCodeAt(i))|0;return src+":"+(h>>>0).toString(36);
+    snap?.rows?.length??0].join("|");
 }
 function clearInvoicePdfCache(id){
   if(!id){_invoicePdfCache.clear();return;}
@@ -8896,12 +8819,6 @@ function _pdfCell(doc,text,x,y,w,h,size=5.1,align="left",bold=false){
 }
 
 async function buildInvoicePdfFile(inv,opts={}){
-  // v4.62.34: generate with the theme tied to this invoice's active revision (never silently the Default / latest theme).
-  const __ov=mdmEffectiveThemeOverride(inv),__prior=window.__MDM_INVOICE_THEME_OVERRIDE;
-  if(__ov&&__ov!==__prior){window.__MDM_INVOICE_THEME_OVERRIDE=__ov;try{return await buildInvoicePdfFileCore(inv,opts);}finally{window.__MDM_INVOICE_THEME_OVERRIDE=__prior;}}
-  return buildInvoicePdfFileCore(inv,opts);
-}
-async function buildInvoicePdfFileCore(inv,opts={}){
   const key=invoicePdfCacheKey(inv);
   if(!opts.force && !opts.skipCache && _invoicePdfCache.has(key))return _invoicePdfCache.get(key);
   await loadPdfLibs();
@@ -9100,7 +9017,7 @@ async function buildInvoicePdfFileCore(inv,opts={}){
   text("Add : CGST",316,651.05+bottomTextShift,8);text(money(t.cgst),rightValueX,651.05+bottomTextShift,8,false,"right");
   text("Add : SGST",316,666.05+bottomTextShift,8);text(money(t.sgst),rightValueX,666.05+bottomTextShift,8,false,"right");
   text("Gross Amount",316,682.85+bottomTextShift,8.2,true);text(money(t.gross),rightValueX,682.85+bottomTextShift,8.2,true,"right");
-  text("Round Off",316,697.15+bottomTextShift,7.9);text(mdmSignedRoundOff(t.roundOff,{ascii:true}),rightValueX,697.15+bottomTextShift,7.9,false,"right");
+  text("Round Off",316,697.15+bottomTextShift,7.9);text(money(t.roundOff),rightValueX,697.15+bottomTextShift,7.9,false,"right");
   rect(312.19,710.83+bottomCardShift,252.26,16.19,MEDIUM,null,0);
   text("Net Payable Amount",315.43,713.05+bottomTextShift,9.1,true);text(money(t.net),561.37,712.85+bottomTextShift,9.1,true,"right",TEXT);
 
@@ -10489,19 +10406,8 @@ function invoiceThemeSaveFromUI(){
   const st={...(A.sett||ST0),themeDesign:upd};
   try{
     // Canonical settings are authoritative for both Normal/Original and Hybrid.
-    // v4.62.34 ROOT-CAUSE FIX: this used to write localStorage only. On the next load V42.hydrateFromIDB()
-    // restores A.sett from the IndexedDB "kv" copy (which sv() maintains) and that stale copy still held the
-    // previous/default theme, so every saved theme "reverted". Persist through the shared sv() so localStorage,
-    // IndexedDB and the cloud queue all receive the same record. The direct write first is only a quota probe,
-    // because LS.set swallows quota errors.
     localStorage.setItem("st",JSON.stringify(st));
-    sv("st",st);
     A.sett=st;
-    try{clearInvoicePdfCache();}catch(_c){}
-    // Read-back verification: the theme that will be restored on reload must be the one just saved.
-    try{const back=JSON.parse(localStorage.getItem("st")||"{}").themeDesign||{};
-      if((back.invoicePreset||"")!==(upd.invoicePreset||"")||(back.themeSeed||"")!==(upd.themeSeed||""))throw new Error("Theme read-back mismatch");}
-    catch(ve){throw ve;}
     // Keep the compatibility mirror in sync when storage permits. It is no
     // longer allowed to make the primary save fail or overwrite canonical data.
     try{localStorage.setItem("mdm_invoice_typography_theme_v1",JSON.stringify(upd));}catch(_){/* canonical st is already saved */}
@@ -12184,7 +12090,7 @@ function gstSummaryDoc(c, sch, form, invNo){
   form = form || {};
   const f=A.firm, t=c.mTot;
   const rows = c.merged.map((item,i)=>`<tr><td class="itd" style="text-align:center">${i+1}</td><td class="itd" style="font-weight:600">${ec(item.name)}</td><td class="itd" style="text-align:center">${ec(item.head||"")}</td><td class="itd" style="text-align:center">${item.gst||0}%</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.taxable).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.cgst).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace">${d2(item.sgst).toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${d2(item.gross).toFixed(2)}</td></tr>`).join("");
-  return `${invoiceThemeDocumentStyle()}<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">GST Summary</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | Invoice: ${ec(invNo)} | ${ec(form.month)} ${ec(form.year)}</div></div><table style="width:100%;border-collapse:collapse"><thead><tr>${["Sr.No","Item","Head","GST%","Taxable","CGST","SGST","Gross"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${rows}<tr style="background:#F0F4F8"><td colspan="4" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900">${t.gross.toFixed(2)}</td></tr></tbody></table><div style="display:flex;justify-content:flex-end;padding:10px"><div style="text-align:right"><div style="font-size:9px;color:#555">Round Off: ${mdmSignedRoundOff(t.roundOff)}</div><div style="font-size:12px;font-weight:900;color:#1E3A5F;margin-top:2px">Net Payable: ${t.net.toFixed(2)}</div></div></div></div>`;
+  return `${invoiceThemeDocumentStyle()}<div class="ax"><div style="text-align:center;padding:7px 10px 5px;border-bottom:1.5px solid #555"><div style="font-size:15px;font-weight:900">${ec(f.name)}</div><div style="font-size:11px;font-weight:700;color:#1E3A5F;margin-top:2px">GST Summary</div><div style="font-size:9px;color:#333;margin-top:2px">School: ${ec(sch?sch.name:"")} | Invoice: ${ec(invNo)} | ${ec(form.month)} ${ec(form.year)}</div></div><table style="width:100%;border-collapse:collapse"><thead><tr>${["Sr.No","Item","Head","GST%","Taxable","CGST","SGST","Gross"].map(h=>`<th class="ith">${h}</th>`).join("")}</tr></thead><tbody>${rows}<tr style="background:#F0F4F8"><td colspan="4" class="itd" style="text-align:right;font-weight:700">TOTAL</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.taxable.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.cgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:700">${t.sgst.toFixed(2)}</td><td class="itd" style="text-align:right;font-family:monospace;font-weight:900">${t.gross.toFixed(2)}</td></tr></tbody></table><div style="display:flex;justify-content:flex-end;padding:10px"><div style="text-align:right"><div style="font-size:9px;color:#555">Round Off: ${t.roundOff>=0?"+":""}${t.roundOff.toFixed(2)}</div><div style="font-size:12px;font-weight:900;color:#1E3A5F;margin-top:2px">Net Payable: ${t.net.toFixed(2)}</div></div></div></div>`;
 }
 
 // ── Print Tracking (spec item 9) ──────────────────────────
@@ -16071,6 +15977,9 @@ v2.8 — Definitive flat-light header + school category correction
     masala: { id:'masala', label:'Masala', method:'masala_50', step:50, min:50, tie:'down' },
     lahsoon: { id:'lahsoon', label:'Lahsoon / Garlic', method:'ceil', step:250, min:250 },
     lpg: { id:'lpg', label:'LPG Gas', method:'nearest', step:500, min:0, tie:'up', displayMode:'KG_ONLY' },
+    // Firewood remains a distinct fuel mode, while retaining the approved fuel
+    // quantity normalization behaviour and KG-only billing display.
+    firewood: { id:'firewood', label:'Firewood', method:'nearest', step:500, min:0, tie:'up', displayMode:'KG_ONLY' },
     green_veg_mix: { id:'green_veg_mix', label:'Green Veg Mix', method:'nearest', step:500, min:0, tie:'up' },
     generic_small: { id:'generic_small', label:'General Small Quantity', method:'nearest', step:50, min:0, maxInputExclusive:500, tie:'up' },
     generic_large: { id:'generic_large', label:'General Large Quantity', method:'fractional_250_bands', step:250, min:0 }
@@ -16131,7 +16040,7 @@ v2.8 — Definitive flat-light header + school category correction
     const ruleId=resolveRule(String(input.itemId||''),input.ruleId,actualGrams);
     const normalizedGrams=normalizeGrams(actualGrams,ruleId);
     const mode=input.displayMode==='KG_ONLY'?'KG_ONLY':'SMART';
-    const outUnit=(ruleId==='oil'?'LTR':(mode==='KG_ONLY'||ruleId==='lpg'?'KG':(normalizedGrams<1000?'GM':'KG')));
+    const outUnit=(ruleId==='oil'?'LTR':(mode==='KG_ONLY'||ruleId==='lpg'||ruleId==='firewood'?'KG':(normalizedGrams<1000?'GM':'KG')));
     const normalizedInUnit=ruleId==='oil'?normalizedGrams/1000:(outUnit==='KG'?normalizedGrams/1000:normalizedGrams);
     return {
       eligible:true,engineVersion:VERSION,ruleId,actualQuantity:actual,actualUnit:unit,actualGrams,
@@ -16168,6 +16077,10 @@ v2.8 — Definitive flat-light header + school category correction
     check('LPG 16.250kg',normalizeGrams(16250,'lpg'),16500);
     check('LPG 16.749kg',normalizeGrams(16749,'lpg'),16500);
     check('LPG 16.750kg',normalizeGrams(16750,'lpg'),17000);
+    check('Firewood 16.249kg uses dedicated fuel rule',normalizeGrams(16249,'firewood'),16000);
+    check('Firewood 16.750kg uses dedicated fuel rule',normalizeGrams(16750,'firewood'),17000);
+    check('Firewood always KG',normalize({itemId:'i21',ruleId:'firewood',actualQuantity:0.75,unit:'KG',displayMode:'SMART'}).normalizedUnit,'KG');
+    check('Firewood has distinct rule identity',normalize({itemId:'i21',ruleId:'firewood',actualQuantity:0.75,unit:'KG',displayMode:'SMART'}).ruleId,'firewood');
     check('Generic 39g to 50g',normalizeGrams(39,'generic_small'),50);
     check('Generic 119g to 100g',normalizeGrams(119,'generic_small'),100);
     check('Generic 287g to 300g',normalizeGrams(287,'generic_small'),300);
