@@ -1,3 +1,4 @@
+<!-- MDM ERP v4.62.43 — Seven-tap Developer Mode; own-invoice renumber only; cross-invoice number reuse remains blocked: existing invoice revisions retain their reserved invoice number; new invoices remain globally protected. No revision-count cap added. Based on v4.62.41. -->
 <!-- MDM ERP v4.62.33 (EXACT-1.0.0): target-based exact solver + single shared validator; spurious half-paise line check removed. Previously v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
@@ -2997,6 +2998,7 @@ function niResolvedInvNo(withFallback){
 function niCurrentInvoiceNo(withFallback=true){
   if(NI.editId){
     const original=A.invoices.find(i=>String(i.id)===String(NI.editId));
+    if(NI.developerMode&&String(NI.revisionNumberOverride||"").trim())return String(NI.revisionNumberOverride).trim();
     if(original && original.invNo!=null && String(original.invNo).trim()) return String(original.invNo);
   }
   return niResolvedInvNo(withFallback);
@@ -3004,13 +3006,45 @@ function niCurrentInvoiceNo(withFallback=true){
 function niRevisionIdentityCard(){
   const original=NI.editId?A.invoices.find(i=>String(i.id)===String(NI.editId)):null;
   if(!original)return niNumberCard();
+  const changed=String(NI.revisionNumberOverride||"").trim();
   return `<div class="card ni-number-summary ni-revision-identity" style="margin:0;padding:14px;border-radius:16px;width:100%">
-    <div class="ni-ns-head ni-summary-head"><div>${ic("file-text",15)}<span>Revision Mode</span></div></div>
-    <div class="ni-meta"><span class="ni-meta-ico ni-series-ico">${ic("invoice",15)}</span><div><div class="ni-meta-l">Original Invoice Number</div><div class="mono ni-meta-v">${ec(original.invNo)}</div></div></div>
+    <div class="ni-ns-head ni-summary-head"><div>${ic("file-text",15)}<span>Revision Mode</span></div><span class="bdg ${NI.developerMode?"bo":"bn"}">${NI.developerMode?"DEVELOPER MODE":"STANDARD MODE"}</span></div>
+    <div class="ni-meta"><span class="ni-meta-ico ni-series-ico">${ic("invoice",15)}</span><div><div class="ni-meta-l">Original Invoice Number</div><div class="mono ni-meta-v" onclick="niDeveloperTap()" title="Tap 7 times for administrator tools" style="user-select:none">${ec(original.invNo)}</div></div></div>
     <div class="ni-meta"><span class="ni-meta-ico ni-month-ico">${ic("calendar",15)}</span><div><div class="ni-meta-l">Saved Invoice</div><div class="ni-meta-v">${ec(original.schoolName||"")}</div></div></div>
     <div class="ni-stat" style="margin-top:8px"><div class="ni-stat-label">Number allocation</div><div class="ni-meta-v" style="white-space:normal">Disabled while revising an existing invoice</div></div>
+    ${NI.developerMode?`<div class="info inf-w" style="margin-top:10px"><b>Developer Mode enabled for this revision session.</b> You may change this invoice's own number only. Numbers reserved by other invoices remain permanently blocked.</div><div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:10px"><div style="flex:1;min-width:220px"><label class="flbl">New invoice number (full number)</label><input class="fi" id="ni-revision-number-override" value="${ec(changed||original.invNo)}" placeholder="e.g. MSE2627-335" oninput="NI.revisionNumberOverride=this.value"/></div><button class="btn btn-g btn-sm" onclick="niValidateRevisionNumberOverride()">Validate number</button><button class="btn btn-n btn-sm" onclick="NI.revisionNumberOverride='';NI.developerMode=false;NI.developerTapCount=0;gP('new')">Exit developer mode</button></div><small style="display:block;margin-top:7px;color:var(--txl)">The new number is committed only when you confirm and save. The old number remains reserved and cannot be reused.</small>`:""}
     <div class="ni-source manual"><span class="ni-source-dot manual"></span>Existing invoice identity is preserved</div>
   </div>`;
+}
+function niDeveloperTap(){
+  if(!NI.editId)return;
+  NI.developerTapCount=(Number(NI.developerTapCount)||0)+1;
+  if(NI.developerTapCount>=7){
+    NI.developerTapCount=0;
+    const ok=window.confirm("Enable Developer Mode for this revision session? This permits changing this invoice's own number only. Every other invoice number remains blocked.");
+    if(ok){NI.developerMode=true;NI.revisionNumberOverride="";toast("Developer Mode enabled for this invoice revision.","warn");}
+    gP("new");
+  }
+}
+function invoiceNumberCounterFromAny(value){
+  const m=String(value||"").match(/(?:^|\D)(\d+)$/);return m?Number(m[1]):null;
+}
+function niValidateRevisionNumberOverride(){
+  const inv=A.invoices.find(i=>String(i.id)===String(NI.editId));if(!inv)return false;
+  const candidate=String(NI.revisionNumberOverride||"").trim();
+  if(!candidate){toast("Enter a new invoice number.","err");return false;}
+  if(candidate.toLowerCase()===String(inv.invNo||"").trim().toLowerCase()){toast("This is already the current invoice number. No change is needed.","ok");return true;}
+  const conflict=invoiceNumberReservationRecords().some(r=>String(r.invNo||"").trim().toLowerCase()===candidate.toLowerCase() && String(r.invNo||"").trim().toLowerCase()!==String(inv.invNo||"").trim().toLowerCase())
+    ||(A.invoices||[]).some(other=>String(other.id)!==String(inv.id)&&String(other.invNo||"").trim().toLowerCase()===candidate.toLowerCase())
+    ||(A.invoiceUndoArchive||[]).some(a=>String(a?.invoiceNo||a?.invoice?.invNo||"").trim().toLowerCase()===candidate.toLowerCase());
+  if(conflict){toast("This invoice number is reserved or belongs to another invoice. Cross-invoice override is permanently blocked.","err");return false;}
+  const parsed=invoiceNumberCounterFromAny(candidate);
+  if(parsed!==null){
+    const es={...A.series,fy:fyFromDate(`${String(inv.year||new Date().getFullYear()).padStart(4,"0")}-04-01`)};
+    const counterConflict=invoiceNumberReservationRecords().some(r=>String(r.invNo||"").trim().toLowerCase()!==String(inv.invNo||"").trim().toLowerCase()&&invoiceCounterAnySeries(r.invNo,es)===parsed);
+    if(counterConflict){toast("This invoice counter is already reserved in the Financial Year. Cross-invoice override is blocked.","err");return false;}
+  }
+  return true;
 }
 
 // Shared invoice PDF theme layer. One selected preset is applied to Original + Hybrid
@@ -4025,7 +4059,7 @@ function dupBanner(){
 function rsDup(id){sv("dups",A.dups.map(d=>d.id===id?{...d,resolved:true}:d));toast("Alert resolved","ok");gP("dashboard");}
 
 // ═══ NEW INVOICE ═══
-let NI={editId:null,revisionItemOverrides:{},revisionFuelOverride:"",revisionItemToAdd:"",revisionRateProfileId:"",revisionRateProfileAuto:true,revisionRateProfileName:"",schoolId:"",schoolOpen:false,date:new Date().toISOString().slice(0,10),month:MN[new Date().getMonth()],year:String(new Date().getFullYear()),s15:"",s68:"",useFruit:true,sFruit:"",fruitRate:"5",adjustmentOn:false,adjustmentAmount:"",adjustmentSign:"plus",hybridAdjustmentItemId:"",notes:"",doShuffle:true,calc:null,generated:false,generatedSignature:null,saved:false,dupWarns:[],tab:"merged",autoAllocate:true,manualNum:"",autoStrategy:"next",batchMenu:false,showAvailable:false,availableSearch:"",schoolSearch:""};
+let NI={editId:null,developerTapCount:0,developerMode:false,revisionNumberOverride:"",revisionItemOverrides:{},revisionFuelOverride:"",revisionItemToAdd:"",revisionRateProfileId:"",revisionRateProfileAuto:true,revisionRateProfileName:"",schoolId:"",schoolOpen:false,date:new Date().toISOString().slice(0,10),month:MN[new Date().getMonth()],year:String(new Date().getFullYear()),s15:"",s68:"",useFruit:true,sFruit:"",fruitRate:"5",adjustmentOn:false,adjustmentAmount:"",adjustmentSign:"plus",hybridAdjustmentItemId:"",notes:"",doShuffle:true,calc:null,generated:false,generatedSignature:null,saved:false,dupWarns:[],tab:"merged",autoAllocate:true,manualNum:"",autoStrategy:"next",batchMenu:false,showAvailable:false,availableSearch:"",schoolSearch:""};
 const NI_HSN_KEY="ni_hsn_behavior_v1";
 function niHsnState(){return LS.get(NI_HSN_KEY,{stickyOn:false,onStreak:0,offStreak:0});}
 function niHsnDefault(){return niHsnState().stickyOn===true;}
@@ -4711,10 +4745,27 @@ function niGen(){
   const s15=niStudentValue(NI.s15),s68=niStudentValue(NI.s68);
   if(!s15&&!s68){toast("Enter at least one student count","err");return;}
   if(!NI.schoolId){toast("Select a school first","err");return;}
-  const nxt=niResolvedInvNo(false);
+  const nxt=NI.editId?niCurrentInvoiceNo(false):niResolvedInvNo(false);
   if(!nxt){toast("Enter or select a manual invoice number","err");return;}
-  const {hard,warns}=chkDup(nxt,NI.schoolId,NI.month,NI.year,s15,s68);
-  if(hard){toast(hard,"err");return;}
+  // Existing-invoice revisions retain their original invoice number. The global
+  // reservation ledger must block new invoice creation, not a revision of the
+  // very invoice that owns that reservation. Final verification uses
+  // smartDupCheck(candidate, editingInvoice.id) to exclude this invoice while
+  // still blocking a conflicting second invoice with the same number.
+  let warns=[];
+  if(!NI.editId){
+    const duplicateCheck=chkDup(nxt,NI.schoolId,NI.month,NI.year,s15,s68);
+    if(duplicateCheck.hard){toast(duplicateCheck.hard,"err");return;}
+    warns=duplicateCheck.warns||[];
+  }else{
+    const editingInvoice=A.invoices.find(i=>String(i.id)===String(NI.editId));
+    if(!editingInvoice){toast("The invoice being revised could not be found. Reopen it from Invoice History.","err");return;}
+    if(String(editingInvoice.invNo||"").trim().toLowerCase()!==String(nxt).trim().toLowerCase()){
+      if(!NI.developerMode){toast("A revision must retain its existing invoice number. Activate Developer Mode to change this invoice's own number.","err");return;}
+      NI.revisionNumberOverride=nxt;
+      if(!niValidateRevisionNumberOverride())return;
+    }
+  }
   NI.dupWarns=warns;
   const sFr=NI.useFruit?Math.max(0,parseInt(NI.sFruit)||0):0;
   const adjustmentAmount=niAmountAdjustmentValue();
@@ -4772,7 +4823,7 @@ function niSaveEdited(){
   const old=A.invoices[idx], before=mrSnapshot(old), sch=A.schools.find(s=>s.id===NI.schoolId); const s15=Math.max(0,parseInt(NI.s15)||0),s68=Math.max(0,parseInt(NI.s68)||0),sFr=NI.useFruit?Math.max(0,parseInt(NI.sFruit)||0):0,frR=parseFloat(NI.fruitRate)||0;
   if(!NI.calc||!Array.isArray(NI.calc.merged)||!Number.isFinite(Number(NI.calc.a15))||!Number.isFinite(Number(NI.calc.a68))||!Number.isFinite(Number(NI.calc.aFr))||!Number.isFinite(Number(NI.calc.grand))){resetRevisionConfirmation();toast("Invoice calculation is incomplete. Recalculate the invoice before saving; no data was changed.","err");return;}
   const at=new Date().toISOString();
-  let updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:old.schoolName||sch?.name||"",schoolAddress:old.schoolAddress||sch?.address||"",schoolUdise:old.schoolUdise||sch?.udise||"",schoolBlock:old.schoolBlock||sch?.block||"",schoolDistrict:old.schoolDistrict||sch?.district||"",schoolMobile:old.schoolMobile||sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),adjustmentSign:NI.adjustmentSign||"plus",adjustmentItemId:activeBillingMode()==="hybrid"?(NI.hybridAdjustmentItemId||""):"",taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,calculationSnapshot:NI.calcMasterSnapshot||old.calculationSnapshot||invoiceCalcContext(old),revisionCalculationSource:NI.revisionCalculationSource||"previous",revisionEngine:niRevisionEngineKey(),revisionRateProfileId:NI.revisionRateProfileAuto?(NI.revisionRateProfileId||""):"",annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:old.invoiceType||(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:old.savedAt||at,updatedAt:at,revisedAt:at,status:"revised",revisionStatus:mrInvoiceShared(old)?"RE_SHARE_PENDING":(old.issuedAt?"RE_ISSUE_PENDING":"REVISED_NOT_SHARED"),reSharePending:mrInvoiceShared(old),recallPending:mrInvoiceShared(old),reIssuePending:!!old.issuedAt,originalSnapshot:old.originalSnapshot||before};
+  let updated={...old,invNo:(NI.developerMode&&String(NI.revisionNumberOverride||"").trim()?String(NI.revisionNumberOverride).trim():old.invNo),date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:old.schoolName||sch?.name||"",schoolAddress:old.schoolAddress||sch?.address||"",schoolUdise:old.schoolUdise||sch?.udise||"",schoolBlock:old.schoolBlock||sch?.block||"",schoolDistrict:old.schoolDistrict||sch?.district||"",schoolMobile:old.schoolMobile||sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),adjustmentSign:NI.adjustmentSign||"plus",adjustmentItemId:activeBillingMode()==="hybrid"?(NI.hybridAdjustmentItemId||""):"",taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,calculationSnapshot:NI.calcMasterSnapshot||old.calculationSnapshot||invoiceCalcContext(old),revisionCalculationSource:NI.revisionCalculationSource||"previous",revisionEngine:niRevisionEngineKey(),revisionRateProfileId:NI.revisionRateProfileAuto?(NI.revisionRateProfileId||""):"",annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:old.invoiceType||(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:old.savedAt||at,updatedAt:at,revisedAt:at,status:"revised",revisionStatus:mrInvoiceShared(old)?"RE_SHARE_PENDING":(old.issuedAt?"RE_ISSUE_PENDING":"REVISED_NOT_SHARED"),reSharePending:mrInvoiceShared(old),recallPending:mrInvoiceShared(old),reIssuePending:!!old.issuedAt,originalSnapshot:old.originalSnapshot||before};
   if(!NI.revisionPreviewConfirmed){
     NI.pendingRevisionPreview={invoiceId:old.id,updatedAt:at,updated};
     const beforeRows=Array.isArray(old.mergedItems)?old.mergedItems:[],afterRows=Array.isArray(updated.mergedItems)?updated.mergedItems:[];
@@ -4784,14 +4835,29 @@ function niSaveEdited(){
     const dlg=document.createElement("div");dlg.className="ov";dlg.id="individual-revision-preview";dlg.innerHTML=`<div class="modal ir-preview-modal" role="dialog" aria-modal="true" aria-labelledby="ir-preview-title"><div class="mhd ir-preview-head"><div><div class="ir-preview-title" id="ir-preview-title">Preview Revision — ${ec(old.invNo)}</div><div class="ir-preview-subtitle">Review the changes before saving this revision.</div></div><button class="btn btn-g btn-sm ir-close" aria-label="Close preview" onclick="NI.pendingRevisionPreview=null;NI.revisionPreviewConfirmed=false;document.getElementById('individual-revision-preview')?.remove()">&#10005;</button></div><div class="mbd ir-preview-body"><div class="ir-comparison"><section class="ir-side ir-before"><div class="ir-side-head"><span class="ir-icon ir-icon-before">▤</span><div><div class="ir-side-title">Original <span>(Before)</span></div><div class="ir-side-sub">Current saved invoice amounts</div></div></div><div class="ir-metric"><span>Grand Total</span><strong>${R(old.grand)}</strong></div><div class="ir-metric"><span>Net Payable</span><strong>${R(old.net)}</strong></div></section><section class="ir-change-column" aria-label="Amount differences"><div class="ir-change-heading">Change</div><div class="ir-change-row">${deltaMarkup(grandDelta)}<span class="ir-arrow">→</span></div><div class="ir-change-row">${deltaMarkup(netDelta)}<span class="ir-arrow">→</span></div></section><section class="ir-side ir-after"><div class="ir-side-head"><span class="ir-icon ir-icon-after">✓</span><div><div class="ir-side-title">Revised <span>(After)</span></div><div class="ir-side-sub">Updated invoice amounts · preview only</div></div></div><div class="ir-metric"><span>Grand Total</span><strong>${R(updated.grand)}</strong></div><div class="ir-metric"><span>Net Payable</span><strong>${R(updated.net)}</strong></div></section></div><section class="ir-items-panel"><div class="ir-items-head"><div><span class="ir-list-icon">☷</span><strong>Item-wise Changes</strong><span class="ir-count">${keys.filter(k=>{const b=beforeRows.filter(r=>key(r)===k).reduce((n,r)=>n+(Number(r.gross)||0),0),a=afterRows.filter(r=>key(r)===k).reduce((n,r)=>n+(Number(r.gross)||0),0);return Math.abs(a-b)>=0.005;}).length} item(s) changed</span></div></div><div class="tw ir-table-wrap"><table class="dt ir-table"><thead><tr><th>Item</th><th class="num">Before Amount</th><th class="num">After Amount</th><th class="num">Difference</th><th>Change</th></tr></thead><tbody>${diffs||'<tr><td colspan="5" class="ir-no-changes">No item line amount differences detected. Check totals and non-item fields above.</td></tr>'}</tbody></table></div></section><div class="ir-preview-notice"><span class="ir-info-icon">i</span><div><strong>This is a preview only. Nothing has been saved yet.</strong><span>Confirm only after checking item amounts, Grand Total and Net Payable.</span></div></div><div class="sac ir-preview-actions"><button class="btn btn-g ir-cancel" onclick="NI.pendingRevisionPreview=null;NI.revisionPreviewConfirmed=false;document.getElementById('individual-revision-preview')?.remove()">Cancel</button><button class="btn btn-p ir-confirm" onclick="NI.revisionPreviewConfirmed=true;document.getElementById('individual-revision-preview')?.remove();niSaveEdited()">▣&nbsp; Confirm &amp; Save Revision</button></div></div></div>`;document.body.appendChild(dlg);return;
   }
   NI.revisionPreviewConfirmed=false;NI.pendingRevisionPreview=null;
-  const rev={revisionNo:(old.revisions||[]).length+1,by:A.currentUser?.name||"Administrator",at,reason:"Edited from saved invoice",operation:"individual_edit",calculationSource:NI.revisionCalculationSource||"previous",engine:niRevisionEngineKey(),rateProfileId:NI.revisionRateProfileAuto?(NI.revisionRateProfileId||""):"",beforeNet:Number(old.net)||0,afterNet:Number(updated.net)||0,delta:d2((Number(updated.net)||0)-(Number(old.net)||0)),before,after:mrSnapshot(updated)};
+  const requestedNewNo=String(updated.invNo||"").trim();
+  if(requestedNewNo.toLowerCase()!==String(old.invNo||"").trim().toLowerCase()){
+    if(!NI.developerMode||!niValidateRevisionNumberOverride()){resetRevisionConfirmation();return;}
+    const lateConflict=(A.invoices||[]).some(other=>String(other.id)!==String(old.id)&&String(other.invNo||"").trim().toLowerCase()===requestedNewNo.toLowerCase())
+      ||(A.invoiceUndoArchive||[]).some(a=>String(a?.invoiceNo||a?.invoice?.invNo||"").trim().toLowerCase()===requestedNewNo.toLowerCase())
+      ||(A.invoiceNumberReservations||[]).some(r=>String(r.invNo||"").trim().toLowerCase()===requestedNewNo.toLowerCase()&&String(r.invNo||"").trim().toLowerCase()!==String(old.invNo||"").trim().toLowerCase());
+    if(lateConflict){resetRevisionConfirmation();toast("Number conflict detected at final save. No changes were saved; another invoice's number cannot be overridden.","err");return;}
+  }
+  const rev={revisionNo:(old.revisions||[]).length+1,by:A.currentUser?.name||"Administrator",at,reason:"Edited from saved invoice",operation:"individual_edit",oldInvoiceNo:old.invNo,newInvoiceNo:updated.invNo,numberChanged:String(old.invNo)!==String(updated.invNo),calculationSource:NI.revisionCalculationSource||"previous",engine:niRevisionEngineKey(),rateProfileId:NI.revisionRateProfileAuto?(NI.revisionRateProfileId||""):"",beforeNet:Number(old.net)||0,afterNet:Number(updated.net)||0,delta:d2((Number(updated.net)||0)-(Number(old.net)||0)),before,after:mrSnapshot(updated)};
   updated.revisions=[...(old.revisions||[]),rev];
   updated.revisionEvents=[...(old.revisionEvents||[]),{type:"REVISION_CREATED",at,revisionNo:rev.revisionNo,detail:"Edited from saved invoice"}];
   if(activeBillingMode()==="hybrid"){
     try{updated.hybridModel=old.hybridModel?JSON.parse(JSON.stringify(old.hybridModel)):null;hybridEnsureSnapshot(updated);}
     catch(e){toast("Hybrid revision snapshot could not be created; no invoice changes were saved: "+(e.message||e),"err");return;}
   }
-  sv("iv",A.invoices.map((i,j)=>j===idx?updated:i)); niRevisionWritePreferences(); NI.saved=true; const id=updated.id; NI.editId=null; A.flashId=id; toast("Invoice "+updated.invNo+" updated — original preserved; revision saved","ok"); auditLog("UPDATE","invoice",id,"Edited invoice with revision snapshot: "+updated.invNo,{revisionNo:rev.revisionNo,beforeNet:rev.beforeNet,afterNet:rev.afterNet}); setTimeout(()=>showInvSuccess(updated),250); gP("new");
+  sv("iv",A.invoices.map((i,j)=>j===idx?updated:i));
+  if(String(updated.invNo||"").trim().toLowerCase()!==String(old.invNo||"").trim().toLowerCase()){
+    mergeInvoiceNumberReservations([{invNo:updated.invNo,date:updated.date,month:updated.month,year:updated.year,source:"developer-mode-renumber",invoiceId:updated.id,reservedAt:at}]);
+    updated.revisionEvents=[...(updated.revisionEvents||[]),{type:"INVOICE_NUMBER_CHANGED",at,oldInvoiceNo:old.invNo,newInvoiceNo:updated.invNo,by:A.currentUser?.name||"Administrator",developerMode:true}];
+    sv("iv",A.invoices.map((i,j)=>j===idx?updated:i));
+    auditLog("RENUMBER","invoice",updated.id,"Developer Mode changed invoice number",{oldInvoiceNo:old.invNo,newInvoiceNo:updated.invNo});
+  }
+  niRevisionWritePreferences(); NI.saved=true; const id=updated.id; NI.developerMode=false;NI.developerTapCount=0;NI.revisionNumberOverride="";NI.editId=null; A.flashId=id; toast("Invoice "+updated.invNo+" updated — original preserved; revision saved","ok"); auditLog("UPDATE","invoice",id,"Edited invoice with revision snapshot: "+updated.invNo,{revisionNo:rev.revisionNo,beforeNet:rev.beforeNet,afterNet:rev.afterNet}); setTimeout(()=>showInvSuccess(updated),250); gP("new");
 }
 
 async function niPr(tab){
@@ -10278,7 +10344,7 @@ function nativeShare(id) {
 function niEditSaved(id){
   const inv=A.invoices.find(i=>i.id===id); if(!inv)return;
   const sch=A.schools.find(s=>s.id===inv.schoolId);
-  NI.editId=inv.id; NI.revisionItemOverrides={};NI.revisionAddedItems=[];NI.revisionFuelOverride="";NI.revisionCalculationSource="previous"; niRevisionApplyLastPreferences(); NI.schoolId=inv.schoolId; NI.date=inv.date; NI.month=inv.month; NI.year=String(inv.year||""); NI.s15=String(inv.s15||""); NI.s68=String(inv.s68||""); NI.useFruit=(inv.sFr||0)>0; NI.sFruit=String(inv.sFr||""); NI.fruitRate=String(inv.fruitRate||5); NI.adjustmentAmount=String(Math.abs(Number(inv.adjustmentAmount)||0)||""); NI.adjustmentSign=inv.adjustmentSign||((Number(inv.adjustmentAmount)||0)<0?"minus":"plus"); NI.hybridAdjustmentItemId=inv.adjustmentItemId||""; NI.adjustmentOn=Math.abs(Number(inv.adjustmentAmount)||0)>0; NI.notes=inv.notes||"";
+  NI.editId=inv.id; NI.developerTapCount=0;NI.developerMode=false;NI.revisionNumberOverride=""; NI.revisionItemOverrides={};NI.revisionAddedItems=[];NI.revisionFuelOverride="";NI.revisionCalculationSource="previous"; niRevisionApplyLastPreferences(); NI.schoolId=inv.schoolId; NI.date=inv.date; NI.month=inv.month; NI.year=String(inv.year||""); NI.s15=String(inv.s15||""); NI.s68=String(inv.s68||""); NI.useFruit=(inv.sFr||0)>0; NI.sFruit=String(inv.sFr||""); NI.fruitRate=String(inv.fruitRate||5); NI.adjustmentAmount=String(Math.abs(Number(inv.adjustmentAmount)||0)||""); NI.adjustmentSign=inv.adjustmentSign||((Number(inv.adjustmentAmount)||0)<0?"minus":"plus"); NI.hybridAdjustmentItemId=inv.adjustmentItemId||""; NI.adjustmentOn=Math.abs(Number(inv.adjustmentAmount)||0)>0; NI.notes=inv.notes||"";
   // Do not inject a saved historical invoice's cached calculation/PDF-preview payload into
   // the live New Invoice preview. Older invoices can lack newer fields and the
   // async locked-PDF preview may fail during the page transition. Load only the
