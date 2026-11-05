@@ -78,7 +78,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>MDM ERP v4.62.36 — Invoice-Scoped Revision Overrides</title>
+<title>MDM ERP v4.62.39 — Invoice-Scoped Revision Overrides</title>
 <!-- v4.61.37: Revision-mode identity isolation; new-invoice numbering allocation unchanged. -->
 <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
@@ -3321,22 +3321,47 @@ function hybridEnsureSnapshot(inv,approvedSnapshot=null){
   if(!inv||!Array.isArray(inv.mergedItems))return inv;
   if(!window.MDMHybridQuantityEngine||typeof hybridMakeSnapshot!=="function")throw new Error("Hybrid quantity engine is not ready");
   const sourceSig=typeof mdmV7SourceSignature==="function"?mdmV7SourceSignature(inv.mergedItems):"";
-  const approved=approvedSnapshot||(typeof mdmV7GetAppliedSnapshot==="function"?mdmV7GetAppliedSnapshot(inv.mergedItems):null);
-  const snap=approved&&approved.reconciliation?.financialMatch&&approved.reconciliation?.status==="RECONCILED_BY_SMART_OPTIMIZER"
-    ?JSON.parse(JSON.stringify(approved))
-    :hybridMakeSnapshot(inv,hybridUnitDisplayMode());
-  if(approved){
-    snap.sourceInvoiceId=inv.id;snap.sourceInvoiceNo=inv.invNo;snap.sourceSavedAt=inv.savedAt||null;
-    const sourceGross=mdmV7Money(inv.grand??inv.mergedTotals?.gross??0),sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
-    snap.roundOffEnabled=sourceEnabled;snap.sourceGross=sourceFinancials.gross;snap.sourceRoundOff=sourceFinancials.roundOff;snap.sourceNet=sourceFinancials.net;snap.hybridRoundOff=sourceFinancials.roundOff;snap.hybridNet=sourceFinancials.net;
-    snap.sourceInvoiceSnapshot={...(snap.sourceInvoiceSnapshot||{}),id:inv.id,invNo:inv.invNo,date:inv.date,month:inv.month,year:inv.year,schoolId:inv.schoolId,schoolName:inv.schoolName,schoolAddress:inv.schoolAddress,schoolUdise:inv.schoolUdise,schoolBlock:inv.schoolBlock,schoolDistrict:inv.schoolDistrict,schoolMobile:inv.schoolMobile,invoiceType:inv.invoiceType,roundOffEnabled:sourceEnabled,grand:sourceGross,taxable:Number(inv.taxable)||0,cgst:Number(inv.cgst)||0,sgst:Number(inv.sgst)||0,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net,mergedTotals:{...(inv.mergedTotals||{}),gross:sourceGross,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net},mergedItems:inv.mergedItems.map(r=>({...r}))};
-    const gross=mdmV7Money((snap.rows||[]).reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0)/100);
-    // Independent final re-verification through the ONE shared validator against a fresh Original baseline.
-    const fresh=hybridMakeSnapshot(inv,hybridUnitDisplayMode());fresh.roundOffEnabled=sourceEnabled;
-    fresh.sourceGross=sourceFinancials.gross;fresh.sourceRoundOff=sourceFinancials.roundOff;fresh.sourceNet=sourceFinancials.net;
-    fresh.sourceInvoiceSnapshot={...(fresh.sourceInvoiceSnapshot||{}),roundOffEnabled:sourceEnabled,mergedItems:inv.mergedItems.map(r=>({...r}))};
-    const v=validateExactReconciliation(fresh,snap,{currentSignature:mdmV7SourceSignature(inv.mergedItems),approvedIds:(snap.optimizer?.adjustedItems||[]).map(x=>x.id)});
-    if(gross!==mdmV7Money(inv.grand??inv.mergedTotals?.gross)||!v.ok)throw new Error("Approved optimizer snapshot failed final verification ("+(v.ok?"GROSS_VS_INVOICE":v.failed.join(", "))+"); save blocked. Re-run Analyze & Compare.");
+  const supplied=approvedSnapshot||(typeof mdmV7GetAppliedSnapshot==="function"?mdmV7GetAppliedSnapshot(inv.mergedItems):null);
+  const sourceGross=mdmV7Money(inv.grand??inv.mergedTotals?.gross??0);
+  const sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false);
+  const sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
+  const fresh=hybridMakeSnapshot(inv,hybridUnitDisplayMode());
+  fresh.roundOffEnabled=sourceEnabled;fresh.sourceGross=sourceFinancials.gross;fresh.sourceRoundOff=sourceFinancials.roundOff;fresh.sourceNet=sourceFinancials.net;
+  fresh.sourceInvoiceSnapshot={...(fresh.sourceInvoiceSnapshot||{}),id:inv.id,invNo:inv.invNo,date:inv.date,month:inv.month,year:inv.year,schoolId:inv.schoolId,schoolName:inv.schoolName,schoolAddress:inv.schoolAddress,schoolUdise:inv.schoolUdise,schoolBlock:inv.schoolBlock,schoolDistrict:inv.schoolDistrict,schoolMobile:inv.schoolMobile,invoiceType:inv.invoiceType,roundOffEnabled:sourceEnabled,grand:sourceGross,taxable:Number(inv.taxable)||0,cgst:Number(inv.cgst)||0,sgst:Number(inv.sgst)||0,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net,mergedTotals:{...(inv.mergedTotals||{}),gross:sourceGross,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net},mergedItems:inv.mergedItems.map(r=>({...r}))};
+  const validateCandidate=candidate=>{
+    if(!candidate||!Array.isArray(candidate.rows))return {ok:false,failed:["SNAPSHOT_ROWS_MISSING"]};
+    candidate.sourceInvoiceId=inv.id;candidate.sourceInvoiceNo=inv.invNo;candidate.sourceSavedAt=inv.savedAt||null;
+    candidate.roundOffEnabled=sourceEnabled;candidate.sourceGross=sourceFinancials.gross;candidate.sourceRoundOff=sourceFinancials.roundOff;candidate.sourceNet=sourceFinancials.net;
+    candidate.sourceInvoiceSnapshot={...(candidate.sourceInvoiceSnapshot||{}),...fresh.sourceInvoiceSnapshot};
+    const gross=mdmV7Money((candidate.rows||[]).reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0)/100);
+    const v=validateExactReconciliation(fresh,candidate,{currentSignature:sourceSig,approvedIds:(candidate.optimizer?.adjustedItems||[]).map(x=>x.id)});
+    return {ok:gross===sourceGross&&v.ok,failed:[...(gross===sourceGross?[]:["GROSS_VS_INVOICE"]),...v.failed],gross,validation:v};
+  };
+  let snap=null,check=null;
+  const approvedIsCurrent=supplied&&supplied.reconciliation?.financialMatch&&["RECONCILED_BY_SMART_OPTIMIZER","RECONCILED"].includes(supplied.reconciliation?.status);
+  if(approvedIsCurrent){
+    const candidate=JSON.parse(JSON.stringify(supplied));
+    check=validateCandidate(candidate);
+    if(check.ok)snap=candidate;
+  }
+  // A stale/inconsistent approved preview must not permanently block a valid save.
+  // Rebuild against the exact final invoice rows, then run the same strict validator.
+  if(!snap){
+    // If the unadjusted Hybrid rows already match the invoice exactly, retain
+    // that valid baseline; the optimizer is only needed when a residual exists.
+    const baseline=JSON.parse(JSON.stringify(fresh));
+    check=validateCandidate(baseline);
+    if(check.ok)snap=baseline;
+  }
+  if(!snap){
+    const rebuilt=mdmV7AutoReconcileSnapshot(fresh,hybridReconEligible());
+    const candidate=rebuilt?.snapshot;
+    check=validateCandidate(candidate);
+    if(check.ok)snap=candidate;
+  }
+  if(!snap){
+    const failed=(check?.failed||["NO_VALID_HYBRID_SNAPSHOT"]).join(", ");
+    throw new Error("Hybrid final verification failed ("+failed+"). No invoice changes were saved. Review the current invoice calculation and run Analyze & Compare again.");
   }
   const old=inv.hybridModel||{schema:"MDM-HYBRID-MODEL",schemaVersion:3,activeRevision:0,revisions:[],createdAt:snap.createdAt};
   const revisions=Array.isArray(old.revisions)?old.revisions.slice():[];
@@ -4000,7 +4025,7 @@ function dupBanner(){
 function rsDup(id){sv("dups",A.dups.map(d=>d.id===id?{...d,resolved:true}:d));toast("Alert resolved","ok");gP("dashboard");}
 
 // ═══ NEW INVOICE ═══
-let NI={editId:null,revisionItemOverrides:{},revisionFuelOverride:"",revisionItemToAdd:"",schoolId:"",schoolOpen:false,date:new Date().toISOString().slice(0,10),month:MN[new Date().getMonth()],year:String(new Date().getFullYear()),s15:"",s68:"",useFruit:true,sFruit:"",fruitRate:"5",adjustmentOn:false,adjustmentAmount:"",adjustmentSign:"plus",hybridAdjustmentItemId:"",notes:"",doShuffle:true,calc:null,generated:false,generatedSignature:null,saved:false,dupWarns:[],tab:"merged",autoAllocate:true,manualNum:"",autoStrategy:"next",batchMenu:false,showAvailable:false,availableSearch:"",schoolSearch:""};
+let NI={editId:null,revisionItemOverrides:{},revisionFuelOverride:"",revisionItemToAdd:"",revisionRateProfileId:"",revisionRateProfileAuto:true,revisionRateProfileName:"",schoolId:"",schoolOpen:false,date:new Date().toISOString().slice(0,10),month:MN[new Date().getMonth()],year:String(new Date().getFullYear()),s15:"",s68:"",useFruit:true,sFruit:"",fruitRate:"5",adjustmentOn:false,adjustmentAmount:"",adjustmentSign:"plus",hybridAdjustmentItemId:"",notes:"",doShuffle:true,calc:null,generated:false,generatedSignature:null,saved:false,dupWarns:[],tab:"merged",autoAllocate:true,manualNum:"",autoStrategy:"next",batchMenu:false,showAvailable:false,availableSearch:"",schoolSearch:""};
 const NI_HSN_KEY="ni_hsn_behavior_v1";
 function niHsnState(){return LS.get(NI_HSN_KEY,{stickyOn:false,onStreak:0,offStreak:0});}
 function niHsnDefault(){return niHsnState().stickyOn===true;}
@@ -4219,7 +4244,7 @@ ${niAmountAdjustmentEnabled()?`<div class="ni-adjust-control ni-adjust-secondary
     <small style="display:block;margin-top:3px;color:var(--txl);font-size:9.5px">${activeBillingMode()==="hybrid"?"Independent item adjustment; separate from Smart Reconciliation Optimizer.":"Applied within the existing allocation item; no separate adjustment line."}</small>
   </div>
 </div>`:""}
-<div style="flex:1;min-width:180px"><div class="aband"><div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Total Allocation</div><div style="font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace">${R(grand)}</div>${Math.abs(niAmountAdjustmentValue())>0?`<div style="font-size:9.5px;color:var(--sf);font-weight:700;margin-top:3px">Base ${niAmountAdjustmentValue()>=0?"+":"−"} Adjustment: ${R(Math.abs(niAmountAdjustmentValue()))}</div>`:""}</div><button id="ni-generate-btn" class="btn btn-lg ${niIsGeneratedFresh()?"btn-s":(niCalcIsFresh()?"ni-stage-generate":"ni-stage-fetch")}" title="${niIsGeneratedFresh()?"Step 3 of 3: Generated — verify and save":(niCalcIsFresh()?"Step 2 of 3: Generate invoice":"Step 1 of 3: Fetch / recalculate")}" aria-label="${niIsGeneratedFresh()?"Generated — verify and save":(niCalcIsFresh()?"Generate invoice":"Fetch / recalculate")}" onclick="${niIsGeneratedFresh()?"niFinalizeGenerate()":(niCalcIsFresh()?"niFinalizeGenerate()":"niGen()")}" ${(!NI.s15&&!NI.s68)||!NI.schoolId?"disabled":""}>${niCalcIsFresh()&&!niIsGeneratedFresh()?"&#10003; Generate Invoice":niIsGeneratedFresh()?"&#10003; Generated":"&#8635; Fetch / Recalculate"}</button></div></div></div><div style="margin-top:11px"><label class="flbl">Notes</label><input class="fi" value="${ec(NI.notes||"")}" onchange="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" placeholder="Optional remarks..."/></div></div></div>${niRevisionIdentityCard()}</div>${NI.editId?niRevisionItemOverrideHTML():""}${calcH}${!NI.calc?`<div class="card"><div class="empty"><div class="ei">&#127979;</div><div class="et">Ready to generate</div><div class="es">Select a school, enter the details, then click Fetch / Recalculate before saving or exporting.</div></div></div>`:""}`;
+<div style="flex:1;min-width:180px"><div class="aband"><div><div style="font-size:10px;opacity:.7;margin-bottom:2px">Total Allocation</div><div style="font-size:22px;font-weight:800;font-family:'JetBrains Mono',monospace">${R(grand)}</div>${Math.abs(niAmountAdjustmentValue())>0?`<div style="font-size:9.5px;color:var(--sf);font-weight:700;margin-top:3px">Base ${niAmountAdjustmentValue()>=0?"+":"−"} Adjustment: ${R(Math.abs(niAmountAdjustmentValue()))}</div>`:""}</div><button id="ni-generate-btn" class="btn btn-lg ${niIsGeneratedFresh()?"btn-s":(niCalcIsFresh()?"ni-stage-generate":"ni-stage-fetch")}" title="${niIsGeneratedFresh()?"Step 3 of 3: Generated — verify and save":(niCalcIsFresh()?"Step 2 of 3: Generate invoice":"Step 1 of 3: Fetch / recalculate")}" aria-label="${niIsGeneratedFresh()?"Generated — verify and save":(niCalcIsFresh()?"Generate invoice":"Fetch / recalculate")}" onclick="${niIsGeneratedFresh()?"niFinalizeGenerate()":(niCalcIsFresh()?"niFinalizeGenerate()":"niGen()")}" ${(!NI.s15&&!NI.s68)||!NI.schoolId?"disabled":""}>${niCalcIsFresh()&&!niIsGeneratedFresh()?"&#10003; Generate Invoice":niIsGeneratedFresh()?"&#10003; Generated":"&#8635; Fetch / Recalculate"}</button></div></div></div><div style="margin-top:11px"><label class="flbl">Notes</label><input class="fi" value="${ec(NI.notes||"")}" onchange="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.notes=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" placeholder="Optional remarks..."/></div></div></div>${niRevisionIdentityCard()}</div>${NI.editId?niRevisionSourceSelectorHTML()+niRevisionItemOverrideHTML():""}${calcH}${!NI.calc?`<div class="card"><div class="empty"><div class="ei">&#127979;</div><div class="et">Ready to generate</div><div class="es">Select a school, enter the details, then click Fetch / Recalculate before saving or exporting.</div></div></div>`:""}`;
 }
 function niIsGeneratedFresh(){return !!(NI.generated===true && NI.generatedSignature && NI.generatedSignature===niInputSignature() && niCalcIsFresh());}
 function niFinalizeGenerate(){
@@ -4539,46 +4564,135 @@ function niInputSignature(){
     r15:Number(A.rates?.r15)||0,r68:Number(A.rates?.r68)||0,
     gstMode:settings.gstMode||"cgst_sgst",invoiceType:settings.invoiceType||"tax_invoice",
     roundOff:settings.roundOff!==false,hsnOn:!!NI.hsnOn,
-    revisionOverrides:NI.editId?{items:NI.revisionItemOverrides||{},added:NI.revisionAddedItems||[],fuel:NI.revisionFuelOverride||""}:null,
+    revisionOverrides:NI.editId?{source:NI.revisionCalculationSource||"previous",items:NI.revisionItemOverrides||{},added:NI.revisionAddedItems||[],fuel:NI.revisionFuelOverride||"",rateProfileId:NI.revisionRateProfileId||"",rateProfileAuto:!!NI.revisionRateProfileAuto}:null,
     fuel:{selectedFuel:A.lpg?.selectedFuel||"domestic",profiles:Object.fromEntries(["domestic","commercial","firewood"].map(k=>{const p=A.lpg?.fuelProfiles?.[k]||{};return [k,{rate:Number(p.rate)||0,unit:p.unit||"Kg",netWeight:Number(p.netWeight)||0,gst:Number(p.gst)||0,taxTreatment:p.taxTreatment||"taxable",taxMode:p.taxMode||"inclusive",hsn:p.hsn||""}]}))}
   });
 }
 // Invoice-scoped revision overrides. These always operate on cloned snapshot data;
 // the global Item Master and Admin fuel configuration are never written here.
+// v4.62.39 — Engine-scoped revision workspace preferences and calculation source selection.
+// Preferences are convenience defaults only; they never mutate invoice snapshots or Item Master.
+const NI_REV_PREF_PREFIX="mdm_revision_workspace_preferences_v1";
+function niRevisionEngineKey(){return activeBillingMode()==="hybrid"?"hybrid":"original";}
+function niRevisionPrefKey(){return NI_REV_PREF_PREFIX+":"+niRevisionEngineKey();}
+function niRevisionReadPreferences(){
+  try{const raw=localStorage.getItem(niRevisionPrefKey());return raw?JSON.parse(raw):null;}catch(_){return null;}
+}
+function niRevisionWritePreferences(){
+  if(!NI.editId)return false;
+  const data={schemaVersion:1,engine:niRevisionEngineKey(),fuel:NI.revisionFuelOverride||"",items:JSON.parse(JSON.stringify(NI.revisionItemOverrides||{})),added:[...(NI.revisionAddedItems||[])],source:NI.revisionCalculationSource||"previous",rateProfileId:NI.revisionRateProfileId||"",rateProfileAuto:!!NI.revisionRateProfileAuto,updatedAt:new Date().toISOString()};
+  try{localStorage.setItem(niRevisionPrefKey(),JSON.stringify(data));}catch(e){console.warn("Revision preferences local save failed",e);return false;}
+  try{if(window.V42?.openDB) V42.idbSet("meta",niRevisionPrefKey(),data).catch(e=>console.warn("Revision preferences IndexedDB mirror failed",e));}catch(_){}
+  return true;
+}
+function niRevisionApplyLastPreferences(){
+  const p=niRevisionReadPreferences();if(!p||p.engine!==niRevisionEngineKey())return false;
+  NI.revisionFuelOverride=["domestic","commercial","firewood"].includes(p.fuel)?p.fuel:"";
+  NI.revisionItemOverrides=p.items&&typeof p.items==="object"?JSON.parse(JSON.stringify(p.items)):{};
+  NI.revisionAddedItems=Array.isArray(p.added)?p.added.map(String):[];
+  // Do not restore an old source blindly if it is not recognized.
+  NI.revisionCalculationSource=["previous","last_revision","item_master"].includes(p.source)?p.source:"previous";
+  NI.revisionRateProfileId=String(p.rateProfileId||"");NI.revisionRateProfileAuto=p.rateProfileAuto!==false;
+  if(NI.revisionRateProfileId&&!niRevisionReadProfiles().some(x=>x.id===NI.revisionRateProfileId&&x.engine===niRevisionEngineKey())){NI.revisionRateProfileId="";NI.revisionRateProfileAuto=false;}
+  return true;
+}
+// Reusable complete Item Master rate profiles. Stored locally per billing engine.
+const NI_RATE_PROFILE_PREFIX="mdm_revision_rate_profiles_v1";
+function niRevisionProfilesKey(){return NI_RATE_PROFILE_PREFIX+":"+niRevisionEngineKey();}
+function niRevisionReadProfiles(){try{const x=JSON.parse(localStorage.getItem(niRevisionProfilesKey())||"[]");return Array.isArray(x)?x:[];}catch(_){return [];}}
+function niRevisionSaveProfiles(list){try{localStorage.setItem(niRevisionProfilesKey(),JSON.stringify(list));try{if(window.V42?.openDB)V42.idbSet("meta",niRevisionProfilesKey(),list).catch(e=>console.warn("Rate profile IndexedDB mirror failed",e));}catch(_){}return true;}catch(e){console.warn("Rate profile save failed",e);toast("Could not save rate profile in this browser.","err");return false;}}
+function niRevisionCaptureRateProfile(name){
+  if(!NI.editId)return;const clean=String(name||"").trim();if(!clean){toast("Enter a profile name first.","warn");return;}
+  // Capture the complete Item Master record by stable ID. Keeping the full record
+  // preserves future calculation-relevant fields without mutating the live master.
+  const items=(A.items||[]).filter(x=>x&&x.id!=null).map(x=>JSON.parse(JSON.stringify({...x,id:String(x.id)})));
+  if(!items.length){toast("No Item Master items are available to capture.","warn");return;}
+  const profiles=niRevisionReadProfiles(),id="rp_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,7),now=new Date().toISOString();
+  profiles.push({schemaVersion:2,id,name:clean,engine:niRevisionEngineKey(),scope:"global",items,createdAt:now,updatedAt:now,itemCount:items.length});
+  if(!niRevisionSaveProfiles(profiles))return;NI.revisionRateProfileId=id;NI.revisionRateProfileAuto=true;NI.revisionRateProfileName="";niRevisionWritePreferences();niRevisionInvalidate();gP("new");toast("Complete Item Master profile saved and applied to this revision.","ok");
+}
+function niRevisionSelectRateProfile(id){const profiles=niRevisionReadProfiles();if(id&&!profiles.some(p=>p.id===id)){toast("Selected rate profile was not found.","warn");return;}NI.revisionRateProfileId=id||"";NI.revisionRateProfileAuto=!!id;niRevisionInvalidate();niRevisionWritePreferences();gP("new");}
+function niRevisionToggleRateProfileAuto(on){NI.revisionRateProfileAuto=!!on;niRevisionInvalidate();niRevisionWritePreferences();gP("new");}
+function niRevisionDeleteRateProfile(){const id=NI.revisionRateProfileId;if(!id)return;const profiles=niRevisionReadProfiles().filter(p=>p.id!==id);if(!niRevisionSaveProfiles(profiles))return;NI.revisionRateProfileId="";NI.revisionRateProfileAuto=false;niRevisionInvalidate();niRevisionWritePreferences();gP("new");toast("Rate profile deleted. Existing invoices and snapshots are unchanged.","ok");}
+function niRevisionApplyRateProfile(ctx){
+  if(!NI.revisionRateProfileAuto||!NI.revisionRateProfileId)return ctx;
+  const profile=niRevisionReadProfiles().find(p=>p.id===NI.revisionRateProfileId&&p.engine===niRevisionEngineKey());if(!profile)return ctx;
+  const byId=new Map((profile.items||[]).filter(x=>x&&x.id!=null).map(x=>[String(x.id),x]));
+  // Apply only to items already present in this invoice calculation context.
+  // A profile never silently inserts new items or changes the global Item Master.
+  ctx.items=(ctx.items||[]).map(item=>{const p=byId.get(String(item.id));if(!p)return item;const data=p.data&&typeof p.data==="object"?p.data:p;return {...item,...JSON.parse(JSON.stringify(data)),id:item.id};});
+  return ctx;
+}
+function niRevisionSourceContext(inv){
+  const original=invoiceCalcContext(inv);
+  const source=NI.revisionCalculationSource||"previous";
+  if(source==="previous")return JSON.parse(JSON.stringify(original));
+  if(source==="last_revision"){
+    const revisions=Array.isArray(inv?.revisions)?inv.revisions:[];
+    const last=[...revisions].reverse().find(r=>r&&r.after);
+    const snap=last?.after?.calculationSnapshot;
+    if(snap&&snap.schema==="MDM-INVOICE-CALC-SNAPSHOT")return JSON.parse(JSON.stringify(snap));
+    // Older revision records may contain invoice rows but no calc snapshot.
+    if(last?.after?.mergedItems?.length){return legacyInvoiceCalculationSnapshot(last.after);}
+    toast("No saved revision calculation snapshot exists; using the original invoice source.","warn");
+    return JSON.parse(JSON.stringify(original));
+  }
+  // Current Item Master source: begin with the invoice's historical structural context,
+  // then overlay current master definitions by stable item ID. New items are opt-in below.
+  const ctx=JSON.parse(JSON.stringify(original));
+  const masterById=new Map((A.items||[]).map(x=>[String(x.id),x]));
+  ctx.items=(ctx.items||[]).map(old=>{const now=masterById.get(String(old.id));return now?{...old,name:now.name??old.name,rate:Number(now.rate??old.rate)||0,gst:Number(now.gst??old.gst)||0,unit:now.unit||old.unit,hsn:now.hsn||old.hsn,taxTreatment:now.taxTreatment||old.taxTreatment,taxMode:now.taxMode||old.taxMode,dist:Number(now.dist??old.dist)||0,active:now.active!==false}:old;});
+  ctx.lpg=JSON.parse(JSON.stringify(A.lpg||ctx.lpg||{}));
+  ctx.heads=(ctx.heads||[]).map(old=>{const now=(A.heads||[]).find(x=>String(x.id)===String(old.id));return now?{...old,...now}:old;});
+  ctx.rates={...(ctx.rates||{}),...(A.rates||{})};
+  return ctx;
+}
+function niRevisionSetSource(source){
+  if(!["previous","last_revision","item_master"].includes(source))return;
+  NI.revisionCalculationSource=source;NI.revisionItemOverrides={};NI.revisionAddedItems=[];
+  niRevisionInvalidate();niRevisionWritePreferences();gP("new");
+}
+function niRevisionSourceSelectorHTML(){
+  if(!NI.editId)return "";
+  const source=NI.revisionCalculationSource||"previous";
+  const labels={previous:"Previous Invoice",last_revision:"Last Saved Revision",item_master:"Current Item Master"};
+  return `<section class="card" style="margin:12px 0;border:1.5px solid var(--sf)"><div class="chd"><span class="cht">Revision Calculation Source</span><span class="bdg bo">${ec(niRevisionEngineKey().toUpperCase())} Engine</span></div><div class="cbd"><div style="display:flex;gap:7px;flex-wrap:wrap"><button type="button" class="btn btn-sm ${source==="previous"?"btn-p":"btn-g"}" onclick="niRevisionSetSource('previous')">Previous Invoice</button><button type="button" class="btn btn-sm ${source==="last_revision"?"btn-p":"btn-g"}" onclick="niRevisionSetSource('last_revision')">Last Saved Revision</button><button type="button" class="btn btn-sm ${source==="item_master"?"btn-p":"btn-g"}" onclick="niRevisionSetSource('item_master')">Current Item Master</button></div><div class="info inf-b" style="margin-top:8px">Active source: <b>${labels[source]}</b>. Switching source reloads the calculation baseline; it does not modify the saved invoice or Global Item Master. Recalculate before generating or saving.</div><div style="margin-top:12px;padding:12px;border:1.5px solid ${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"#16a34a":"var(--bd)"};border-radius:10px;background:${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"rgba(22,163,74,.08)":"var(--sf2,transparent)"}"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:12px">Reusable Item Master Rate Profile</b><span class="bdg ${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"bs":"bo"}">${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"PROFILE ACTIVE":"PROFILE INACTIVE"}</span></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px"><select class="fi fi-sm" style="min-width:220px;max-width:340px;border-color:${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"#16a34a":"var(--bd)"}" onchange="niRevisionSelectRateProfile(this.value)"><option value="">No reusable profile</option>${niRevisionReadProfiles().filter(p=>p.engine===niRevisionEngineKey()).map(p=>`<option value="${ec(p.id)}" ${NI.revisionRateProfileId===p.id?"selected":""}>${ec(p.name)} · ${(p.items||[]).length} items</option>`).join("")}</select><label style="display:flex;gap:6px;align-items:center;font-size:11px;font-weight:700;color:${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"#15803d":"var(--txl)"}"><input type="checkbox" ${NI.revisionRateProfileAuto&&NI.revisionRateProfileId?"checked":""} ${NI.revisionRateProfileId?"":"disabled"} onchange="niRevisionToggleRateProfileAuto(this.checked)"> Auto apply to this invoice</label><button type="button" class="btn btn-n btn-sm" onclick="niRevisionDeleteRateProfile()" ${NI.revisionRateProfileId?"":"disabled"}>Delete profile</button></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><input class="fi fi-sm" style="max-width:260px" placeholder="New profile name (e.g. May–Aug Rates)" value="${ec(NI.revisionRateProfileName||"")}" oninput="NI.revisionRateProfileName=this.value"><button type="button" class="btn btn-s btn-sm" onclick="niRevisionCaptureRateProfile(NI.revisionRateProfileName)">＋ Save all Item Master rates as profile</button></div><small style="display:block;margin-top:7px;color:var(--txl)">Captures the complete current Item Master records (all stored item fields) by stable Item ID. Profiles are reusable across invoices, but are kept separate for ${ec(niRevisionEngineKey().toUpperCase())} engine. Only matching items already in the invoice are updated; new items are never silently inserted. Invoice-only overrides take priority, and the live Item Master is never changed.</small></div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px"><button type="button" class="btn btn-g btn-sm" onclick="if(niRevisionApplyLastPreferences()){niRevisionInvalidate();niRevisionWritePreferences();gP('new');toast('Last used ${niRevisionEngineKey()} revision setup loaded. Recalculate before saving.','ok')}else toast('No saved setup for this engine yet.','info')">Continue Last Setup</button><button type="button" class="btn btn-n btn-sm" onclick="NI.revisionItemOverrides={};NI.revisionAddedItems=[];NI.revisionFuelOverride='';niRevisionInvalidate();gP('new')">Fresh Overrides</button></div></div></section>`;
+}
 function niRevisionInvalidate(){NI.calc=null;NI.calcSignature=null;NI.generated=false;NI.generatedSignature=null;NI.saved=false;NI.hybridAppliedSnapshot=null;NI.hybridAppliedSourceSignature="";NI.hybridAppliedAt=null;window.MDM_V7_APPLIED_SNAPSHOT=null;window.MDM_V7_APPLIED_SOURCE_SIGNATURE="";niSyncGenerateButton();}
 function niRevisionSetItem(id,field,value){
   if(!NI.editId)return;
   const inv=A.invoices.find(x=>String(x.id)===String(NI.editId));if(!inv)return;
-  const base=invoiceCalcContext(inv),item=(base.items||[]).find(x=>String(x.id)===String(id))||((NI.revisionAddedItems||[]).includes(String(id))?(A.items||[]).find(x=>String(x.id)===String(id)):null);if(!item)return;
+  const base=niRevisionSourceContext(inv),item=(base.items||[]).find(x=>String(x.id)===String(id))||((NI.revisionAddedItems||[]).includes(String(id))?(A.items||[]).find(x=>String(x.id)===String(id)):null);if(!item)return;
   const current={...(NI.revisionItemOverrides||{})};current[id]={...(current[id]||{}),[field]:field==="active"?!!value:Number(value)};
   if(field!=="active"&&!Number.isFinite(current[id][field])){toast("Enter a valid numeric value.","warn");return;}
   if(field==="rate"&&Number(value)<=0){toast("Item rate must be greater than zero.","warn");return;}
   if((field==="gst"||field==="dist")&&Number(value)<0){toast("Value cannot be negative.","warn");return;}
   if(field==="dist"&&Number(value)>100){toast("Allocation weight cannot exceed 100.","warn");return;}
-  NI.revisionItemOverrides=current;niRevisionInvalidate();
+  NI.revisionItemOverrides=current;niRevisionInvalidate();niRevisionWritePreferences();
 }
 function niRevisionAddItem(id){
   if(!NI.editId||!id)return;const src=(A.items||[]).find(x=>String(x.id)===String(id));if(!src)return;
   const inv=A.invoices.find(x=>String(x.id)===String(NI.editId));if(!inv)return;
-  const base=invoiceCalcContext(inv),items=(base.items||[]).map(x=>({...x}));
+  const base=niRevisionSourceContext(inv),items=(base.items||[]).map(x=>({...x}));
   if(items.some(x=>String(x.id)===String(id))){toast("This item is already available in this invoice snapshot.","info");return;}
   items.push({...src,active:true});NI.revisionAddedItems=[...(NI.revisionAddedItems||[]),String(id)];NI.revisionItemOverrides={...(NI.revisionItemOverrides||{})};
   // Store the selected item in a separate invoice-only additions list; it is merged into the cloned calc context.
-  niRevisionInvalidate();gP("new");
+  niRevisionInvalidate();niRevisionWritePreferences();gP("new");
 }
 function niRevisionMasterContext(inv){
-  const base=invoiceCalcContext(inv),ctx=JSON.parse(JSON.stringify(base));
+  const base=niRevisionSourceContext(inv),ctx=JSON.parse(JSON.stringify(base));
   ctx.items=(ctx.items||[]).map(x=>({...x}));
   (NI.revisionAddedItems||[]).forEach(id=>{if(!ctx.items.some(x=>String(x.id)===String(id))){const src=(A.items||[]).find(x=>String(x.id)===String(id));if(src)ctx.items.push({...src,active:true});}});
+  niRevisionApplyRateProfile(ctx);
   Object.entries(NI.revisionItemOverrides||{}).forEach(([id,ov])=>{const item=ctx.items.find(x=>String(x.id)===String(id));if(item)Object.assign(item,ov);});
   if(NI.revisionFuelOverride){ctx.lpg=JSON.parse(JSON.stringify(ctx.lpg||{}));ctx.lpg.selectedFuel=NI.revisionFuelOverride;}
   return ctx;
 }
-function niRevisionFuelChange(key){if(!["domestic","commercial","firewood"].includes(key))return;NI.revisionFuelOverride=key;niRevisionInvalidate();gP("new");}
+function niRevisionFuelChange(key){if(!["domestic","commercial","firewood"].includes(key))return;NI.revisionFuelOverride=key;niRevisionInvalidate();niRevisionWritePreferences();gP("new");}
 function niRevisionItemOverrideHTML(){
   if(!NI.editId)return "";const inv=A.invoices.find(x=>String(x.id)===String(NI.editId));if(!inv)return "";
-  const base=invoiceCalcContext(inv),ids=new Set((base.items||[]).map(x=>String(x.id)));
-  const rows=[...(base.items||[]),...(NI.revisionAddedItems||[]).map(id=>(A.items||[]).find(x=>String(x.id)===String(id))).filter(Boolean).filter(x=>!ids.has(String(x.id)))];
+  const base=niRevisionApplyRateProfile(niRevisionSourceContext(inv)),ids=new Set((base.items||[]).map(x=>String(x.id)));
+  const addedRows=niRevisionApplyRateProfile({items:(NI.revisionAddedItems||[]).map(id=>(A.items||[]).find(x=>String(x.id)===String(id))).filter(Boolean).filter(x=>!ids.has(String(x.id)))}).items;const rows=[...(base.items||[]),...addedRows];
   const overrides=NI.revisionItemOverrides||{};
   const rowHTML=rows.map(item=>{const ov=overrides[item.id]||{},active=ov.active===undefined?item.active!==false:ov.active;return `<tr><td><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" ${active?"checked":""} onchange="niRevisionSetItem('${ec(item.id)}','active',this.checked)"><b>${ec(item.name||item.id)}</b></label><small style="color:var(--txl)">${ec(item.unit||"")} · ${ec(item.head||"")}</small></td><td><input class="fi fi-sm" style="width:82px" type="number" min="0.01" step="0.01" value="${ec(ov.rate??item.rate??0)}" onchange="niRevisionSetItem('${ec(item.id)}','rate',this.value)"></td><td><input class="fi fi-sm" style="width:68px" type="number" min="0" step="0.01" value="${ec(ov.gst??item.gst??0)}" onchange="niRevisionSetItem('${ec(item.id)}','gst',this.value)"></td><td><input class="fi fi-sm" style="width:72px" type="number" min="0" max="100" step="0.01" value="${ec(ov.dist??item.dist??0)}" onchange="niRevisionSetItem('${ec(item.id)}','dist',this.value)"></td></tr>`;}).join("");
   const fuels=fuelProfilesWithDefaults(base.lpg||{}),fuel=NI.revisionFuelOverride||selectedFuelProfile(base.lpg||{}).key;
@@ -4658,7 +4772,7 @@ function niSaveEdited(){
   const old=A.invoices[idx], before=mrSnapshot(old), sch=A.schools.find(s=>s.id===NI.schoolId); const s15=Math.max(0,parseInt(NI.s15)||0),s68=Math.max(0,parseInt(NI.s68)||0),sFr=NI.useFruit?Math.max(0,parseInt(NI.sFruit)||0):0,frR=parseFloat(NI.fruitRate)||0;
   if(!NI.calc||!Array.isArray(NI.calc.merged)||!Number.isFinite(Number(NI.calc.a15))||!Number.isFinite(Number(NI.calc.a68))||!Number.isFinite(Number(NI.calc.aFr))||!Number.isFinite(Number(NI.calc.grand))){resetRevisionConfirmation();toast("Invoice calculation is incomplete. Recalculate the invoice before saving; no data was changed.","err");return;}
   const at=new Date().toISOString();
-  let updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:old.schoolName||sch?.name||"",schoolAddress:old.schoolAddress||sch?.address||"",schoolUdise:old.schoolUdise||sch?.udise||"",schoolBlock:old.schoolBlock||sch?.block||"",schoolDistrict:old.schoolDistrict||sch?.district||"",schoolMobile:old.schoolMobile||sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),adjustmentSign:NI.adjustmentSign||"plus",adjustmentItemId:activeBillingMode()==="hybrid"?(NI.hybridAdjustmentItemId||""):"",taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,calculationSnapshot:NI.calcMasterSnapshot||old.calculationSnapshot||invoiceCalcContext(old),annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:old.invoiceType||(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:old.savedAt||at,updatedAt:at,revisedAt:at,status:"revised",revisionStatus:mrInvoiceShared(old)?"RE_SHARE_PENDING":(old.issuedAt?"RE_ISSUE_PENDING":"REVISED_NOT_SHARED"),reSharePending:mrInvoiceShared(old),recallPending:mrInvoiceShared(old),reIssuePending:!!old.issuedAt,originalSnapshot:old.originalSnapshot||before};
+  let updated={...old,date:NI.date,month:NI.month,year:NI.year,schoolId:NI.schoolId,schoolName:old.schoolName||sch?.name||"",schoolAddress:old.schoolAddress||sch?.address||"",schoolUdise:old.schoolUdise||sch?.udise||"",schoolBlock:old.schoolBlock||sch?.block||"",schoolDistrict:old.schoolDistrict||sch?.district||"",schoolMobile:old.schoolMobile||sch?.mobile||"",s15,s68,sFr,fruitRate:frR,a15:d2(NI.calc.a15),a68:d2(NI.calc.a68),aFr:d2(NI.calc.aFr),grand:NI.calc.grand,adjustmentAmount:niAmountAdjustmentValue(),adjustmentSign:NI.adjustmentSign||"plus",adjustmentItemId:activeBillingMode()==="hybrid"?(NI.hybridAdjustmentItemId||""):"",taxable:NI.calc.mTot.taxable,cgst:NI.calc.mTot.cgst,sgst:NI.calc.mTot.sgst,roundOff:NI.calc.mTot.roundOff,net:NI.calc.mTot.net,mergedItems:NI.calc.merged,calculationSnapshot:NI.calcMasterSnapshot||old.calculationSnapshot||invoiceCalcContext(old),revisionCalculationSource:NI.revisionCalculationSource||"previous",revisionEngine:niRevisionEngineKey(),revisionRateProfileId:NI.revisionRateProfileAuto?(NI.revisionRateProfileId||""):"",annexA:NI.calc.annexA,annexB:NI.calc.annexB,mergedTotals:NI.calc.mTot,totalsA:NI.calc.tA,totalsB:NI.calc.tB,invoiceType:old.invoiceType||(A.sett||ST0).invoiceType||"tax_invoice",notes:NI.notes||"",savedAt:old.savedAt||at,updatedAt:at,revisedAt:at,status:"revised",revisionStatus:mrInvoiceShared(old)?"RE_SHARE_PENDING":(old.issuedAt?"RE_ISSUE_PENDING":"REVISED_NOT_SHARED"),reSharePending:mrInvoiceShared(old),recallPending:mrInvoiceShared(old),reIssuePending:!!old.issuedAt,originalSnapshot:old.originalSnapshot||before};
   if(!NI.revisionPreviewConfirmed){
     NI.pendingRevisionPreview={invoiceId:old.id,updatedAt:at,updated};
     const beforeRows=Array.isArray(old.mergedItems)?old.mergedItems:[],afterRows=Array.isArray(updated.mergedItems)?updated.mergedItems:[];
@@ -4670,14 +4784,14 @@ function niSaveEdited(){
     const dlg=document.createElement("div");dlg.className="ov";dlg.id="individual-revision-preview";dlg.innerHTML=`<div class="modal ir-preview-modal" role="dialog" aria-modal="true" aria-labelledby="ir-preview-title"><div class="mhd ir-preview-head"><div><div class="ir-preview-title" id="ir-preview-title">Preview Revision — ${ec(old.invNo)}</div><div class="ir-preview-subtitle">Review the changes before saving this revision.</div></div><button class="btn btn-g btn-sm ir-close" aria-label="Close preview" onclick="NI.pendingRevisionPreview=null;NI.revisionPreviewConfirmed=false;document.getElementById('individual-revision-preview')?.remove()">&#10005;</button></div><div class="mbd ir-preview-body"><div class="ir-comparison"><section class="ir-side ir-before"><div class="ir-side-head"><span class="ir-icon ir-icon-before">▤</span><div><div class="ir-side-title">Original <span>(Before)</span></div><div class="ir-side-sub">Current saved invoice amounts</div></div></div><div class="ir-metric"><span>Grand Total</span><strong>${R(old.grand)}</strong></div><div class="ir-metric"><span>Net Payable</span><strong>${R(old.net)}</strong></div></section><section class="ir-change-column" aria-label="Amount differences"><div class="ir-change-heading">Change</div><div class="ir-change-row">${deltaMarkup(grandDelta)}<span class="ir-arrow">→</span></div><div class="ir-change-row">${deltaMarkup(netDelta)}<span class="ir-arrow">→</span></div></section><section class="ir-side ir-after"><div class="ir-side-head"><span class="ir-icon ir-icon-after">✓</span><div><div class="ir-side-title">Revised <span>(After)</span></div><div class="ir-side-sub">Updated invoice amounts · preview only</div></div></div><div class="ir-metric"><span>Grand Total</span><strong>${R(updated.grand)}</strong></div><div class="ir-metric"><span>Net Payable</span><strong>${R(updated.net)}</strong></div></section></div><section class="ir-items-panel"><div class="ir-items-head"><div><span class="ir-list-icon">☷</span><strong>Item-wise Changes</strong><span class="ir-count">${keys.filter(k=>{const b=beforeRows.filter(r=>key(r)===k).reduce((n,r)=>n+(Number(r.gross)||0),0),a=afterRows.filter(r=>key(r)===k).reduce((n,r)=>n+(Number(r.gross)||0),0);return Math.abs(a-b)>=0.005;}).length} item(s) changed</span></div></div><div class="tw ir-table-wrap"><table class="dt ir-table"><thead><tr><th>Item</th><th class="num">Before Amount</th><th class="num">After Amount</th><th class="num">Difference</th><th>Change</th></tr></thead><tbody>${diffs||'<tr><td colspan="5" class="ir-no-changes">No item line amount differences detected. Check totals and non-item fields above.</td></tr>'}</tbody></table></div></section><div class="ir-preview-notice"><span class="ir-info-icon">i</span><div><strong>This is a preview only. Nothing has been saved yet.</strong><span>Confirm only after checking item amounts, Grand Total and Net Payable.</span></div></div><div class="sac ir-preview-actions"><button class="btn btn-g ir-cancel" onclick="NI.pendingRevisionPreview=null;NI.revisionPreviewConfirmed=false;document.getElementById('individual-revision-preview')?.remove()">Cancel</button><button class="btn btn-p ir-confirm" onclick="NI.revisionPreviewConfirmed=true;document.getElementById('individual-revision-preview')?.remove();niSaveEdited()">▣&nbsp; Confirm &amp; Save Revision</button></div></div></div>`;document.body.appendChild(dlg);return;
   }
   NI.revisionPreviewConfirmed=false;NI.pendingRevisionPreview=null;
-  const rev={revisionNo:(old.revisions||[]).length+1,by:A.currentUser?.name||"Administrator",at,reason:"Edited from saved invoice",operation:"individual_edit",beforeNet:Number(old.net)||0,afterNet:Number(updated.net)||0,delta:d2((Number(updated.net)||0)-(Number(old.net)||0)),before,after:mrSnapshot(updated)};
+  const rev={revisionNo:(old.revisions||[]).length+1,by:A.currentUser?.name||"Administrator",at,reason:"Edited from saved invoice",operation:"individual_edit",calculationSource:NI.revisionCalculationSource||"previous",engine:niRevisionEngineKey(),rateProfileId:NI.revisionRateProfileAuto?(NI.revisionRateProfileId||""):"",beforeNet:Number(old.net)||0,afterNet:Number(updated.net)||0,delta:d2((Number(updated.net)||0)-(Number(old.net)||0)),before,after:mrSnapshot(updated)};
   updated.revisions=[...(old.revisions||[]),rev];
   updated.revisionEvents=[...(old.revisionEvents||[]),{type:"REVISION_CREATED",at,revisionNo:rev.revisionNo,detail:"Edited from saved invoice"}];
   if(activeBillingMode()==="hybrid"){
     try{updated.hybridModel=old.hybridModel?JSON.parse(JSON.stringify(old.hybridModel)):null;hybridEnsureSnapshot(updated);}
     catch(e){toast("Hybrid revision snapshot could not be created; no invoice changes were saved: "+(e.message||e),"err");return;}
   }
-  sv("iv",A.invoices.map((i,j)=>j===idx?updated:i)); NI.saved=true; const id=updated.id; NI.editId=null; A.flashId=id; toast("Invoice "+updated.invNo+" updated — original preserved; revision saved","ok"); auditLog("UPDATE","invoice",id,"Edited invoice with revision snapshot: "+updated.invNo,{revisionNo:rev.revisionNo,beforeNet:rev.beforeNet,afterNet:rev.afterNet}); setTimeout(()=>showInvSuccess(updated),250); gP("new");
+  sv("iv",A.invoices.map((i,j)=>j===idx?updated:i)); niRevisionWritePreferences(); NI.saved=true; const id=updated.id; NI.editId=null; A.flashId=id; toast("Invoice "+updated.invNo+" updated — original preserved; revision saved","ok"); auditLog("UPDATE","invoice",id,"Edited invoice with revision snapshot: "+updated.invNo,{revisionNo:rev.revisionNo,beforeNet:rev.beforeNet,afterNet:rev.afterNet}); setTimeout(()=>showInvSuccess(updated),250); gP("new");
 }
 
 async function niPr(tab){
@@ -7251,10 +7365,10 @@ function doLogin(){
 const V42_DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbxQna-J_HYnAridv9CNRD7EEO6aXYhEjmEerJ6qSGSpjNfYuPVSlNdRoNgeyzHIMJxXfQ/exec";
 const V42_DEFAULT_CLIENT_ID = "794479553635-oma3vem2r4ae21j98tnsisr9c9976jpt.apps.googleusercontent.com";
 const V42 = {
-  version: "4.57.4",
-  previousVersion: "4.41",
+  version: "4.62.38",
+  previousVersion: "4.62.37",
   dbName: "MDM_INVOICE_SYSTEM",
-  dbVersion: 1,
+  dbVersion: 2,
   apiUrl: localStorage.getItem("mdm_api_url") || ((window.google && google.script && google.script.run) ? "APPS_SCRIPT_BRIDGE" : V42_DEFAULT_API_URL),
   googleClientId: localStorage.getItem("mdm_google_client_id") || V42_DEFAULT_CLIENT_ID,
   showConfigModal: false,
@@ -7285,8 +7399,13 @@ V42.openDB = function(){
         st.createIndex("createdAt","createdAt");
       }
       if(!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
+      if(!db.objectStoreNames.contains("snapshots")){
+        const ss=db.createObjectStore("snapshots",{keyPath:"snapshotId"});
+        ss.createIndex("invoiceId","invoiceId");
+        ss.createIndex("createdAt","createdAt");
+      }
     };
-    req.onsuccess=e=>{V42.db=e.target.result;resolve(V42.db);};
+    req.onsuccess=e=>{V42.db=e.target.result;try{if(navigator.storage?.persist)navigator.storage.persist().catch(()=>{});}catch(_){}resolve(V42.db);};
     req.onerror=()=>reject(req.error||new Error("IndexedDB open failed"));
   });
 };
@@ -7294,6 +7413,37 @@ V42.idbGet=function(store,key){return V42.openDB().then(db=>new Promise((res,rej
 V42.idbSet=function(store,key,value){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readwrite").objectStore(store).put(value,key);r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error);}));};
 V42.idbDelete=function(store,key){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readwrite").objectStore(store).delete(key);r.onsuccess=()=>res(true);r.onerror=()=>rej(r.error);}));};
 V42.idbAll=function(store){return V42.openDB().then(db=>new Promise((res,rej)=>{const r=db.transaction(store,"readonly").objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error);}));};
+
+// v4.62.39 — Calculation source selector and revision workspace preferences for Original and Hybrid engines.
+// Invoice JSON remains the portable canonical payload; IndexedDB keeps independently addressable copies.
+V42.storageMode = (function(){try{const m=localStorage.getItem("mdm_snapshot_storage_mode");return ["offline","default","cloud"].includes(m)?m:"default";}catch(_){return "default";}})();
+V42.setStorageMode=function(mode){
+  if(!["offline","default","cloud"].includes(mode))throw new Error("Invalid snapshot storage mode");
+  V42.storageMode=mode;localStorage.setItem("mdm_snapshot_storage_mode",mode);
+  if(mode==="offline")V42.setCloudSyncEnabled(false);else V42.setCloudSyncEnabled(true);
+  return mode;
+};
+V42.setCloudSyncEnabled=function(enabled){try{localStorage.setItem("mdm_snapshot_cloud_sync",enabled?"1":"0");}catch(_){}};
+V42.cloudSyncEnabled=function(){try{return V42.storageMode!=="offline"&&localStorage.getItem("mdm_snapshot_cloud_sync")!=="0";}catch(_){return V42.storageMode!=="offline";}};
+V42.snapshotRecordsForInvoice=function(inv){
+  if(!inv||!inv.id)return [];
+  const out=[];const add=(snapshotId,type,data,revisionNo)=>{if(!data||typeof data!=="object")return;out.push({snapshotId:String(snapshotId),invoiceId:String(inv.id),invoiceNo:String(inv.invNo||""),type,revisionNo:Number(revisionNo)||0,createdAt:data.createdAt||data.capturedAt||inv.savedAt||new Date().toISOString(),schemaVersion:1,data:JSON.parse(JSON.stringify(data))});};
+  if(inv.calculationSnapshot)add(inv.id+"::original-calculation","original-calculation",inv.calculationSnapshot,0);
+  if(inv.hybridModel&&Array.isArray(inv.hybridModel.revisions))inv.hybridModel.revisions.forEach(r=>add(inv.id+"::hybrid::"+(r.revisionNo||0),"hybrid",r,r.revisionNo));
+  if(Array.isArray(inv.revisions))inv.revisions.forEach((r,i)=>{if(r.before)add(inv.id+"::revision::"+(r.revisionNo||i+1)+"::before","revision-before",r.before,r.revisionNo||i+1);if(r.after)add(inv.id+"::revision::"+(r.revisionNo||i+1)+"::after","revision-after",r.after,r.revisionNo||i+1);});
+  return out;
+};
+V42.persistInvoiceSnapshots=async function(invoices){
+  const records=(Array.isArray(invoices)?invoices:[]).flatMap(V42.snapshotRecordsForInvoice);
+  if(!records.length)return {saved:0};
+  const db=await V42.openDB();
+  await new Promise((resolve,reject)=>{const tx=db.transaction("snapshots","readwrite"),st=tx.objectStore("snapshots");records.forEach(r=>st.put(r));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error("Snapshot archive transaction failed"));tx.onabort=()=>reject(tx.error||new Error("Snapshot archive transaction aborted"));});
+  return {saved:records.length};
+};
+V42.getInvoiceSnapshots=async function(invoiceId){
+  const db=await V42.openDB();return new Promise((resolve,reject)=>{const ix=db.transaction("snapshots","readonly").objectStore("snapshots").index("invoiceId");const r=ix.getAll(String(invoiceId));r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});
+};
+V42.snapshotStorageStatus=async function(){let count=0;try{count=(await V42.idbAll("snapshots")).length;}catch(_){}return {mode:V42.storageMode,localSnapshotCount:count,cloudSyncEnabled:V42.cloudSyncEnabled(),pending:await V42.queueCount().catch(()=>0)};};
 
 V42.stateKeys = ["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","gd","as2","al","rv","dp","ib","iu","mrb"];
 V42.keyMap = {f:"firm",sr:"series",rt:"rates",hd:"heads",it:"items",sc:"schools",iv:"invoices",us:"users",st:"sett",alm:"alm",lpg:"lpg",ro:"ro",gd:"gd",as2:"as2",al:"al",rv:"rv",dp:"dups",ib:"batchCfg",iu:"invoiceUndoArchive",mrb:"mrb"};
@@ -7348,12 +7498,12 @@ V42.hydrateFromIDB = async function(){
 V42._svOriginal = sv;
 sv = function(k,v){
   V42._svOriginal(k,v);
-  try{ V42.writeStateKey(k,v); }catch(e){}
+  try{ V42.writeStateKey(k,v).catch(e=>console.warn("Local state persistence pending",e)); }catch(e){}
   try{
+    if(k==="iv") V42.persistInvoiceSnapshots(v).catch(e=>console.error("Snapshot archive persistence failed",e));
     const cloudEligible=["f","sr","rt","hd","it","sc","iv","us","st","alm","lpg","ro","mrb"];
-    if(cloudEligible.includes(k)){
-      V42.enqueue("state",k,{key:k,value:v});
-      if(k==="iv" && navigator.onLine && CLOUD.user) setTimeout(()=>V42.flushQueue(),400);
+    if(cloudEligible.includes(k)&&V42.cloudSyncEnabled()){
+      V42.enqueue("state",k,{key:k,value:v}).then(()=>{if(k==="iv"&&navigator.onLine&&CLOUD.user)setTimeout(()=>V42.flushQueue(),400);});
     }
   }catch(e){}
 };
@@ -7398,11 +7548,13 @@ V42.saveConfigForm = function(){
   const urlEl=document.getElementById("v42-cfg-url"), cidEl=document.getElementById("v42-cfg-cid");
   const url=(urlEl&&urlEl.value?urlEl.value.trim():"");
   const cid=(cidEl&&cidEl.value?cidEl.value.trim():"");
+  const storageEl=document.getElementById("v42-storage-mode");
   if(!cid){ toast("Google OAuth Client ID cannot be blank","err"); return; }
   const hosted=!!(window.google && google.script && google.script.run);
   V42.apiUrl = hosted ? "APPS_SCRIPT_BRIDGE" : url;
   localStorage.setItem("mdm_api_url",V42.apiUrl);
   V42.googleClientId=cid; localStorage.setItem("mdm_google_client_id",V42.googleClientId);
+  try{V42.setStorageMode(storageEl?.value||V42.storageMode);}catch(e){toast(e.message||"Storage mode could not be saved","err");return;}
   V42.showConfigModal=false;
   toast("Infrastructure configuration saved","ok");
   gP("backupsync");
@@ -7423,7 +7575,8 @@ V42.configModalHTML = function(){
   return `<div class="ov" onclick="if(event.target===this){V42.closeConfigModal()}"><div class="modal"><div class="mhd"><div class="mt">Offline &amp; Cloud Infrastructure — Configure</div><button class="btn btn-g btn-sm" onclick="V42.closeConfigModal()">&#10005;</button></div><div class="mbd"><div class="fg" style="gap:13px">
     <div><label class="flbl">MDM API Web App URL</label><input class="fi" id="v42-cfg-url" value="${ec(hosted?"APPS_SCRIPT_BRIDGE (hosted mode — URL not editable)":(V42.apiUrl||""))}" ${hosted?"disabled":""} placeholder="https://script.google.com/macros/s/.../exec"/></div>
     <div><label class="flbl">Google OAuth Client ID</label><input class="fi" id="v42-cfg-cid" value="${ec(V42.googleClientId||"")}" placeholder="xxxxxxxxxx.apps.googleusercontent.com"/></div>
-    <div style="font-size:10.5px;color:var(--txl)">Restore Default resets both fields to the app's built-in fallback values and saves immediately.</div>
+    <div><label class="flbl">Snapshot Storage Mode</label><select class="fi" id="v42-storage-mode"><option value="offline" ${V42.storageMode==="offline"?"selected":""}>Offline — Local Only</option><option value="default" ${V42.storageMode==="default"?"selected":""}>Default — Local First + Cloud Sync</option><option value="cloud" ${V42.storageMode==="cloud"?"selected":""}>Cloud — Cloud Preferred + Local Fallback</option></select><div style="font-size:10px;color:var(--txl);margin-top:4px">All modes save locally first. Default and Cloud queue cloud sync when configured and authenticated; Offline disables cloud queueing.</div></div>
+    <div style="font-size:10.5px;color:var(--txl)">Restore Default resets API settings. Storage mode remains independently selected.</div>
   </div></div><div class="mft"><button class="btn btn-g" onclick="V42.restoreConfigDefaults()">Restore Default</button><button class="btn btn-g" onclick="V42.closeConfigModal()">Cancel</button><button class="btn btn-p" onclick="V42.saveConfigForm()">Save</button></div></div></div>`;
 };
 
@@ -7611,7 +7764,7 @@ V42.installUI = function(){
     pgBackupSync=function(){
       const base=original();
       const qCount="<span id=\"v42-q-count\">…</span>";
-      const card=`<div class="card" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">⚙ Offline &amp; Cloud Infrastructure</span><span class="bdg bn">v4.42</span></div><div class="cbd"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px"><div><b>Local Database</b><div style="color:var(--txl);margin-top:3px">IndexedDB • offline-first</div></div><div><b>Sync Queue</b><div style="color:var(--txl);margin-top:3px">${qCount}</div></div><div><b>Google Identity</b><div style="color:${V42.googleClientId?"var(--gn)":"var(--am)"};margin-top:3px">${V42.googleClientId?"Configured":"Client ID required"}</div></div><div><b>Master API</b><div style="color:${V42.apiUrl?"var(--gn)":"var(--am)"};margin-top:3px">${V42.apiUrl?"Configured":"Endpoint required"}</div></div></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-g btn-sm" onclick="V42.config()">Configure</button><button class="btn btn-g btn-sm" onclick="V42.googleSignIn()">Google Login</button><button class="btn btn-g btn-sm" onclick="V42.flushQueue().then(()=>toast('Sync queue processed','ok'))">Sync Queue</button><button class="btn btn-g btn-sm" onclick="V42.createLocalSnapshot()">Local Snapshot</button><button class="btn btn-g btn-sm" onclick="V42.importRecovery()">Restore Local Snapshot</button></div></div></div>`;
+      const card=`<div class="card" style="margin-bottom:14px;border:1px solid var(--bd)"><div class="chd"><span class="cht">⚙ Offline &amp; Cloud Infrastructure</span><span class="bdg bn">v4.42</span></div><div class="cbd"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px"><div><b>Snapshot Storage</b><div style="color:var(--txl);margin-top:3px">${V42.storageMode.toUpperCase()} • IndexedDB archive</div></div><div><b>Sync Queue</b><div style="color:var(--txl);margin-top:3px">${qCount}</div></div><div><b>Google Identity</b><div style="color:${V42.googleClientId?"var(--gn)":"var(--am)"};margin-top:3px">${V42.googleClientId?"Configured":"Client ID required"}</div></div><div><b>Master API</b><div style="color:${V42.apiUrl?"var(--gn)":"var(--am)"};margin-top:3px">${V42.apiUrl?"Configured":"Endpoint required"}</div></div></div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-g btn-sm" onclick="V42.config()">Configure</button><button class="btn btn-g btn-sm" onclick="V42.googleSignIn()">Google Login</button><button class="btn btn-g btn-sm" onclick="V42.flushQueue().then(()=>toast('Sync queue processed','ok'))">Sync Queue</button><button class="btn btn-g btn-sm" onclick="V42.createLocalSnapshot()">Local Snapshot</button><button class="btn btn-g btn-sm" onclick="V42.importRecovery()">Restore Local Snapshot</button></div></div></div>`;
       setTimeout(async()=>{const n=document.getElementById("v42-q-count");if(n)n.textContent=(await V42.queueCount())+" pending";},0);
       return card+V42.configModalHTML()+base;
     };
@@ -10125,7 +10278,7 @@ function nativeShare(id) {
 function niEditSaved(id){
   const inv=A.invoices.find(i=>i.id===id); if(!inv)return;
   const sch=A.schools.find(s=>s.id===inv.schoolId);
-  NI.editId=inv.id; NI.revisionItemOverrides={};NI.revisionAddedItems=[];NI.revisionFuelOverride=""; NI.schoolId=inv.schoolId; NI.date=inv.date; NI.month=inv.month; NI.year=String(inv.year||""); NI.s15=String(inv.s15||""); NI.s68=String(inv.s68||""); NI.useFruit=(inv.sFr||0)>0; NI.sFruit=String(inv.sFr||""); NI.fruitRate=String(inv.fruitRate||5); NI.adjustmentAmount=String(Math.abs(Number(inv.adjustmentAmount)||0)||""); NI.adjustmentSign=inv.adjustmentSign||((Number(inv.adjustmentAmount)||0)<0?"minus":"plus"); NI.hybridAdjustmentItemId=inv.adjustmentItemId||""; NI.adjustmentOn=Math.abs(Number(inv.adjustmentAmount)||0)>0; NI.notes=inv.notes||"";
+  NI.editId=inv.id; NI.revisionItemOverrides={};NI.revisionAddedItems=[];NI.revisionFuelOverride="";NI.revisionCalculationSource="previous"; niRevisionApplyLastPreferences(); NI.schoolId=inv.schoolId; NI.date=inv.date; NI.month=inv.month; NI.year=String(inv.year||""); NI.s15=String(inv.s15||""); NI.s68=String(inv.s68||""); NI.useFruit=(inv.sFr||0)>0; NI.sFruit=String(inv.sFr||""); NI.fruitRate=String(inv.fruitRate||5); NI.adjustmentAmount=String(Math.abs(Number(inv.adjustmentAmount)||0)||""); NI.adjustmentSign=inv.adjustmentSign||((Number(inv.adjustmentAmount)||0)<0?"minus":"plus"); NI.hybridAdjustmentItemId=inv.adjustmentItemId||""; NI.adjustmentOn=Math.abs(Number(inv.adjustmentAmount)||0)>0; NI.notes=inv.notes||"";
   // Do not inject a saved historical invoice's cached calculation/PDF-preview payload into
   // the live New Invoice preview. Older invoices can lack newer fields and the
   // async locked-PDF preview may fail during the page transition. Load only the
@@ -14616,6 +14769,7 @@ v2.8 — Definitive flat-light header + school category correction
   };
 
   V42.flushQueue = async function(){
+    if(!V42.cloudSyncEnabled()) return {sent:0,failed:0,skipped:true,reason:"offline-mode"};
     if(V42.syncing || !navigator.onLine || !V42.apiUrl || !isGoogleUser(CLOUD.user) || !V42.idToken) {
       return {sent:0,failed:0,skipped:true};
     }
