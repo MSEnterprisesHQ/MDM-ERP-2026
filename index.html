@@ -1,4 +1,4 @@
-<!-- MDM ERP v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
+<!-- MDM ERP v4.62.33 (EXACT-1.0.0): target-based exact solver + single shared validator; spurious half-paise line check removed. Previously v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
 BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
@@ -17,7 +17,7 @@ Update: v4.57.4 — Corrects School Master ID/category resolution, includes inac
 Update: v4.36 — Locked Master vector restore: removed SVG/canvas/raster print conversion from Main Invoice preview/print path. The authoritative jsPDF PDF remains the sole source. No invoice geometry, calculations, data, Annexure/GST, or other export logic changed.
 Update: v4.37 — Canonical PDF print/share bridge: Main Invoice Print/Preview now opens the exact prepared PDF File used by Save/Share, with no secondary HTML print renderer and no browser print() interception. This is a surgical bridge-only change; locked invoice geometry/data/calculations and Annexure/GST are untouched.
 Update: v4.51 — Production infrastructure hardening: real Apps Script bridge hooks, Google-auth cloud-write gating, durable offline queue ACK handling, persistent session handling, emergency local login preservation, and cloud backup routing. Existing invoice/PDF/theme/calculation/rendering logic remains locked.
-Update: v4.41 — Theme Engine architecture pass: presets and custom color selection now use a sing/le reference/seed color; Dark, Medium (60% toward Light), and Light shades are generated automatically and semantically mapped. Added Deep Forest Slate and Corporate Navy presets. No invoice geometry, columns, calculations, typography, or non-theme logic changed.
+Update: v4.41 — Theme Engine architecture pass: presets and custom color selection now use a single reference/seed color; Dark, Medium (60% toward Light), and Light shades are generated automatically and semantically mapped. Added Deep Forest Slate and Corporate Navy presets. No invoice geometry, columns, calculations, typography, or non-theme logic changed.
 
 Update: v4.40 — Dashboard dark-mode contrast correction; mobile dashboard cards, labels, status chips and desktop dashboard light-only surfaces now map to dark theme tokens. Locked Main Invoice/PDF renderer untouched. Previous v4.39 — Surgical correction: Product/Particulars fourth header is explicitly rendered from the active theme darkest/Primary shade, with smart header-text contrast resolved against that exact shade. No data, calculations, geometry, column positions, typography, or non-theme invoice logic changed.
 
@@ -78,7 +78,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>MDM ERP v4.62.30 — Exact Gross & Canonical Round Off Reconciliation</title>
+<title>MDM ERP v4.62.33 — Exact Gross Reconciliation Engine</title>
 <!-- v4.61.37: Revision-mode identity isolation; new-invoice numbering allocation unchanged. -->
 <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
@@ -3330,10 +3330,13 @@ function hybridEnsureSnapshot(inv,approvedSnapshot=null){
     const sourceGross=mdmV7Money(inv.grand??inv.mergedTotals?.gross??0),sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
     snap.roundOffEnabled=sourceEnabled;snap.sourceGross=sourceFinancials.gross;snap.sourceRoundOff=sourceFinancials.roundOff;snap.sourceNet=sourceFinancials.net;snap.hybridRoundOff=sourceFinancials.roundOff;snap.hybridNet=sourceFinancials.net;
     snap.sourceInvoiceSnapshot={...(snap.sourceInvoiceSnapshot||{}),id:inv.id,invNo:inv.invNo,date:inv.date,month:inv.month,year:inv.year,schoolId:inv.schoolId,schoolName:inv.schoolName,schoolAddress:inv.schoolAddress,schoolUdise:inv.schoolUdise,schoolBlock:inv.schoolBlock,schoolDistrict:inv.schoolDistrict,schoolMobile:inv.schoolMobile,invoiceType:inv.invoiceType,roundOffEnabled:sourceEnabled,grand:sourceGross,taxable:Number(inv.taxable)||0,cgst:Number(inv.cgst)||0,sgst:Number(inv.sgst)||0,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net,mergedTotals:{...(inv.mergedTotals||{}),gross:sourceGross,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net},mergedItems:inv.mergedItems.map(r=>({...r}))};
-    const checks={tax:mdmV7Money(snap.rows.reduce((a,r)=>a+(Number(r.displayTaxable)||0),0)),cg:mdmV7Money(snap.rows.reduce((a,r)=>a+(Number(r.displayCgst)||0),0)),sg:mdmV7Money(snap.rows.reduce((a,r)=>a+(Number(r.displaySgst)||0),0))};
-    const gross=mdmV7Money(checks.tax+checks.cg+checks.sg),enabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),ft=mdmCanonicalInvoiceTotals(gross,enabled);
-    const lineFailures=(snap.rows||[]).filter(r=>Math.abs(mdmV7Money(Number(r.billedQuantity)*Number(r.billingRate)-Number(r.rateCalculatedTaxable??r.displayTaxable)))>=0.01);
-    if(gross!==mdmV7Money(inv.grand??inv.mergedTotals?.gross)||ft.gross!==mdmV7Money(snap.sourceGross)||ft.roundOff!==mdmV7Money(snap.sourceRoundOff)||ft.net!==mdmV7Money(snap.sourceNet)||lineFailures.length)throw new Error("Approved optimizer snapshot no longer matches the Original Gross/Round Off/Net or contains an invalid item calculation; save blocked. Re-run optimizer.");
+    const gross=mdmV7Money((snap.rows||[]).reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0)/100);
+    // Independent final re-verification through the ONE shared validator against a fresh Original baseline.
+    const fresh=hybridMakeSnapshot(inv,hybridUnitDisplayMode());fresh.roundOffEnabled=sourceEnabled;
+    fresh.sourceGross=sourceFinancials.gross;fresh.sourceRoundOff=sourceFinancials.roundOff;fresh.sourceNet=sourceFinancials.net;
+    fresh.sourceInvoiceSnapshot={...(fresh.sourceInvoiceSnapshot||{}),roundOffEnabled:sourceEnabled,mergedItems:inv.mergedItems.map(r=>({...r}))};
+    const v=validateExactReconciliation(fresh,snap,{currentSignature:mdmV7SourceSignature(inv.mergedItems),approvedIds:(snap.optimizer?.adjustedItems||[]).map(x=>x.id)});
+    if(gross!==mdmV7Money(inv.grand??inv.mergedTotals?.gross)||!v.ok)throw new Error("Approved optimizer snapshot failed final verification ("+(v.ok?"GROSS_VS_INVOICE":v.failed.join(", "))+"); save blocked. Re-run Analyze & Compare.");
   }
   const old=inv.hybridModel||{schema:"MDM-HYBRID-MODEL",schemaVersion:3,activeRevision:0,revisions:[],createdAt:snap.createdAt};
   const revisions=Array.isArray(old.revisions)?old.revisions.slice():[];
@@ -4196,7 +4199,7 @@ function pgNew(){
       <option value="disabled"  ${(A.sett||ST0).gstMode==="disabled"?"selected":""}>Disabled</option>
     </select>
   </div>
-</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="niReset()" title="Clear form">&#10006; Clear</button><label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txl)"><label class="tog"><input type="checkbox" ${NI.doShuffle?"checked":""} onchange="NI.doShuffle=this.checked"><span class="tog-s"></span></label>Randomise</label>${NI.calc&&!NI.saved?`<button class="btn btn-g btn-sm" onclick="niVerifyOpen()">&#128190; Save</button>`:""}${NI.saved?`<span class="bdg bg">&#10003; Saved</span>`:""}${NI.calc?`<button class="btn btn-t btn-sm" onclick="niPr(NI.tab||'merged')">&#128424; Print (Preview)</button>`:""}</div></div><div class="ni-layout" style="display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start;margin-bottom:14px"><div class="card" style="margin:0"><div class="chd ni-section-head" style="background-image:none!important"><span class="cht">Invoice Details</span><span class="mono" style="font-weight:700;font-size:12px;color:var(--nvtx)">${nxt}</span></div><div class="cbd"><div class="fg fg3 ni-basic-grid" style="margin-bottom:12px"><div><label class="flbl">School <span style="color:var(--rd)">*</span></label>${niSchoolPickerHTML(NI.schoolId)}</div><div><label class="flbl">Invoice Date</label><input class="fi" type="date" value="${NI.date}" onchange="NI.date=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;const _p=(NI.date||'').split('-');if(_p.length===3){const _mi=parseInt(_p[1],10)-1;if(_mi>=0&&_mi<12){NI.month=MN[_mi];NI.year=_p[0];}}NI.availableSearch='';gP('new')"/></div><div><label class="flbl">Bill Month / Year</label><div style="display:flex;gap:7px"><select class="fi" onchange="NI.month=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')">${moO}</select><input class="fi" style="width:74px" type="number" value="${NI.year}" onchange="NI.year=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')"/></div></div></div>${schI}${dupW}${activeBillingMode()==="hybrid"?`<section id="mdm-v7-original-hybrid" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Original vs Hybrid Verification</div><div class="mdm-v7-sub">Live invoice calculation · GST-aware financial comparison</div></div><span class="mdm-v7-state" id="mdm-v7-verify-state">${NI.calc?"Ready to verify":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Original Net Payable</small><b id="mdm-v7-original-net">${NI.calc?R(NI.calc.mTot?.net||0):"—"}</b></div><div><small>Hybrid Net Payable</small><b id="mdm-v7-hybrid-net">—</b></div><div><small>Net Difference</small><b id="mdm-v7-net-diff">—</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-verify" ${NI.calc?"":"disabled"} onclick="mdmV7Verify()">Verify Original vs Hybrid</button><span class="mdm-v7-note">Read-only check. Original calculation and invoice/PDF data are not modified.</span></div><div id="mdm-v7-verify-results" class="mdm-v7-results" hidden></div></section><section id="mdm-v7-smart-recon" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Smart Reconciliation Optimizer</div><div class="mdm-v7-sub">Hybrid-only · Green Veg Mix only: adjust quantity + daily rate to absorb taxable/gross difference; GST stays exempt</div></div><span class="mdm-v7-state" id="mdm-v7-recon-state">${NI.calc?"Awaiting verified baseline":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Reconciliation Difference</small><b id="mdm-v7-diff">—</b></div><div><small>Valid Options</small><b id="mdm-v7-options">Not evaluated</b></div><div><small>Apply Status</small><b id="mdm-v7-action">Blocked until valid option</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-analyze" ${NI.calc?"":"disabled"} onclick="mdmV7Analyze()">Analyze &amp; Compare</button><span class="mdm-v7-note">After manual rounding, the remaining plus/minus difference is automatically analyzed for Green Veg Mix first using joint quantity + daily-rate adjustment. Other item categories are not modified by this optimizer. Green Veg Mix absorbs taxable/gross difference only; its CGST/SGST stay zero. Other rows retain saved GST paise. Exact totals required; no arbitrary balancing entry.</span></div><div id="mdm-v7-recon-results" class="mdm-v7-results" hidden></div><div id="mdm-v7-manual-panel" class="mdm-v7-results" hidden></div></section>`:""}<div class="ni-entry-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch"><div class="ni-class-card"><div class="ni-class-card-title">Class 1–5 Students</div><input id="ni-s15" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s15}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s15',this.value)" onchange="niStudentInput('s15',this.value)"/>${s15>0?`<div class="ni-alloc">Alloc: ${R(a15)}</div>`:""}</div><div class="ni-class-card"><div class="ni-class-card-title">Class 6–8 Students</div><input id="ni-s68" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s68}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s68',this.value)" onchange="niStudentInput('s68',this.value)"/>${s68>0?`<div class="ni-alloc">Alloc: ${R(a68)}</div>`:""}</div><div class="ni-fruit-card" style="flex:0 0 auto;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 13px;min-width:230px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><label class="tog"><input type="checkbox" ${NI.useFruit?"checked":""} onchange="NI.useFruit=this.checked;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton();gP('new')"><span class="tog-s"></span></label>
+</div></div><div class="sac"><button class="btn btn-g btn-sm" onclick="niReset()" title="Clear form">&#10006; Clear</button><label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--txl)"><label class="tog"><input type="checkbox" ${NI.doShuffle?"checked":""} onchange="NI.doShuffle=this.checked"><span class="tog-s"></span></label>Randomise</label>${NI.calc&&!NI.saved?`<button class="btn btn-g btn-sm" onclick="niVerifyOpen()">&#128190; Save</button>`:""}${NI.saved?`<span class="bdg bg">&#10003; Saved</span>`:""}${NI.calc?`<button class="btn btn-t btn-sm" onclick="niPr(NI.tab||'merged')">&#128424; Print (Preview)</button>`:""}</div></div><div class="ni-layout" style="display:grid;grid-template-columns:1fr 280px;gap:14px;align-items:start;margin-bottom:14px"><div class="card" style="margin:0"><div class="chd ni-section-head" style="background-image:none!important"><span class="cht">Invoice Details</span><span class="mono" style="font-weight:700;font-size:12px;color:var(--nvtx)">${nxt}</span></div><div class="cbd"><div class="fg fg3 ni-basic-grid" style="margin-bottom:12px"><div><label class="flbl">School <span style="color:var(--rd)">*</span></label>${niSchoolPickerHTML(NI.schoolId)}</div><div><label class="flbl">Invoice Date</label><input class="fi" type="date" value="${NI.date}" onchange="NI.date=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;const _p=(NI.date||'').split('-');if(_p.length===3){const _mi=parseInt(_p[1],10)-1;if(_mi>=0&&_mi<12){NI.month=MN[_mi];NI.year=_p[0];}}NI.availableSearch='';gP('new')"/></div><div><label class="flbl">Bill Month / Year</label><div style="display:flex;gap:7px"><select class="fi" onchange="NI.month=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')">${moO}</select><input class="fi" style="width:74px" type="number" value="${NI.year}" onchange="NI.year=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;NI.availableSearch='';gP('new')"/></div></div></div>${schI}${dupW}${activeBillingMode()==="hybrid"?`<section id="mdm-v7-original-hybrid" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Original vs Hybrid Verification</div><div class="mdm-v7-sub">Live invoice calculation · GST-aware financial comparison</div></div><span class="mdm-v7-state" id="mdm-v7-verify-state">${NI.calc?"Ready to verify":"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Original Net Payable</small><b id="mdm-v7-original-net">${NI.calc?R(NI.calc.mTot?.net||0):"—"}</b></div><div><small>Hybrid Net Payable</small><b id="mdm-v7-hybrid-net">—</b></div><div><small>Net Difference</small><b id="mdm-v7-net-diff">—</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-verify" ${NI.calc?"":"disabled"} onclick="mdmV7Verify()">Verify Original vs Hybrid</button><span class="mdm-v7-note">Read-only check. Original calculation and invoice/PDF data are not modified.</span></div><div id="mdm-v7-verify-results" class="mdm-v7-results" hidden></div></section><section id="mdm-v7-smart-recon" class="mdm-v7-recon"><div class="mdm-v7-recon-head"><div><div class="mdm-v7-title">Smart Reconciliation Optimizer</div><div class="mdm-v7-sub">Hybrid-only · Green Veg Mix only: adjust quantity + daily rate to absorb taxable/gross difference; GST stays exempt</div></div><span class="mdm-v7-state" id="mdm-v7-recon-state">${NI.calc?(mdmV7GetAppliedSnapshot(NI.calc.merged)?"Reconciled":"Awaiting verified baseline"):"Waiting for Calculation"}</span></div><div class="mdm-v7-stats"><div><small>Reconciliation Difference</small><b id="mdm-v7-diff">—</b></div><div><small>Valid Options</small><b id="mdm-v7-options">Not evaluated</b></div><div><small>Apply Status</small><b id="mdm-v7-action">Blocked until valid option</b></div></div><div class="mdm-v7-actions"><button type="button" class="btn btn-p btn-sm" id="mdm-v7-analyze" ${NI.calc?"":"disabled"} onclick="mdmV7Analyze()">Analyze &amp; Compare</button><button type="button" class="btn btn-g btn-sm" id="mdm-v7-force" ${NI.calc?"":"disabled"} onclick="mdmExactForce()">Force Exact Reconciliation</button><button type="button" class="btn btn-g btn-sm" ${NI.calc?"":"disabled"} onclick="mdmV7ManualOpen()">Manual Adjustment</button><span class="mdm-v7-note">After manual rounding, the remaining plus/minus difference is automatically analyzed for Green Veg Mix first using joint quantity + daily-rate adjustment. Other item categories are not modified by this optimizer. Green Veg Mix absorbs taxable/gross difference only; its CGST/SGST stay zero. Other rows retain saved GST paise. Exact totals required; no arbitrary balancing entry.</span></div><div id="mdm-v7-recon-results" class="mdm-v7-results" hidden></div><div id="mdm-v7-manual-panel" class="mdm-v7-results" hidden></div></section>`:""}<div class="ni-entry-row" style="display:flex;gap:12px;flex-wrap:wrap;align-items:stretch"><div class="ni-class-card"><div class="ni-class-card-title">Class 1–5 Students</div><input id="ni-s15" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s15}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s15',this.value)" onchange="niStudentInput('s15',this.value)"/>${s15>0?`<div class="ni-alloc">Alloc: ${R(a15)}</div>`:""}</div><div class="ni-class-card"><div class="ni-class-card-title">Class 6–8 Students</div><input id="ni-s68" class="fi" type="number" step="${niDecimalStudentEnabled()?"0.01":"1"}" min="0" value="${NI.s68}" inputmode="${niDecimalStudentEnabled()?"decimal":"numeric"}" oninput="niStudentInput('s68',this.value)" onchange="niStudentInput('s68',this.value)"/>${s68>0?`<div class="ni-alloc">Alloc: ${R(a68)}</div>`:""}</div><div class="ni-fruit-card" style="flex:0 0 auto;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px 13px;min-width:230px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><label class="tog"><input type="checkbox" ${NI.useFruit?"checked":""} onchange="NI.useFruit=this.checked;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton();gP('new')"><span class="tog-s"></span></label>
 
 <span style="font-weight:600;font-size:12.5px">Egg / Fruit</span></div>${NI.useFruit?`<div style="display:flex;gap:8px"><div style="flex:1"><label class="flbl">Count</label><input class="fi fi-sm" type="number" min="0" value="${NI.sFruit}" onchange="NI.sFruit=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.sFruit=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" placeholder="${s15+s68}"/></div><div style="flex:1"><label class="flbl">Rate</label><div style="display:flex;gap:4px;flex-wrap:wrap">${[5,6,7].map(rv=>`<button class="btn btn-sm" style="background:${NI.fruitRate===String(rv)?"var(--sf)":"var(--bd)"};color:${NI.fruitRate===String(rv)?"#fff":"var(--tx)"};border:none;height:25px;padding:0 8px;font-size:11px" onclick="NI.fruitRate='${rv}';NI.calc=null;NI.calcSignature=null;NI.saved=false;gP('new')">\u20B9${rv}</button>`).join("")}<input class="fi fi-sm" type="number" min="0" value="${NI.fruitRate}" onchange="NI.fruitRate=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" oninput="NI.fruitRate=this.value;NI.calc=null;NI.calcSignature=null;NI.saved=false;niSyncGenerateButton()" style="width:48px"/></div></div></div>${aFr>0?`<div style="font-size:10.5px;color:var(--sf);margin-top:5px;font-weight:600">Alloc: ${R(aFr)}</div>`:""}`:""}</div>
 ${niAmountAdjustmentEnabled()?`<div class="ni-adjust-control ni-adjust-secondary" style="flex:0 0 100%;width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:9px;background:var(--card)">
@@ -5074,7 +5077,7 @@ function mdmV7Candidate(row,qty,rateOverride){
   const factor=(unit==="GM"||unit==="G"||unit==="ML")?0.001:1;
   const baseQty=Number((Number(qty)*factor).toFixed(6));if(!(baseQty>0))return null;
   const sourceTax=money(row.sourceTaxable),normalizedRate=mdmV7RoundRate(sourceTax/baseQty);
-  const rate=rateOverride==null?normalizedRate:money(rateOverride);
+  const rate=rateOverride==null?normalizedRate:Number(Number(rateOverride).toFixed(6));
   if(!(rate>0))return null;
   const taxable=money(baseQty*rate);
   const sourceGST=money((Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0));
@@ -5091,206 +5094,308 @@ function mdmV7Candidate(row,qty,rateOverride){
     hybridQuantityTimesRate:taxable,autoAdjustmentAmount:money(taxable-sourceTax),netPayableImpact:money(taxable+gst-sourceTax-sourceGST),
     rateRoundingDelta:money(rate-(Number(row.sourceRateInHybridUnit)||normalizedRate)),normalizedGrams:(unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000,adjustmentGrams:((unit==="GM"||unit==="G"||unit==="ML")?qty:qty*1000)-(Number(row.actualQuantity)||0)*((String(row.actualUnit||"").toUpperCase()==="GM"||String(row.actualUnit||"").toUpperCase()==="G"||String(row.actualUnit||"").toUpperCase()==="ML")?1:1000),autoAdjustment:true,redistributionApplied:true,optimizerAdjusted:true,optimizerRateAdjusted:rateOverride!=null};
 }
-function mdmV7Solve(baseSnap,eligibleIds){
-  const cents=v=>Math.round((Number(v)||0)*100), rows=baseSnap.rows||[];
-  const eligible=rows.map((r,i)=>({r,i,cat:mdmV7Category(r)})).filter(x=>x.cat==='green_veg_mix'&&Number(x.r.sourceTaxable??x.r.displayTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount??x.r.independentAdjustmentGross)||0)<0.005);
-  if(!eligible.length)return {status:'NO_ELIGIBLE_ROWS',options:[],eligibleRows:0,searchStates:0,diagnostics:{reason:'NO_ELIGIBLE_GREEN_VEG_MIX'}};
-  const g=eligible[0],row=g.r,idx=g.i,unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||'KG').toUpperCase();
-  const factor=(unit==='GM'||unit==='G'||unit==='ML')?0.001:1;
-  const fixedGross=cents(rows.reduce((a,r,i)=>a+(i===idx?0:(Number(r.displayTaxable)||0)+(Number(r.displayCgst)||0)+(Number(r.displaySgst)||0)),0));
-  const targetItemGross=cents(baseSnap.sourceGross)-fixedGross;
-  if(targetItemGross<=0)return {status:'NO_EXACT_SOLUTION',options:[],eligibleRows:eligible.length,searchStates:0,diagnostics:{reason:'FIXED_ROWS_EXCEED_GROSS_TARGET',targetItemGross}};
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXACT GROSS RECONCILIATION ENGINE — EXACT-1.0.0 (MDM ERP v4.62.33)
+   One target-based solver (solveExactAdjustment) + one shared validator
+   (validateExactReconciliation) used by Analyze, Force, Manual Fetch, Apply,
+   Verify and the final Save gate. Integer-paise arithmetic. Original calc()
+   and the canonical round-off functions are NOT modified.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const MDM_EXACT_VERSION="EXACT-1.0.0";
+const MDM_EXACT_STATES={searching:"Searching",found:"Exact Candidate Found",ready:"Ready for Fetch",reconciled:"Reconciled",none:"No Exact Solution",changed:"Source Changed",failed:"Validation Failed"};
+function mdmExC(v){const n=Number(v)||0;return Math.round(n*100+(n<0?-1e-7:1e-7));}
+function mdmExINR(c){return mdmV7INR(c/100);}
+function mdmExDecimals(v){const s=String(Number(v));if(/e/i.test(s))return 9;const i=s.indexOf(".");return i<0?0:s.length-i-1;}
+function mdmExactSetState(key,extra){window.MDM_EXACT_STATE={key,label:MDM_EXACT_STATES[key]||key,extra:extra||"",at:new Date().toISOString()};putText("mdm-v7-recon-state",(MDM_EXACT_STATES[key]||key)+(extra?" · "+extra:""));}
+// Reads the item's SAVED configuration (unit, GST, current qty/rate) – nothing is hardcoded by item name.
+function mdmExactItemConfig(row,mode){
+  const unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||"KG").toUpperCase();
+  const factor=(unit==="GM"||unit==="G"||unit==="ML")?0.001:1;
   const q0=Number(row.billedQuantity)||0,rate0=Number(row.displayRate)||Number(row.sourceRateInHybridUnit)||0;
-  const maxQtyMove=Math.max(1,Math.abs(q0)*0.20),maxRateMove=Math.max(10,Math.abs(rate0)*0.20);
-  const qSteps=Math.min(20001,Math.ceil(maxQtyMove/0.001)), options=[],seen=new Set();let states=0;
-  // Search quantity at 0.001-unit precision. For each quantity, derive the rate from the target
-  // taxable cents and inspect a sufficiently wide cent window to account for GST rounding.
-  const treatment=String(row.taxTreatment||row.gstTreatment||row.taxability||'').toLowerCase();
+  const treatment=String(row.taxTreatment||row.gstTreatment||row.taxability||"").toLowerCase();
   const explicit=Number(row.gstRate??row.gstPercent??row.gst??row.taxRate);
-  const exempt=['exempt','nil_rated','nil-rated','non_gst','non-gst','non_gst_supply'].includes(treatment);
-  const sourceTaxable=Number(row.sourceTaxable)||0,sourceGST=(Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0);
-  const gstRate=exempt?0:(Number.isFinite(explicit)&&explicit>=0?explicit/100:(sourceTaxable>0?sourceGST/sourceTaxable:0));
-  const taxTargets=new Set();
-  // GST is based on the row's saved tax treatment/rate. Search around the exact
-  // inverse-taxable target rather than assuming GST can never exceed ₹5.
-  const approxTaxable=Math.round(targetItemGross/(1+gstRate));
-  for(let d=-8;d<=8;d++){
-    const tc=approxTaxable+d;if(tc<=0)continue;
-    const tax=Math.round(tc*gstRate);
-    if(tc+tax===targetItemGross)taxTargets.add(tc);
-  }
-  const targetTaxables=[...taxTargets].filter(x=>x>0);
-  for(let qi=-qSteps;qi<=qSteps;qi++){
-    const q=Number((q0+qi*0.001).toFixed(3));if(q<=0||Math.abs(q-q0)>maxQtyMove+1e-9)continue;
-    const baseQty=Number((q*factor).toFixed(6));if(!(baseQty>0))continue;
-    for(const tc of targetTaxables){
-      const center=Math.round((tc/100/baseQty)*100);
-      for(let dr=-5;dr<=5;dr++){
-        const rate=(center+dr)/100;if(rate<=0||Math.abs(rate-rate0)>maxRateMove+1e-6)continue;
-        states++;
-        const c=mdmV7Candidate(row,q,rate);if(!c)continue;
-        const gross=cents(c.displayTaxable)+cents(c.displayCgst)+cents(c.displaySgst);
-        if(gross!==targetItemGross)continue;
-        const key=q.toFixed(3)+'|'+rate.toFixed(2);if(seen.has(key))continue;seen.add(key);
-        const qtyPct=Math.abs(q-q0)/Math.max(.001,Math.abs(q0))*100,ratePct=Math.abs(rate-rate0)/Math.max(.01,Math.abs(rate0))*100;
-        options.push({id:'OPT-'+(options.length+1),cost:qtyPct+ratePct+Math.abs(qtyPct-ratePct)*.08,rows:[{index:idx,category:'green_veg_mix',row:c,move:Math.abs(q-q0),rateMove:Math.abs(rate-rate0),qtyPct,ratePct}],totals:{gross:targetItemGross,net:cents(baseSnap.sourceNet)}});
-      }
-    }
-  }
-  options.sort((a,b)=>a.cost-b.cost);
-  return {status:options.length?'SOLVED':'NO_EXACT_SOLUTION',options:options.slice(0,12),eligibleRows:eligible.length,searchStates:states,targets:{gross:cents(baseSnap.sourceGross),roundOff:cents(baseSnap.sourceRoundOff),net:cents(baseSnap.sourceNet)},diagnostics:options.length?null:{reason:'NO_GROSS_MATCH_WITHIN_ALLOWED_QTY_RATE_LIMITS',targetItemGross,quantityRange:[Number((q0-maxQtyMove).toFixed(3)),Number((q0+maxQtyMove).toFixed(3))],rateRange:[Number((rate0-maxRateMove).toFixed(2)),Number((rate0+maxRateMove).toFixed(2))]},primaryAbsorptionItem:'green_veg_mix',primaryRateAndQuantityOptimization:true};
+  const exempt=["exempt","nil_rated","nil-rated","non_gst","non-gst","non_gst_supply"].includes(treatment);
+  const srcTax=Number(row.sourceTaxable)||0,srcGst=(Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0);
+  const gstRate=exempt?0:(Number.isFinite(explicit)&&explicit>=0?explicit/100:(srcTax>0?srcGst/srcTax:0));
+  const wide=mode==="force";
+  return {mode:mode||"auto",unit,factor,q0,rate0,gstRate,exempt,qtyDecimals:3,rateDecimals:2,
+    minQty:Math.max(0.001,q0*(wide?0.05:0.8)),maxQty:q0*(wide?3:1.2),
+    minRate:Math.max(0.01,rate0*(wide?0.25:0.8)),maxRate:rate0*(wide?4:1.2)};
 }
-function mdmV7BuildProposal(baseSnap,option){
+// Mathematically derived search: for each candidate quantity derive the rate that yields the required
+// taxable, and for each candidate rate derive the quantity; test the neighbours at display precision
+// through the real line calculation (mdmV7Candidate). Not a brute-force over arbitrary combinations.
+function solveExactAdjustment(targetGrossC,cfg,row){
+  const out={status:"NO_EXACT_SOLUTION",candidates:[],tested:0,targetGrossC,cfg,reason:null,reasonCode:null,nextPrecision:null,nearest:null};
+  if(!(targetGrossC>0)){out.reasonCode="TARGET_NOT_POSITIVE";out.reason="Fixed rows already consume the whole Original Gross; the required line gross is "+mdmExINR(targetGrossC)+".";return out;}
+  if(!(cfg.q0>0&&cfg.rate0>0)){out.reasonCode="INVALID_BASELINE";out.reason="Baseline quantity/rate of the adjustment item is not positive.";return out;}
+  const g=cfg.gstRate;
+  const taxTargets=[];
+  const approx=Math.round(targetGrossC/(1+g));
+  for(let d=-6;d<=6;d++){const tc=approx+d;if(tc>0&&tc+Math.round(tc*g)===targetGrossC)taxTargets.push(tc);}
+  if(!taxTargets.length){out.reasonCode="GST_UNREACHABLE";out.reason="No taxable amount can produce a line gross of "+mdmExINR(targetGrossC)+" at the saved GST rate of "+(g*100).toFixed(2)+"% after paise rounding of GST. The target is mathematically unreachable for this item.";return out;}
+  const run=(qd,rd,lim)=>{
+    const qS=Math.pow(10,qd),rS=Math.pow(10,rd);
+    const qLo=Math.max(1,Math.ceil(lim.minQty*qS-1e-9)),qHi=Math.floor(lim.maxQty*qS+1e-9);
+    const rLo=Math.max(1,Math.ceil(lim.minRate*rS-1e-9)),rHi=Math.floor(lim.maxRate*rS+1e-9);
+    const seen=new Set(),found=[];let tested=0,nearest=null;
+    const test=(qi,ri)=>{
+      if(qi<qLo||qi>qHi||ri<rLo||ri>rHi)return;
+      const key=qi+"|"+ri;if(seen.has(key))return;seen.add(key);tested++;
+      const q=Number((qi/qS).toFixed(qd)),r=Number((ri/rS).toFixed(rd));
+      const base=q*cfg.factor,tc=mdmExC(base*r),gr=tc+mdmExC(tc/100*g),d=Math.abs(gr-targetGrossC);
+      if(!nearest||d<nearest.d)nearest={d,q,r,grossC:gr};
+      if(d>1)return;                                   // cheap integer pre-filter (tolerates half-paise float ties)
+      const c=mdmV7Candidate(row,q,r);if(!c)return;     // the real line calculation decides
+      const lineC=mdmExC(c.displayTaxable)+mdmExC(c.displayCgst)+mdmExC(c.displaySgst);
+      if(lineC!==targetGrossC)return;
+      const qtyPct=Math.abs(q-cfg.q0)/cfg.q0*100,ratePct=Math.abs(r-cfg.rate0)/cfg.rate0*100;
+      const onGrid=Math.abs(r*2-Math.round(r*2))<1e-9;found.push({qty:q,rate:r,row:c,itemGrossC:lineC,qtyPct,ratePct,combined:qtyPct+ratePct,onGrid,score:qtyPct+ratePct+(onGrid?0:2),natural:mdmExDecimals(q)+mdmExDecimals(r)});
+    };
+    for(let qi=qLo;qi<=qHi;qi++){                       // quantity-derived rate
+      const q=qi/qS,base=q*cfg.factor;if(!(base>0))continue;
+      for(const tc of taxTargets){const ri0=Math.round(tc/100/base*rS);for(let k=-1;k<=1;k++)test(qi,ri0+k);}
+    }
+    for(let ri=rLo;ri<=rHi;ri++){                       // rate-derived quantity
+      const r=ri/rS;
+      for(const tc of taxTargets){const qi0=Math.round(tc/100/r/cfg.factor*qS);for(let k=-1;k<=1;k++)test(qi0+k,ri);}
+    }
+    return {found,tested,nearest,qLo,qHi,rLo,rHi,qS,rS};
+  };
+  const main=run(cfg.qtyDecimals,cfg.rateDecimals,cfg);
+  out.tested=main.tested;out.nearest=main.nearest;
+  // Ranking: exact gross is mandatory (already filtered); then combined qty+rate deviation, with a 2-point penalty when the rate is off the ERP's .00/.50 display grid (natural-looking values preferred); ties: qty %, rate %, fewer decimals.
+  const rank=(a,b)=>(a.score-b.score)||(a.qtyPct-b.qtyPct)||(a.ratePct-b.ratePct)||(a.natural-b.natural);
+  if(main.found.length){out.status="EXACT";out.candidates=main.found.sort(rank).slice(0,12);return out;}
+  const T=taxTargets[0]/100;
+  out.reasonCode="NO_EXACT_AT_APPROVED_PRECISION";
+  out.reason="No quantity/rate pair within quantity "+cfg.minQty.toFixed(3)+"–"+cfg.maxQty.toFixed(3)+" "+cfg.unit+" (≤"+cfg.qtyDecimals+" dp) and rate ₹"+cfg.minRate.toFixed(2)+"–₹"+cfg.maxRate.toFixed(2)+" (≤"+cfg.rateDecimals+" dp) reproduces the required line gross "+mdmExINR(targetGrossC)+" (taxable ₹"+T.toFixed(2)+"). At the current rate ₹"+cfg.rate0.toFixed(2)+" the exact quantity would be "+(T/cfg.rate0/cfg.factor).toFixed(5)+" "+cfg.unit+"."
+    +(main.nearest?" Nearest reachable line gross is "+mdmExINR(main.nearest.grossC)+" ("+main.nearest.q+" × ₹"+main.nearest.r.toFixed(2)+"), "+mdmExINR(main.nearest.d)+" away.":"");
+  // Next permitted precision – offered for approval only, never applied silently.
+  const ext=run(cfg.qtyDecimals+1,cfg.rateDecimals+1,{minQty:cfg.q0*0.9,maxQty:cfg.q0*1.1,minRate:cfg.rate0*0.9,maxRate:cfg.rate0*1.1});
+  out.tested+=ext.tested;
+  if(ext.found.length){const best=ext.found.sort(rank)[0];out.nextPrecision={qtyDecimals:cfg.qtyDecimals+1,rateDecimals:cfg.rateDecimals+1,candidate:best};
+    out.reason+=" An exact combination exists only at the next precision ("+(cfg.qtyDecimals+1)+" dp quantity / "+(cfg.rateDecimals+1)+" dp rate): "+best.qty+" "+cfg.unit+" × ₹"+best.rate+". The invoice does not display that precision, so it is NOT applied; approval and a display-precision change would be required.";}
+  return out;
+}
+// ── The single shared validator ─────────────────────────────────────────────
+function validateExactReconciliation(original,proposed,ctx){
+  ctx=ctx||{};const checks=[],add=(id,ok,detail)=>checks.push({id,ok:!!ok,detail:detail||""});
+  const orows=(original&&original.rows)||[],prows=(proposed&&proposed.rows)||[];
+  const enabled=original?.roundOffEnabled??original?.sourceInvoiceSnapshot?.roundOffEnabled??((A.sett||ST0).roundOff!==false);
+  const sumC=rows=>rows.reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0);
+  const origGrossC=mdmExC(original?.sourceGross),origRoC=mdmExC(original?.sourceRoundOff),origNetC=mdmExC(original?.sourceNet);
+  const canonOrig=mdmCanonicalInvoiceTotals(origGrossC/100,enabled);
+  add("ORIGINAL_TARGET_CANONICAL",mdmExC(canonOrig.roundOff)===origRoC&&mdmExC(canonOrig.net)===origNetC,"Original Round Off/Net must equal the canonical engine on the Original Gross");
+  const propGrossC=sumC(prows),canon=mdmCanonicalInvoiceTotals(propGrossC/100,enabled),propRoC=mdmExC(canon.roundOff),propNetC=mdmExC(canon.net);
+  add("GROSS_EQUAL",propGrossC===origGrossC,"Gross diff "+mdmExINR(propGrossC-origGrossC));
+  add("ROUNDOFF_EQUAL",propRoC===origRoC,"Round Off diff "+mdmExINR(propRoC-origRoC));
+  add("NET_EQUAL",propNetC===origNetC,"Net diff "+mdmExINR(propNetC-origNetC));
+  add("ROW_SET_UNCHANGED",orows.length===prows.length&&orows.every((r,i)=>String(r.id)===String(prows[i]?.id)),"Row set/order must match the Original snapshot");
+  const approvedIds=new Set((ctx.approvedIds||(proposed?.optimizer?.adjustedItems||[]).map(x=>x.id)).map(String));
+  const keyOf=r=>JSON.stringify([r.billedQuantity,r.billedUnit,r.displayRate,r.displayTaxable,r.displayCgst,r.displaySgst]);
+  const changed=[];prows.forEach((r,i)=>{if(orows[i]&&keyOf(r)!==keyOf(orows[i]))changed.push(String(r.id));});
+  const unapproved=changed.filter(id=>!approvedIds.has(id));
+  add("ONLY_APPROVED_ITEMS_CHANGED",unapproved.length===0,unapproved.length?"Unapproved rows changed: "+unapproved.join(","):"Changed: "+(changed.join(",")||"none"));
+  // Item arithmetic: taxable = billedQty × visible rate (one paise rounding, half-paise tolerant) on every row.
+  const arithBad=prows.filter(r=>{const base=Number(r.rateCalculatedTaxable??r.displayTaxable);return Math.abs(Number(r.billedQuantity)*Number(r.billingRate)*100-base*100)>0.5+1e-6;}).map(r=>String(r.id));
+  add("ITEM_ARITHMETIC",arithBad.length===0,arithBad.length?"Invalid line arithmetic: "+arithBad.join(","):"All lines valid");
+  // GST integrity of every changed row against its SAVED tax configuration.
+  const gstBad=[];prows.forEach((r,i)=>{const o=orows[i];if(!o||!changed.includes(String(r.id)))return;
+    const cfg=mdmExactItemConfig(o,"auto"),tc=mdmExC(r.displayTaxable),exp=Math.round(tc*cfg.gstRate),got=mdmExC(r.displayCgst)+mdmExC(r.displaySgst);
+    if(got!==exp||String(r.taxTreatment)!==String(o.taxTreatment)||Number(r.gstRate)!==Number(o.gstRate))gstBad.push(String(r.id));});
+  add("GST_INTEGRITY",gstBad.length===0,gstBad.length?"GST invalid on: "+gstBad.join(","):"GST per saved configuration");
+  const ids=prows.map(r=>String(r.id)),adj=prows.filter(r=>r.optimizerAdjusted).length,origAdj=orows.filter(r=>r.optimizerAdjusted).length;
+  add("NO_DUPLICATE_ADJUSTMENT",new Set(ids).size===ids.length&&origAdj===0&&adj<=Math.max(1,approvedIds.size)&&(proposed?.optimizer?.adjustedItems||[]).length<=1,"Adjusted rows: "+adj);
+  const sigOrig=mdmV7SourceSignature(original?.sourceInvoiceSnapshot?.mergedItems||[]),sigProp=mdmV7SourceSignature(proposed?.sourceInvoiceSnapshot?.mergedItems||[]);
+  const sigOk=sigOrig===sigProp&&(ctx.currentSignature==null||ctx.currentSignature===sigOrig);
+  add("SOURCE_SIGNATURE_UNCHANGED",sigOk,sigOk?"Source unchanged":"Source invoice changed after analysis");
+  const failed=checks.filter(c=>!c.ok).map(c=>c.id);
+  return {ok:failed.length===0,checks,failed,diffs:{gross:(propGrossC-origGrossC)/100,roundOff:(propRoC-origRoC)/100,net:(propNetC-origNetC)/100},
+    originalC:{gross:origGrossC,roundOff:origRoC,net:origNetC},proposedC:{gross:propGrossC,roundOff:propRoC,net:propNetC},
+    taxComponentDiffs:{taxable:Number(((prows.reduce((a,r)=>a+mdmExC(r.displayTaxable),0)-orows.reduce((a,r)=>a+mdmExC(r.sourceTaxable),0))/100).toFixed(2)),
+      cgst:Number(((prows.reduce((a,r)=>a+mdmExC(r.displayCgst),0)-orows.reduce((a,r)=>a+mdmExC(r.sourceCgst),0))/100).toFixed(2)),
+      sgst:Number(((prows.reduce((a,r)=>a+mdmExC(r.displaySgst),0)-orows.reduce((a,r)=>a+mdmExC(r.sourceSgst),0))/100).toFixed(2))},changedIds:changed,validatedAt:new Date().toISOString(),engine:MDM_EXACT_VERSION};
+}
+function mdmExactEligibleIndex(rows){
+  return rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==="green_veg_mix"&&Number(x.r.sourceTaxable??x.r.displayTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount??x.r.independentAdjustmentGross)||0)<0.005)[0]||null;
+}
+// Target = Original Gross − Fixed (non-adjustable) rows' Gross, in integer paise.
+function mdmExactTarget(base){
+  const rows=base.rows||[],el=mdmExactEligibleIndex(rows);if(!el)return null;
+  const fixedC=rows.reduce((a,r,i)=>a+(i===el.i?0:mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst)),0);
+  const curC=mdmExC(el.r.displayTaxable)+mdmExC(el.r.displayCgst)+mdmExC(el.r.displaySgst);
+  return {index:el.i,row:el.r,fixedC,targetItemGrossC:mdmExC(base.sourceGross)-fixedC,currentItemGrossC:curC};
+}
+function mdmV7Solve(baseSnap,eligibleIds,mode){
+  const t=mdmExactTarget(baseSnap);
+  if(!t)return {status:"NO_ELIGIBLE_ROWS",options:[],eligibleRows:0,searchStates:0,diagnostics:{reason:"NO_ELIGIBLE_GREEN_VEG_MIX"}};
+  const cfg=mdmExactItemConfig(t.row,mode||"auto"),sol=solveExactAdjustment(t.targetItemGrossC,cfg,t.row);
+  const options=sol.candidates.map((c,i)=>({id:"OPT-"+(i+1),cost:c.combined,rows:[{index:t.index,category:"green_veg_mix",row:c.row,move:Math.abs(c.qty-cfg.q0),rateMove:Math.abs(c.rate-cfg.rate0),qtyPct:c.qtyPct,ratePct:c.ratePct}],totals:{gross:t.targetItemGrossC,net:mdmExC(baseSnap.sourceNet)}}));
+  return {status:options.length?"SOLVED":"NO_EXACT_SOLUTION",options,eligibleRows:1,searchStates:sol.tested,solver:sol,target:t,cfg,
+    targets:{gross:mdmExC(baseSnap.sourceGross),roundOff:mdmExC(baseSnap.sourceRoundOff),net:mdmExC(baseSnap.sourceNet)},
+    diagnostics:options.length?null:{reason:sol.reasonCode,message:sol.reason,targetItemGross:t.targetItemGrossC},primaryAbsorptionItem:"green_veg_mix",primaryRateAndQuantityOptimization:true};
+}
+function mdmExactBuildProposalDetailed(baseSnap,option,ctx){
   const copy=JSON.parse(JSON.stringify(baseSnap));
   (option.rows||[]).forEach(c=>{copy.rows[c.index]=JSON.parse(JSON.stringify(c.row));});
   const sum=k=>mdmV7Money(copy.rows.reduce((a,r)=>a+(Number(r[k])||0),0));
-  copy.hybridTaxableTotal=sum('displayTaxable');copy.roundedTaxableTotal=copy.hybridTaxableTotal;copy.reconciledDisplayTaxableTotal=copy.hybridTaxableTotal;
-  copy.hybridCgstTotal=sum('displayCgst');copy.hybridSgstTotal=sum('displaySgst');
-  copy.hybridGross=mdmV7Money(copy.hybridTaxableTotal+copy.hybridCgstTotal+copy.hybridSgstTotal);
+  copy.hybridTaxableTotal=sum("displayTaxable");copy.roundedTaxableTotal=copy.hybridTaxableTotal;copy.reconciledDisplayTaxableTotal=copy.hybridTaxableTotal;
+  copy.hybridCgstTotal=sum("displayCgst");copy.hybridSgstTotal=sum("displaySgst");
+  copy.hybridGross=mdmV7Money(copy.rows.reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0)/100);
   copy.roundOffEnabled=baseSnap.roundOffEnabled??baseSnap.sourceInvoiceSnapshot?.roundOffEnabled??((A.sett||ST0).roundOff!==false);
-  const finalTotals=mdmCanonicalInvoiceTotals(copy.hybridGross,copy.roundOffEnabled);
-  copy.hybridRoundOff=finalTotals.roundOff;copy.hybridNet=finalTotals.net;
+  const fin=mdmCanonicalInvoiceTotals(copy.hybridGross,copy.roundOffEnabled);
+  copy.hybridRoundOff=fin.roundOff;copy.hybridNet=fin.net;
   copy.financialImpact=mdmV7Money(copy.hybridNet-copy.sourceNet);copy.allocatedAmount=copy.sourceNet;
-  const diffs={gross:mdmV7Money(copy.hybridGross-copy.sourceGross),roundOff:mdmV7Money(copy.hybridRoundOff-copy.sourceRoundOff),net:mdmV7Money(copy.hybridNet-copy.sourceNet)};
-  // Validate the canonical financial contract only. Tax components are recalculated and disclosed,
-  // but component-level equality is not an independent Apply gate.
-  const lineFailures=copy.rows.filter(r=>Math.abs(mdmV7Money(Number(r.billedQuantity)*Number(r.billingRate)-Number(r.rateCalculatedTaxable??r.displayTaxable)))>=0.01);
-  const pass=diffs.gross===0&&diffs.roundOff===0&&diffs.net===0&&lineFailures.length===0;
-  copy.reconciliation={...(copy.reconciliation||{}),status:pass?'RECONCILED_BY_SMART_OPTIMIZER':'MISMATCH_BLOCKED',financialMatch:pass,differences:diffs,differenceBefore:mdmV7Money(baseSnap.sourceGross-baseSnap.hybridGross),differenceAfter:diffs.gross,adjustmentItemId:(option.rows||[]).map(x=>copy.rows[x.index].id).join(','),adjustmentItemName:(option.rows||[]).map(x=>copy.rows[x.index].name).join(', '),adjustmentAmount:mdmV7Money(copy.hybridGross-baseSnap.hybridGross),method:'GROSS_TARGET_JOINT_QUANTITY_VISIBLE_RATE_WITH_CANONICAL_ROUNDOFF',redistributionApplied:!!option.rows?.length,rowsChecked:copy.rows.length,rowsPassed:copy.rows.length-lineFailures.length,taxComponentDifferences:{taxable:mdmV7Money(copy.hybridTaxableTotal-copy.sourceTaxableTotal),cgst:mdmV7Money(copy.hybridCgstTotal-copy.sourceCgstTotal),sgst:mdmV7Money(copy.hybridSgstTotal-copy.sourceSgstTotal)}};
-  copy.optimizer={engine:'MDM-V7-GROSS-RECONCILIATION',optionId:option.id,objective:'MINIMIZE_QTY_AND_RATE_MOVEMENT_WITH_EXACT_GROSS_ROUNDOFF_NET',primaryAbsorptionItem:'green_veg_mix',rateAndQuantityOptimizedTogether:true,adjustmentMode:option.id?.startsWith('MANUAL-')?'MANUAL_QUANTITY_AND_RATE':'JOINT_QUANTITY_AND_RATE',applied:false,createdAt:new Date().toISOString(),adjustedItems:(option.rows||[]).map(a=>({id:a.row.id,name:a.row.name,category:a.category,fromQuantity:baseSnap.rows[a.index].billedQuantity,toQuantity:a.row.billedQuantity,fromRate:baseSnap.rows[a.index].displayRate,toRate:a.row.displayRate,fromTaxable:baseSnap.rows[a.index].displayTaxable,toTaxable:a.row.displayTaxable}))};
-  return pass?copy:null;
+  copy.optimizer={engine:"MDM-EXACT-GROSS-RECONCILIATION",solver:MDM_EXACT_VERSION,optionId:option.id,objective:"EXACT_GROSS_ROUNDOFF_NET_MIN_QTY_THEN_RATE_MOVEMENT",primaryAbsorptionItem:"green_veg_mix",rateAndQuantityOptimizedTogether:true,adjustmentMode:String(option.id||"").startsWith("MANUAL-")?"MANUAL_QUANTITY_AND_RATE":"JOINT_QUANTITY_AND_RATE",applied:false,createdAt:new Date().toISOString(),
+    adjustedItems:(option.rows||[]).map(a=>({id:a.row.id,name:a.row.name,category:a.category,fromQuantity:baseSnap.rows[a.index].billedQuantity,toQuantity:a.row.billedQuantity,fromRate:baseSnap.rows[a.index].displayRate,toRate:a.row.displayRate,fromTaxable:baseSnap.rows[a.index].displayTaxable,toTaxable:a.row.displayTaxable}))};
+  const validation=validateExactReconciliation(baseSnap,copy,ctx);
+  copy.reconciliation={...(copy.reconciliation||{}),status:validation.ok?"RECONCILED_BY_SMART_OPTIMIZER":"MISMATCH_BLOCKED",financialMatch:validation.ok,differences:validation.diffs,differenceBefore:mdmV7Money(baseSnap.sourceGross-baseSnap.hybridGross),differenceAfter:validation.diffs.gross,
+    adjustmentItemId:(option.rows||[]).map(x=>copy.rows[x.index].id).join(","),adjustmentItemName:(option.rows||[]).map(x=>copy.rows[x.index].name).join(", "),adjustmentAmount:mdmV7Money(copy.hybridGross-baseSnap.hybridGross),
+    method:"EXACT_TARGET_SOLVER_CANONICAL_ROUNDOFF",redistributionApplied:!!(option.rows||[]).length,rowsChecked:copy.rows.length,rowsPassed:validation.ok?copy.rows.length:copy.rows.length-validation.failed.length,taxComponentDifferences:validation.taxComponentDiffs,validatorChecks:validation.checks.map(c=>({id:c.id,ok:c.ok})),validatorEngine:MDM_EXACT_VERSION};
+  return {proposal:copy,validation};
 }
+function mdmV7BuildProposal(baseSnap,option,ctx){const r=mdmExactBuildProposalDetailed(baseSnap,option,ctx);return r.validation.ok?r.proposal:null;}
+function mdmExactBuildBase(){
+  const calc=NI&&NI.calc;if(!calc||!Array.isArray(calc.merged))return null;
+  const o=calc.mTot||{},enabled=(A.sett||ST0).roundOff!==false;
+  const temp={id:"LIVE-EXACT",invNo:niResolvedInvNo(false)||"Draft",net:Number(o.net)||0,grand:Number(o.gross??o.grand??(Number(o.taxable||0)+Number(o.cgst||0)+Number(o.sgst||0)))||0,taxable:Number(o.taxable)||0,cgst:Number(o.cgst)||0,sgst:Number(o.sgst)||0,roundOff:Number(o.roundOff)||0,mergedTotals:{...o,gross:Number(o.gross??o.grand)||0},mergedItems:calc.merged,roundOffEnabled:enabled};
+  const base=hybridMakeSnapshot(temp,hybridUnitDisplayMode());base.roundOffEnabled=enabled;base.sourceInvoiceSnapshot.roundOffEnabled=enabled;return base;
+}
+function mdmExactCurrentSig(){return NI&&NI.calc&&Array.isArray(NI.calc.merged)?mdmV7SourceSignature(NI.calc.merged):null;}
+function mdmExactInvalidate(why){try{if(NI){NI.hybridAppliedSnapshot=null;NI.hybridAppliedSourceSignature=null;}window.MDM_V7_APPLIED_SNAPSHOT=null;window.MDM_V7_APPLIED_SOURCE_SIGNATURE=null;window.MDM_V7_OPTIMIZER=null;}catch(e){}mdmExactSetState("changed",why||"re-run Analyze & Compare");}
+// Single commit path (Apply + Manual): re-validates, idempotent (always replaces, never accumulates).
+function mdmExactCommit(proposal,base,by){
+  const sig=mdmExactCurrentSig(),v=validateExactReconciliation(base,proposal,{currentSignature:sig});
+  if(!v.ok)return {ok:false,validation:v};
+  const p=JSON.parse(JSON.stringify(proposal));p.reconciliation={...p.reconciliation,financialMatch:true,status:"RECONCILED_BY_SMART_OPTIMIZER",differences:v.diffs};
+  p.optimizer.applied=true;p.optimizer.appliedAt=new Date().toISOString();p.optimizer.appliedBy=by;p.optimizer.autoApplied=false;
+  NI.hybridAppliedSnapshot=JSON.parse(JSON.stringify(p));NI.hybridAppliedSourceSignature=sig;NI.hybridAppliedAt=p.optimizer.appliedAt;
+  window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(p));window.MDM_V7_APPLIED_SOURCE_SIGNATURE=sig;
+  return {ok:true,validation:v,proposal:p};
+}
+function mdmExactSummaryHTML(base,t,cand,validation,note){
+  const cur=t.row,rowsOf=x=>x?[x.billedQuantity,x.billedUnit,x.displayRate]:null;
+  const pr=cand?cand.row:null,fin=validation?validation.proposedC:null;
+  const kv=(k,v,bad)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed var(--bd)"><span>${k}</span><b${bad?' style="color:#b91c1c"':''}>${v}</b></div>`;
+  const hy=mdmExC(base.hybridGross);
+  return `<div class="fg fg2" style="gap:2px 18px;font-size:11.5px">`
+   +kv("Original Gross",mdmExINR(mdmExC(base.sourceGross)))+kv("Current Hybrid Gross",mdmExINR(hy))
+   +kv("Difference to Absorb",mdmExINR(mdmExC(base.sourceGross)-hy))+kv("Required Green Veg Mix Gross",mdmExINR(t.targetItemGrossC))
+   +kv("Current Green Veg Mix Qty / Rate",`${rowsOf(cur)[0]} ${hybridEsc(rowsOf(cur)[1])} × ${mdmV7INR(rowsOf(cur)[2])}`)
+   +kv("Proposed Green Veg Mix Qty / Rate",pr?`${pr.billedQuantity} ${hybridEsc(pr.billedUnit)} × ${mdmV7INR(pr.displayRate)}`:"—")
+   +kv("Proposed Item Gross",pr?mdmV7INR(pr.displayTaxable+pr.displayCgst+pr.displaySgst):"—")
+   +kv("Gross Difference After Adjustment",validation?mdmV7INR(validation.diffs.gross):"—",validation&&validation.diffs.gross!==0)
+   +kv("Round Off · Original / Hybrid",fin?`${mdmExINR(validation.originalC.roundOff)} / ${mdmExINR(fin.roundOff)}`:"—",validation&&validation.diffs.roundOff!==0)
+   +kv("Net Payable · Original / Hybrid",fin?`${mdmExINR(validation.originalC.net)} / ${mdmExINR(fin.net)}`:"—",validation&&validation.diffs.net!==0)
+   +kv("Taxable / CGST / SGST of item",pr?`${mdmV7INR(pr.displayTaxable)} / ${mdmV7INR(pr.displayCgst)} / ${mdmV7INR(pr.displaySgst)}`:"—")
+   +kv("Final Verification",validation?(validation.ok?"VERIFIED · all checks passed":"FAILED · "+validation.failed.join(", ")):"Not verified",validation&&!validation.ok)
+   +`</div>${validation?`<div style="font-size:10px;color:var(--txl);margin-top:5px">GST component audit (proposed − original): Taxable ${mdmV7INR(validation.taxComponentDiffs.taxable)} · CGST ${mdmV7INR(validation.taxComponentDiffs.cgst)} · SGST ${mdmV7INR(validation.taxComponentDiffs.sgst)}</div>`:""}${note?`<div style="margin-top:6px">${note}</div>`:""}`;
+}
+function mdmV7PreviewOption(index){const e=window.MDM_V7_OPTIMIZER?.proposals?.[Number(index)];const host=document.getElementById("mdm-v7-option-detail");if(!e||!host)return;const o=window.MDM_V7_OPTIMIZER;host.innerHTML=mdmExactSummaryHTML(o.baseSnapshot,o.target,{row:e.proposal.rows[o.target.index]},e.validation);}
 function mdmV7Analyze(){
-  const calc=NI&&NI.calc,out=document.getElementById("mdm-v7-recon-results");
-  if(!calc||!Array.isArray(calc.merged)||!out){toast("Generate the invoice calculation before analysis","err");return;}
-  const put=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
-  const eligible=hybridReconEligible(),labels=HYB_RECON_ITEMS.filter(x=>eligible.includes(x.id)).map(x=>x.label);
+  const out=document.getElementById("mdm-v7-recon-results");
+  if(!NI||!NI.calc||!Array.isArray(NI.calc.merged)||!out){toast("Generate the invoice calculation before analysis","err");return;}
+  mdmExactSetState("searching");
   try{
-    const original=calc.mTot||{},temp={id:"LIVE-V7-OPT",invNo:niResolvedInvNo(false)||"Draft",net:Number(original.net)||0,grand:Number(original.gross??original.grand??(Number(original.taxable||0)+Number(original.cgst||0)+Number(original.sgst||0)))||0,taxable:Number(original.taxable)||0,cgst:Number(original.cgst)||0,sgst:Number(original.sgst)||0,roundOff:Number(original.roundOff)||0,mergedTotals:{taxable:Number(original.taxable)||0,cgst:Number(original.cgst)||0,sgst:Number(original.sgst)||0,gross:Number(original.gross??original.grand)||0,roundOff:Number(original.roundOff)||0,net:Number(original.net)||0},mergedItems:calc.merged};
-    const base=hybridMakeSnapshot(temp,hybridUnitDisplayMode());
-    const result=mdmV7Solve(base,eligible);
-    const proposals=(result.options||[]).map(o=>({option:o,proposal:mdmV7BuildProposal(base,o)})).filter(x=>x.proposal);
-    window.MDM_V7_OPTIMIZER={status:proposals.length?"SOLVED":"NO_EXACT_SOLUTION",validOptions:proposals.length,applyEnabled:proposals.length>0,eligibleItems:eligible.slice(),eligibleRows:result.eligibleRows||0,searchStates:result.searchStates||0,proposals,baseSnapshot:base,policy:"SAVED_ALLOWLIST_ONLY_EXACT_LINE_AND_INVOICE_RECONCILIATION",analyzedAt:new Date().toISOString()};
-    put("mdm-v7-recon-state",proposals.length?"EXACT SOLUTION FOUND":"NO EXACT SOLUTION");put("mdm-v7-diff",mdmV7INR(base.sourceNet-base.hybridNet));put("mdm-v7-options",proposals.length+" valid options");put("mdm-v7-action",proposals.length?"Ready for approval":"Apply blocked");
-    const html=proposals.length?`<div class="info inf-g" style="margin:9px 0"><b>${proposals.length} mathematically valid option(s)</b><label class="flbl" style="display:block;margin-top:9px">Choose optimization strategy</label><select id="mdm-v7-option-select" class="fi" onchange="mdmV7PreviewOption(Number(this.value))">${proposals.map((x,i)=>`<option value="${i}">Option ${i+1} · ${i===0?"Lowest combined movement":"Alternative valid solution"} · Net ${mdmV7INR(x.proposal.hybridNet)}</option>`).join("")}</select><div id="mdm-v7-option-detail" style="margin-top:8px"></div><button class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmV7Apply(Number(document.getElementById('mdm-v7-option-select')?.value||0))">Apply Selected Option</button></div>`:`<div class="info inf-b"><b>No exact proposal found — Apply is unavailable.</b><br>Eligible categories: Green Veg Mix only. Checked ${result.searchStates||0} bounded search states across ${result.eligibleRows||0} matching Green Veg Mix rows. ${result.status==="NO_ELIGIBLE_ROWS"?"No Green Veg Mix row with a positive taxable amount was found in the current invoice, or the row has an independent Add/Deduct adjustment that must remain isolated.":""} ${result.diagnostics?.reason==="FIXED_ROWS_EXCEED_TARGET"?"The non-adjustable rows already exceed the Original taxable target; the currently permitted item cannot absorb the difference safely.":"No permitted Green Veg Mix quantity/rate candidate satisfies the exact taxable/gross target within the approved movement limits. GST is locked to saved non-Green-Veg rows; Green Veg Mix GST remains zero."}<br>No quantities or rates were changed. Review the eligible-item allowlist and source item values; no approximate result will be applied.<br><button type="button" class="btn btn-g btn-sm" style="margin-top:9px" disabled title="No exact, independently validated proposal exists">Apply Selected Option — Blocked</button> <button type="button" class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmV7ForceAdjustment()">Force Adjustment · Exact Fetch</button></div>`;
-    out.hidden=false;out.innerHTML=html;if(proposals.length)mdmV7PreviewOption(0);
-  }catch(e){console.error("Hybrid optimizer failed",e);put("mdm-v7-recon-state","SOLVER ERROR · BLOCKED");put("mdm-v7-options","0 valid options");put("mdm-v7-action","Apply blocked");out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Optimizer could not complete safely:</b> ${hybridEsc(e.message||e)}. No values changed.</div>`;window.MDM_V7_OPTIMIZER={status:"ERROR",validOptions:0,applyEnabled:false,error:String(e.message||e)};}
+    const base=mdmExactBuildBase(),sig=mdmExactCurrentSig(),result=mdmV7Solve(base,null,"auto"),t=result.target;
+    const ctx={currentSignature:sig};
+    const evald=(result.options||[]).map(o=>{const r=mdmExactBuildProposalDetailed(base,o,ctx);return {option:o,proposal:r.proposal,validation:r.validation};});
+    const proposals=evald.filter(x=>x.validation.ok);
+    window.MDM_V7_OPTIMIZER={status:proposals.length?"SOLVED":"NO_EXACT_SOLUTION",validOptions:proposals.length,applyEnabled:proposals.length>0,eligibleRows:result.eligibleRows||0,searchStates:result.searchStates||0,proposals,rejected:evald.filter(x=>!x.validation.ok),baseSnapshot:base,target:t,solver:result.solver,sourceSignature:sig,policy:"EXACT_TARGET_SOLVER_SHARED_VALIDATOR",analyzedAt:new Date().toISOString()};
+    const diff=mdmExactTarget(base)?mdmV7INR((mdmExC(base.sourceGross)-mdmExC(base.hybridGross))/100):"—";
+    putText("mdm-v7-diff",diff);putText("mdm-v7-options",proposals.length+" valid options");putText("mdm-v7-action",proposals.length?"Ready for approval":"Apply blocked");
+    if(!t){mdmExactSetState("none","no Green Veg Mix row");out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>No eligible Green Veg Mix row.</b> The row must be present with a positive taxable amount and no independent Add/Deduct adjustment. Nothing was changed.</div>`;return;}
+    if(proposals.length){
+      mdmExactSetState("found");
+      out.hidden=false;out.innerHTML=`<div class="info inf-g" style="margin:9px 0"><b>${proposals.length} exact, validated option(s) — ranked by lowest combined quantity + rate movement, natural rates preferred.</b><label class="flbl" style="display:block;margin-top:9px">Choose option</label><select id="mdm-v7-option-select" class="fi" onchange="mdmV7PreviewOption(Number(this.value))">${proposals.map((x,i)=>{const a=x.proposal.optimizer.adjustedItems[0];return `<option value="${i}">Option ${i+1} · ${a.toQuantity} × ₹${Number(a.toRate).toFixed(2)} · Net ${mdmV7INR(x.proposal.hybridNet)}</option>`;}).join("")}</select><div id="mdm-v7-option-detail" style="margin-top:8px"></div><button class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmV7Apply(Number(document.getElementById('mdm-v7-option-select')?.value||0))">Apply Selected Option</button> <button type="button" class="btn btn-g btn-sm" style="margin-top:9px" onclick="mdmExactForce()">Force Exact Reconciliation</button></div>`;
+      mdmV7PreviewOption(0);return;
+    }
+    const rej=evald[0];
+    if(rej){mdmExactSetState("failed");out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Candidates were found but failed validation — Apply is blocked.</b><br>${mdmExactSummaryHTML(base,t,{row:rej.proposal.rows[t.index]},rej.validation)}</div>`;return;}
+    mdmExactSetState("none");
+    out.hidden=false;out.innerHTML=`<div class="info inf-b"><b>No exact proposal within the standard limits — Apply is unavailable.</b><br>${mdmExactSummaryHTML(base,t,null,null,hybridEsc(result.solver.reason||""))}<div style="margin-top:6px;font-size:11px">Candidates tested: ${(result.searchStates||0).toLocaleString("en-IN")}. No quantities or rates were changed.</div><button type="button" class="btn btn-g btn-sm" style="margin-top:9px" disabled>Apply Selected Option — Blocked</button> <button type="button" class="btn btn-p btn-sm" style="margin-top:9px" onclick="mdmExactForce()">Force Exact Reconciliation</button></div>`;
+  }catch(e){console.error("Exact reconciliation failed",e);mdmExactSetState("failed","solver error");putText("mdm-v7-options","0 valid options");putText("mdm-v7-action","Apply blocked");out.hidden=false;out.innerHTML=`<div class="info inf-r"><b>Reconciliation could not complete safely:</b> ${hybridEsc(e.message||e)}. No values changed.</div>`;window.MDM_V7_OPTIMIZER={status:"ERROR",validOptions:0,applyEnabled:false,error:String(e.message||e)};}
 }
-function mdmV7PreviewOption(index){const e=window.MDM_V7_OPTIMIZER?.proposals?.[Number(index)];const host=document.getElementById("mdm-v7-option-detail");if(!e||!host)return;const p=e.proposal;host.innerHTML=`<b>Hybrid Gross:</b> ${mdmV7INR(p.hybridGross)} · <b>Round Off:</b> ${mdmV7INR(p.hybridRoundOff)} · <b>Net:</b> ${mdmV7INR(p.hybridNet)}<br><b>Exact targets:</b> Gross, Round Off and Net Payable must each match to ₹0.00. GST is recalculated and separately disclosed.<br><b>Items adjusted:</b> ${p.optimizer.adjustedItems.map(a=>`${hybridEsc(a.name)}: Qty ${hybridEsc(a.fromQuantity)} → ${hybridEsc(a.toQuantity)}; Rate ${mdmV7INR(a.fromRate)} → ${mdmV7INR(a.toRate)}`).join("; ")}<br><small>Exact line-level and invoice-level checks required before Apply.</small>`;}
 function mdmV7Apply(index){
   const state=window.MDM_V7_OPTIMIZER,entry=state?.proposals?.[Number(index)];
-  if(!entry?.proposal||!state.applyEnabled){toast('No validated optimizer proposal is available','err');return false;}
-  const p=entry.proposal,calc=NI?.calc;if(!calc||!Array.isArray(calc.merged)){toast('Invoice calculation changed. Run optimizer again.','err');return false;}
-  const sourceSig=mdmV7SourceSignature(calc.merged),expected=mdmV7SourceSignature(p.sourceInvoiceSnapshot?.mergedItems||[]);
-  if(sourceSig!==expected){toast('Source invoice changed after analysis. Re-run optimizer.','err');return false;}
-  const gross=mdmV7Money(p.rows.reduce((a,r)=>a+Number(r.displayTaxable||0)+Number(r.displayCgst||0)+Number(r.displaySgst||0),0));
-  const finalTotals=mdmCanonicalInvoiceTotals(gross,p.roundOffEnabled??((A.sett||ST0).roundOff!==false)),round=finalTotals.roundOff,net=finalTotals.net;
-  if(gross!==mdmV7Money(p.sourceGross)||round!==mdmV7Money(p.sourceRoundOff)||net!==mdmV7Money(p.sourceNet)||p.reconciliation?.financialMatch!==true){toast('Final validation failed: Gross, Round Off and Net Payable must match exactly.','err');return false;}
-  p.hybridGross=gross;p.hybridRoundOff=round;p.hybridNet=net;p.optimizer.applied=true;p.optimizer.appliedAt=new Date().toISOString();p.optimizer.appliedBy='USER_APPROVAL';p.optimizer.autoApplied=false;
-  NI.hybridAppliedSnapshot=JSON.parse(JSON.stringify(p));NI.hybridAppliedSourceSignature=sourceSig;NI.hybridAppliedAt=p.optimizer.appliedAt;
-  window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(p));window.MDM_V7_APPLIED_SOURCE_SIGNATURE=sourceSig;
-  toast('Exact reconciliation applied to the active Hybrid draft. Save to persist.','ok');
-  const host=document.getElementById('mdm-v7-recon-results');if(host)host.innerHTML=`<div class="info inf-g"><b>Selected option applied to the active Hybrid draft.</b><br>Gross: ${mdmV7INR(gross)} · Round Off: ${mdmV7INR(round)} · Net Payable: ${mdmV7INR(net)}.<br>Save the invoice to persist this Hybrid revision.</div>`;
-  putText('mdm-v7-recon-state','APPLIED TO ACTIVE DRAFT · READY TO SAVE');putText('mdm-v7-action','Applied · Save to persist');try{gP('new');}catch(e){console.warn('Applied optimizer preview refresh failed',e);}return true;
+  if(!entry?.proposal||!state.applyEnabled){toast("No validated proposal is available","err");return false;}
+  if(!NI?.calc||mdmExactCurrentSig()!==state.sourceSignature){mdmExactInvalidate("source invoice changed after analysis");toast("Source invoice changed after analysis. Re-run Analyze & Compare.","err");return false;}
+  const r=mdmExactCommit(entry.proposal,state.baseSnapshot,"USER_APPROVAL");
+  if(!r.ok){mdmExactSetState("failed",r.validation.failed.join(", "));toast("Final validation failed: "+r.validation.failed.join(", "),"err");return false;}
+  mdmExactSetState("reconciled");toast("Exact reconciliation applied to the active Hybrid draft. Save to persist.","ok");
+  const host=document.getElementById("mdm-v7-recon-results");if(host)host.innerHTML=`<div class="info inf-g"><b>Applied to the active Hybrid draft.</b><br>${mdmExactSummaryHTML(state.baseSnapshot,state.target,{row:r.proposal.rows[state.target.index]},r.validation)}<br>Save the invoice to persist this Hybrid revision.</div>`;
+  putText("mdm-v7-action","Applied · Save to persist");try{gP("new");}catch(e){console.warn("refresh failed",e);}return true;
 }
-function mdmV7ForceAdjustment(){
-  const state=window.MDM_V7_OPTIMIZER;
-  if(!state?.baseSnapshot)mdmV7Analyze();
-  const current=window.MDM_V7_OPTIMIZER,base=current?.baseSnapshot;
-  if(!base){toast('Run Analyze & Compare first; no safe source snapshot is available.','err');return false;}
-  const rows=base.rows||[],eligible=rows.map((r,i)=>({r,i})).filter(x=>mdmV7Category(x.r)==='green_veg_mix'&&Number(x.r.sourceTaxable??x.r.displayTaxable)>0&&Math.abs(Number(x.r.independentAdjustmentAmount??x.r.independentAdjustmentGross)||0)<0.005);
-  if(!eligible.length){toast('Force Adjustment unavailable: no eligible Green Veg Mix row.','err');return false;}
-  const original=NI?.calc?.merged||[],sig=mdmV7SourceSignature(original);
-  if(sig!==mdmV7SourceSignature(base.sourceInvoiceSnapshot?.mergedItems||[])){toast('Source invoice changed. Run Analyze & Compare again.','err');return false;}
-  const cents=v=>Math.round((Number(v)||0)*100), idx=eligible[0].i,row=eligible[0].r;
-  const fixedCents=rows.reduce((a,r,i)=>a+(i===idx?0:cents(r.displayTaxable)+cents(r.displayCgst)+cents(r.displaySgst)),0);
-  const targetGrossCents=cents(base.sourceGross), targetItemGross=targetGrossCents-fixedCents;
-  if(targetItemGross<=0){toast('Fixed invoice rows exceed the Original Gross target. No safe adjustment is possible.','err');return false;}
-  const unit=String(row.billedUnit||row.normalizedUnit||row.actualUnit||'KG').toUpperCase(),factor=(unit==='GM'||unit==='G'||unit==='ML')?0.001:1;
-  const treatment=String(row.taxTreatment||row.gstTreatment||row.taxability||'').toLowerCase();
-  const explicit=Number(row.gstRate??row.gstPercent??row.gst??row.taxRate);
-  const exempt=['exempt','nil_rated','nil-rated','non_gst','non-gst','non_gst_supply'].includes(treatment);
-  const srcTax=Number(row.sourceTaxable)||0,srcGst=(Number(row.sourceCgst)||0)+(Number(row.sourceSgst)||0);
-  const gstRate=exempt?0:(Number.isFinite(explicit)&&explicit>=0?explicit/100:(srcTax>0?srcGst/srcTax:0));
-  const taxableTargets=[];
-  // Enumerate every nearby taxable-cent value whose saved GST treatment yields the exact item gross.
-  const lo=Math.max(1,Math.floor(targetItemGross/(1+gstRate))-250),hi=Math.ceil(targetItemGross/(1+gstRate))+250;
-  for(let tc=lo;tc<=hi;tc++)if(tc+Math.round(tc*gstRate)===targetItemGross)taxableTargets.push(tc);
-  if(!taxableTargets.length){mdmV7ManualOpen();const h=document.getElementById('mdm-v7-manual-result');if(h)h.innerHTML=`<div class="info inf-r"><b>No taxable/GST combination can produce the target item gross.</b><br>Required Green Veg Mix gross: ${mdmV7INR(targetItemGross/100)}. No values were applied.</div>`;return false;}
-  const q0=Number(row.billedQuantity)||0,rate0=Number(row.displayRate)||Number(row.sourceRateInHybridUnit)||0;
-  if(!(q0>0&&rate0>0)){toast('Green Veg Mix baseline quantity/rate is invalid.','err');return false;}
-  // Expanded, deterministic search: quantity precision 0.001; rate precision 0.01.
-  // Search both sides of the current quantity and progressively widen the envelope.
-  const ranges=[{min:Math.max(.001,q0*.25),max:q0*1.75},{min:Math.max(.001,q0*.05),max:q0*3},{min:.001,max:q0*5}];
-  let found=null,checked=0;
-  for(const range of ranges){
-    const qMin=Math.max(1,Math.ceil(range.min*1000)),qMax=Math.floor(range.max*1000);
-    for(let qi=qMin;qi<=qMax&&!found;qi++){
-      const qty=qi/1000,baseQty=qty*factor;if(!(baseQty>0))continue;
-      for(const tc of taxableTargets){
-        const center=Math.round((tc/100/baseQty)*100);
-        for(let dr=-3;dr<=3;dr++){
-          const rateCents=center+dr;if(rateCents<=0)continue;
-          const rate=rateCents/100;if(rate>Math.max(rate0*5,rate0+500))continue;
-          checked++;const candidate=mdmV7Candidate(row,qty,rate);if(!candidate)continue;
-          const itemCents=cents(candidate.displayTaxable)+cents(candidate.displayCgst)+cents(candidate.displaySgst);
-          if(itemCents!==targetItemGross)continue;
-          const option={id:'FORCE-EXACT-'+checked,rows:[{index:idx,category:'green_veg_mix',row:candidate,move:Math.abs(qty-q0),rateMove:Math.abs(rate-rate0)}]};
-          const proposal=mdmV7BuildProposal(base,option);
-          if(proposal){found={qty,rate,proposal};break;}
-        }
-        if(found)break;
-      }
-    }
-    if(found)break;
+// Force Exact Reconciliation: full-limit solver; populates the Manual panel – it never applies on its own.
+function mdmExactForce(){
+  if(!NI?.calc){toast("Generate the invoice calculation first.","err");return false;}
+  mdmExactSetState("searching");
+  let base,t,sol;
+  try{base=mdmExactBuildBase();const res=mdmV7Solve(base,null,"force");t=res.target;sol=res.solver;}catch(e){mdmExactSetState("failed","solver error");toast("Force search failed: "+(e.message||e),"err");return false;}
+  window.MDM_V7_OPTIMIZER={...(window.MDM_V7_OPTIMIZER||{}),baseSnapshot:base,target:t,sourceSignature:mdmExactCurrentSig(),proposals:window.MDM_V7_OPTIMIZER?.proposals||[],applyEnabled:window.MDM_V7_OPTIMIZER?.applyEnabled||false};
+  if(!t){mdmExactSetState("none","no Green Veg Mix row");toast("No eligible Green Veg Mix row.","err");return false;}
+  mdmV7ManualOpen();const host=document.getElementById("mdm-v7-manual-result");
+  let chosen=null,validation=null;
+  for(const c of sol.candidates){const r=mdmExactBuildProposalDetailed(base,{id:"FORCE",rows:[{index:t.index,category:"green_veg_mix",row:c.row}]},{currentSignature:mdmExactCurrentSig()});if(r.validation.ok){chosen=c;validation=r.validation;break;}}
+  if(!chosen){
+    mdmExactSetState("none");
+    if(host)host.innerHTML=`<div class="info inf-r"><b>No exact solution exists within the approved precision and limits.</b><br>${mdmExactSummaryHTML(base,t,null,null,hybridEsc(sol.reason||""))}<div style="margin-top:6px;font-size:11px">Candidates tested: ${sol.tested.toLocaleString("en-IN")}. Nothing was applied.</div></div>`;
+    toast("No exact candidate exists at the approved precision.","err");return false;
   }
-  mdmV7ManualOpen();
-  const host=document.getElementById('mdm-v7-manual-result');
-  if(!found){
-    if(host)host.innerHTML=`<div class="info inf-r"><b>Exact candidate not found within the expanded safe search.</b><br>Required Green Veg Mix Gross: ${mdmV7INR(targetItemGross/100)} · Search checked ${checked.toLocaleString('en-IN')} quantity/rate combinations.<br>Current Quantity: ${q0} · Current Rate: ${mdmV7INR(rate0)}.<br>No values were applied. You may enter another decimal combination manually; Fetch &amp; Reconcile will enforce the same exact financial gate.</div>`;
-    toast('No exact candidate found within permitted search precision.','err');return false;
-  }
-  const q=document.getElementById('mdm-v7-manual-qty'),r=document.getElementById('mdm-v7-manual-rate');
-  if(!q||!r){toast('Manual adjustment panel could not be opened.','err');return false;}
-  q.value=String(found.qty);r.value=String(found.rate);mdmV7ManualPreview();
-  // Directly hand the exact suggested decimal candidate to the independent Manual Fetch gate.
-  // Manual Fetch rebuilds and revalidates the proposal against the current source signature.
-  if(host)host.innerHTML=`<div class="info inf-b"><b>Exact candidate found.</b><br>Green Veg Mix target: ${mdmV7INR(targetItemGross/100)} · Quantity: ${found.qty} ${hybridEsc(unit)} · Rate: ${mdmV7INR(found.rate)}<br>Running independent Fetch &amp; Reconcile with the same exact financial validator…</div>`;
-  return mdmV7ManualFetch();
+  const q=document.getElementById("mdm-v7-manual-qty"),r=document.getElementById("mdm-v7-manual-rate");q.value=String(chosen.qty);r.value=String(chosen.rate);mdmV7ManualPreview();
+  mdmExactSetState("ready");
+  host.innerHTML=`<div class="info inf-b"><b>Exact candidate found and validated — click Fetch &amp; Reconcile to apply.</b><br>${mdmExactSummaryHTML(base,t,chosen,validation)}<div style="margin-top:6px;font-size:11px">Candidates tested: ${sol.tested.toLocaleString("en-IN")}. Not applied yet.</div></div>`;
+  return true;
 }
+function mdmV7ForceAdjustment(){return mdmExactForce();}
 function mdmV7ManualOpen(){
-  const state=window.MDM_V7_OPTIMIZER,base=state?.baseSnapshot;
-  const host=document.getElementById('mdm-v7-manual-panel');
-  if(!base||!host){toast('Run Analyze & Compare first.','err');return false;}
-  const idx=(base.rows||[]).findIndex(r=>mdmV7Category(r)==='green_veg_mix');
-  if(idx<0){host.hidden=false;host.innerHTML='<div class="info inf-r"><b>Manual reconciliation unavailable.</b> Green Veg Mix adjustment row was not found in this invoice.</div>';return false;}
-  const r=base.rows[idx],unit=String(r.billedUnit||r.normalizedUnit||r.actualUnit||'KG');
-  host.hidden=false;host.innerHTML=`<div style="font-weight:800;margin-bottom:8px">Manual Adjustment — ${hybridEsc(r.name||'Green Veg Mix')}</div><div class="fg fg3"><div><label class="flbl">Quantity (${hybridEsc(unit)})</label><input class="fi" id="mdm-v7-manual-qty" type="number" min="0.001" step="0.001" value="${Number(r.billedQuantity)||0}" oninput="mdmV7ManualPreview()"></div><div><label class="flbl">Billing Rate (₹ / ${hybridEsc(unit)})</label><input class="fi" id="mdm-v7-manual-rate" type="number" min="0.01" step="0.01" value="${Number(r.displayRate)||0}" oninput="mdmV7ManualPreview()"></div><div><label class="flbl">GST Classification / Rate</label><input class="fi" value="${hybridEsc(r.taxTreatment||r.gstTreatment||'As saved in invoice')} · ${Number(r.gstRate??r.gstPercent??r.gst??0)}%" disabled></div><div><label class="flbl">Taxable Amount</label><input class="fi" id="mdm-v7-manual-taxable" value="${mdmV7INR(r.displayTaxable)}" readonly></div><div><label class="flbl">CGST</label><input class="fi" id="mdm-v7-manual-cgst" value="${mdmV7INR(r.displayCgst)}" readonly></div><div><label class="flbl">SGST</label><input class="fi" id="mdm-v7-manual-sgst" value="${mdmV7INR(r.displaySgst)}" readonly></div><div><label class="flbl">Item Gross</label><input class="fi" id="mdm-v7-manual-gross" value="${mdmV7INR(Number(r.displayTaxable)+Number(r.displayCgst)+Number(r.displaySgst))}" readonly></div></div><div class="sac" style="margin-top:10px"><button type="button" class="btn btn-p btn-sm" onclick="mdmV7ManualFetch()"><span>↻</span> Fetch &amp; Reconcile</button><span class="mdm-v7-note">Independent of the main Invoice Fetch / Generate button.</span></div><div id="mdm-v7-manual-result" style="margin-top:9px"></div>`;
+  let state=window.MDM_V7_OPTIMIZER;
+  if(!state?.baseSnapshot){try{const b=mdmExactBuildBase();if(b)window.MDM_V7_OPTIMIZER={...(state||{}),baseSnapshot:b,target:mdmExactTarget(b),sourceSignature:mdmExactCurrentSig(),proposals:[],applyEnabled:false};}catch(e){}state=window.MDM_V7_OPTIMIZER;}
+  const base=state?.baseSnapshot,host=document.getElementById("mdm-v7-manual-panel");
+  if(!base||!host){toast("Generate the invoice calculation first.","err");return false;}
+  const t=state.target||mdmExactTarget(base);
+  if(!t){host.hidden=false;host.innerHTML='<div class="info inf-r"><b>Manual reconciliation unavailable.</b> Green Veg Mix adjustment row was not found in this invoice.</div>';return false;}
+  const r=t.row,unit=String(r.billedUnit||r.normalizedUnit||r.actualUnit||"KG");
+  host.hidden=false;host.innerHTML=`<div style="font-weight:800;margin-bottom:8px">Manual Adjustment — ${hybridEsc(r.name||"Green Veg Mix")}</div><div class="fg fg3"><div><label class="flbl">Quantity (${hybridEsc(unit)})</label><input class="fi" id="mdm-v7-manual-qty" type="number" min="0.001" step="0.001" value="${Number(r.billedQuantity)||0}" oninput="mdmV7ManualPreview()"></div><div><label class="flbl">Billing Rate (₹ / ${hybridEsc(unit)})</label><input class="fi" id="mdm-v7-manual-rate" type="number" min="0.01" step="0.01" value="${Number(r.displayRate)||0}" oninput="mdmV7ManualPreview()"></div><div><label class="flbl">GST Classification / Rate</label><input class="fi" value="${hybridEsc(r.taxTreatment||r.gstTreatment||"As saved in invoice")} · ${Number(r.gstRate??r.gstPercent??r.gst??0)}%" disabled></div><div><label class="flbl">Required Item Gross</label><input class="fi" id="mdm-v7-manual-required" value="${mdmExINR(t.targetItemGrossC)}" readonly></div><div><label class="flbl">Taxable Amount</label><input class="fi" id="mdm-v7-manual-taxable" value="${mdmV7INR(r.displayTaxable)}" readonly></div><div><label class="flbl">CGST</label><input class="fi" id="mdm-v7-manual-cgst" value="${mdmV7INR(r.displayCgst)}" readonly></div><div><label class="flbl">SGST</label><input class="fi" id="mdm-v7-manual-sgst" value="${mdmV7INR(r.displaySgst)}" readonly></div><div><label class="flbl">Item Gross</label><input class="fi" id="mdm-v7-manual-gross" value="${mdmV7INR(Number(r.displayTaxable)+Number(r.displayCgst)+Number(r.displaySgst))}" readonly></div></div><div class="sac" style="margin-top:10px"><button type="button" class="btn btn-p btn-sm" onclick="mdmV7ManualFetch()"><span>↻</span> Fetch &amp; Reconcile</button><span class="mdm-v7-note">Independent of the main Invoice Fetch / Generate button.</span></div><div id="mdm-v7-manual-result" style="margin-top:9px"></div>`;
   return true;
 }
 function mdmV7ManualPreview(){
-  const state=window.MDM_V7_OPTIMIZER,base=state?.baseSnapshot,idx=(base?.rows||[]).findIndex(r=>mdmV7Category(r)==='green_veg_mix');if(idx<0)return;
-  const r=base.rows[idx],q=Number(document.getElementById('mdm-v7-manual-qty')?.value),rate=Number(document.getElementById('mdm-v7-manual-rate')?.value);if(!(q>0&&rate>0))return;
-  const c=mdmV7Candidate(r,q,rate);if(!c)return;
-  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=mdmV7INR(v);};set('mdm-v7-manual-taxable',c.displayTaxable);set('mdm-v7-manual-cgst',c.displayCgst);set('mdm-v7-manual-sgst',c.displaySgst);set('mdm-v7-manual-gross',c.displayTaxable+c.displayCgst+c.displaySgst);
+  const t=window.MDM_V7_OPTIMIZER?.target;if(!t)return;
+  const q=Number(document.getElementById("mdm-v7-manual-qty")?.value),rate=Number(document.getElementById("mdm-v7-manual-rate")?.value);if(!(q>0&&rate>0))return;
+  const c=mdmV7Candidate(t.row,q,rate);if(!c)return;
+  const set=(id,v)=>{const e=document.getElementById(id);if(e)e.value=mdmV7INR(v);};set("mdm-v7-manual-taxable",c.displayTaxable);set("mdm-v7-manual-cgst",c.displayCgst);set("mdm-v7-manual-sgst",c.displaySgst);set("mdm-v7-manual-gross",(mdmExC(c.displayTaxable)+mdmExC(c.displayCgst)+mdmExC(c.displaySgst))/100);
+}
+// Core of Manual Fetch (UI-independent so it is testable): validate → recalc → canonical round-off → shared validator → apply.
+function mdmExactManualCore(qty,rate){
+  const state=window.MDM_V7_OPTIMIZER;
+  if(!state?.baseSnapshot||!state.target)return {ok:false,code:"NO_BASELINE",message:"Run Analyze & Compare first."};
+  if(!NI?.calc||mdmExactCurrentSig()!==state.sourceSignature){mdmExactInvalidate("source invoice changed after analysis");return {ok:false,code:"SOURCE_CHANGED",message:"Source invoice changed after analysis. Run Analyze & Compare again."};}
+  const cfg=mdmExactItemConfig(state.target.row,"auto");
+  if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(rate)||rate<=0)return {ok:false,code:"INVALID_INPUT",message:"Enter a positive Quantity and Billing Rate."};
+  if(mdmExDecimals(qty)>cfg.qtyDecimals||mdmExDecimals(rate)>cfg.rateDecimals)return {ok:false,code:"PRECISION_EXCEEDED",message:"The invoice supports at most "+cfg.qtyDecimals+" decimals for quantity and "+cfg.rateDecimals+" for rate; more precision cannot be displayed, so it is not applied."};
+  const row=mdmV7Candidate(state.target.row,qty,rate);if(!row)return {ok:false,code:"INVALID_ITEM",message:"These values cannot produce a valid item calculation."};
+  const base=state.baseSnapshot,r=mdmExactBuildProposalDetailed(base,{id:"MANUAL-"+Date.now(),rows:[{index:state.target.index,category:"green_veg_mix",row}]},{currentSignature:mdmExactCurrentSig()});
+  if(!r.validation.ok)return {ok:false,code:"VALIDATION_FAILED",validation:r.validation,proposal:r.proposal,row,message:"Not reconciled: "+r.validation.failed.join(", ")};
+  const c=mdmExactCommit(r.proposal,base,"USER_APPROVAL_MANUAL");
+  if(!c.ok)return {ok:false,code:"VALIDATION_FAILED",validation:c.validation,row,message:"Not reconciled: "+c.validation.failed.join(", ")};
+  return {ok:true,validation:c.validation,proposal:c.proposal,row};
 }
 function mdmV7ManualFetch(){
-  const state=window.MDM_V7_OPTIMIZER,base=state?.baseSnapshot,host=document.getElementById('mdm-v7-manual-result');
-  if(!base||!host){toast('Manual reconciliation baseline is missing. Re-analyze first.','err');return false;}
-  const idx=(base.rows||[]).findIndex(r=>mdmV7Category(r)==='green_veg_mix');if(idx<0)return false;
-  const qty=Number(document.getElementById('mdm-v7-manual-qty')?.value),rate=Number(document.getElementById('mdm-v7-manual-rate')?.value);
-  if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(rate)||rate<=0){host.innerHTML='<div class="info inf-r">Enter a positive Quantity and Billing Rate.</div>';return false;}
-  const row=mdmV7Candidate(base.rows[idx],qty,rate);if(!row){host.innerHTML='<div class="info inf-r">Entered values cannot produce a valid item calculation.</div>';return false;}
-  const option={id:'MANUAL-'+Date.now(),rows:[{index:idx,category:'green_veg_mix',row,t:Math.round(row.displayTaxable*100),cg:Math.round(row.displayCgst*100),sg:Math.round(row.displaySgst*100),move:Math.abs(qty-Number(base.rows[idx].billedQuantity||0)),rateMove:Math.abs(rate-Number(base.rows[idx].displayRate||0))}]};
-  const proposal=mdmV7BuildProposal(base,option);
-  if(!proposal){host.innerHTML='<div class="info inf-r"><b>Not reconciled.</b> This Quantity/Rate combination does not exactly match the Original invoice. Try another valid combination. No values were applied.</div>';window.MDM_V7_MANUAL_RESULT={status:'MISMATCH',proposal:null};return false;}
-  const original=NI?.calc?.merged||[],sig=JSON.stringify(original.map(r=>[r.id,r.qty,r.rate,r.taxable,r.cgst,r.sgst]));
-  if(sig!==JSON.stringify(proposal.sourceInvoiceSnapshot.mergedItems.map(r=>[r.id,r.qty,r.rate,r.taxable,r.cgst,r.sgst]))){host.innerHTML='<div class="info inf-r">Invoice source changed after analysis. Run Analyze & Compare again.</div>';return false;}
-  proposal.optimizer.applied=true;proposal.optimizer.appliedAt=new Date().toISOString();proposal.optimizer.appliedBy='USER_APPROVAL_MANUAL';proposal.optimizer.autoApplied=false;proposal.optimizer.adjustmentMode='MANUAL_QUANTITY_AND_RATE';
-  NI.hybridAppliedSnapshot=JSON.parse(JSON.stringify(proposal));NI.hybridAppliedSourceSignature=sig;NI.hybridAppliedAt=proposal.optimizer.appliedAt;
-  window.MDM_V7_APPLIED_SNAPSHOT=JSON.parse(JSON.stringify(proposal));window.MDM_V7_APPLIED_SOURCE_SIGNATURE=sig;
-  host.innerHTML=`<div class="info inf-g"><b>Exact reconciliation successful.</b><br>Gross: ${mdmV7INR(proposal.hybridGross)} · Round Off: ${mdmV7INR(proposal.hybridRoundOff)} · Net Payable: ${mdmV7INR(proposal.hybridNet)}<br>Quantity: ${qty} ${hybridEsc(row.billedUnit)} · Rate: ${mdmV7INR(rate)}<br>Manual adjustment is applied to the active Hybrid draft. Save the invoice to persist it.</div>`;
-  putText('mdm-v7-recon-state','MANUALLY RECONCILED · READY TO SAVE');putText('mdm-v7-action','Manual match applied · Save to persist');toast('Manual reconciliation matched exactly.','ok');try{gP('new');}catch(e){console.warn('Hybrid refresh after manual reconcile failed',e);}return true;
+  const host=document.getElementById("mdm-v7-manual-result");
+  if(!window.MDM_V7_OPTIMIZER?.baseSnapshot){try{mdmV7ManualOpen();}catch(e){}}
+  const hostNow=document.getElementById("mdm-v7-manual-result")||host;if(!hostNow){toast("Open the Manual Adjustment panel first.","err");return false;}
+  const qty=Number(document.getElementById("mdm-v7-manual-qty")?.value),rate=Number(document.getElementById("mdm-v7-manual-rate")?.value);
+  const res=mdmExactManualCore(qty,rate),state=window.MDM_V7_OPTIMIZER,t=state?.target;
+  if(!res.ok){
+    const v=res.validation;
+    if(res.code==="VALIDATION_FAILED")mdmExactSetState("failed",v.failed.join(", "));else if(res.code!=="SOURCE_CHANGED")mdmExactSetState("failed",res.code);
+    hostNow.innerHTML=`<div class="info inf-r"><b>${hybridEsc(res.message)}</b>${v&&t?`<br>Exact remaining difference — Gross: ${mdmV7INR(v.diffs.gross)} · Round Off: ${mdmV7INR(v.diffs.roundOff)} · Net: ${mdmV7INR(v.diffs.net)}<br>${mdmExactSummaryHTML(state.baseSnapshot,t,{row:res.row},v)}`:""}<br>No values were applied.</div>`;
+    return false;
+  }
+  mdmExactSetState("reconciled");
+  hostNow.innerHTML=`<div class="info inf-g"><b>Exact reconciliation successful.</b><br>${mdmExactSummaryHTML(state.baseSnapshot,t,{row:res.row},res.validation)}<br>Applied to the active Hybrid draft. Save the invoice to persist it.</div>`;
+  putText("mdm-v7-action","Manual match applied · Save to persist");toast("Exact reconciliation matched.","ok");try{const keep=hostNow.innerHTML;gP("new");}catch(e){console.warn("refresh failed",e);}return true;
 }
 function putText(id,value){const el=document.getElementById(id);if(el)el.textContent=value;}
 
