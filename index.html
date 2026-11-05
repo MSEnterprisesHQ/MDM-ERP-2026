@@ -1,4 +1,4 @@
-<!-- MDM ERP v4.62.33 (EXACT-1.0.0): target-based exact solver + single shared validator; spurious half-paise line check removed. Previously v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
+<!-- MDM ERP v4.62.34: Hybrid save final-verification now uses the same Original gross as Analyze & Compare (mergedTotals.gross, not head-level inv.grand) with structured diagnostics; Theme Engine save now persists through sv() (IndexedDB+cloud) so it no longer reverts on reload; Master Revision Control gains CURRENT APPLIED THEMES (revision-specific). Previously v4.62.33 (EXACT-1.0.0): target-based exact solver + single shared validator; spurious half-paise line check removed. Previously v4.62.31: Exact Gross target + canonical Original Round Off reconciliation; unified Apply/Verify/Save validation. Based on uploaded v4.62.29. Previous v4.62.28: Hybrid revision theme override + reconciliation/manual/GST fixes; baseline v4.62.26 + temporary right icon rail; outside click restores normal layout. Base v4.61.72;  Share modal theme engine and responsive size controls; compact responsive layout and singleton overlay cleanup -->
 <!--
 MDM PROJECT — THEME DESIGN LEVEL 2 BRANCH
 BASELINE: MDM Concept V1.10 — Master Invoice Layout (LOCKED)
@@ -78,7 +78,7 @@ Known limitation: the batch is an allocation/display window; Invoice Register re
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>MDM ERP v4.62.33 — Exact Gross Reconciliation Engine</title>
+<title>MDM ERP v4.62.34 — Hybrid save verification + theme persistence fix</title>
 <!-- v4.61.37: Revision-mode identity isolation; new-invoice numbering allocation unchanged. -->
 <style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
@@ -3317,6 +3317,31 @@ function setBillingMode(next){
     return false;
   }
 }
+// ── v4.62.34: ONE source of truth for the Original gross used by Hybrid snapshots ──
+// Analyze & Compare (hybridLivePreviewHTML / mdmV7Verify / exact solver) measures the Original gross as
+// calc.mTot.gross = Σ per-item (taxable + CGST + SGST). Save, however, builds inv.grand from the head-level
+// back-calculation (a15 + a68 + aFr + adjustment), which can differ by paise. Verifying the approved snapshot
+// (which reconciles to mTot.gross) against inv.grand therefore failed GROSS_EQUAL / ROUNDOFF_EQUAL at save.
+// The Original target is the invoice's own merged item totals; inv.grand is only a fallback.
+function mdmHybridSourceGross(inv){
+  const m=inv&&inv.mergedTotals,money=v=>Math.round((Number(v)||0)*100)/100;
+  if(m&&m.gross!=null&&Number.isFinite(Number(m.gross)))return money(m.gross);
+  if(inv&&Array.isArray(inv.mergedItems)&&inv.mergedItems.length)return money(inv.mergedItems.reduce((a,r)=>a+Math.round(((Number(r.taxable)||0)+(Number(r.cgst)||0)+(Number(r.sgst)||0))*100),0)/100);
+  return money(inv?.grand??0);
+}
+function mdmHybridVerifyDiag(inv,snap,v,srcGross,extra){
+  try{
+    const c=x=>Number(x||0).toFixed(6),pc=v?.proposedC||{},oc=v?.originalC||{};
+    const d={invoiceId:inv?.id,invoiceNo:inv?.invNo,engine:"HYBRID",optimizerMode:snap?.optimizer?.mode||snap?.optimizer?.appliedBy||null,
+      approvalStatus:snap?.optimizer?.applied?"Approved":"Pending",snapshotRevision:snap?.revisionNo??null,
+      itemCount:{expected:(inv?.mergedItems||[]).length,actual:(snap?.rows||[]).length},
+      originalGross:c(oc.gross/100),approvedGross:c(pc.gross/100),invoiceGrandField:c(inv?.grand),mergedTotalsGross:c(inv?.mergedTotals?.gross),canonicalSourceGross:c(srcGross),
+      originalRoundOff:c(oc.roundOff/100),approvedRoundOff:c(pc.roundOff/100),
+      grossDifference:c(v?.diffs?.gross),roundOffDifference:c(v?.diffs?.roundOff),netDifference:c(v?.diffs?.net),
+      checks:(v?.checks||[]).map(k=>k.id+":"+(k.ok?"PASS":"FAIL")+(k.ok?"":" ("+k.detail+")")),...(extra||{})};
+    window.MDM_LAST_HYBRID_VERIFY_DIAG=d;console.error("[MDM Hybrid final verification FAILED]",d);return d;
+  }catch(_){return null;}
+}
 function hybridEnsureSnapshot(inv,approvedSnapshot=null){
   if(!inv||!Array.isArray(inv.mergedItems))return inv;
   if(!window.MDMHybridQuantityEngine||typeof hybridMakeSnapshot!=="function")throw new Error("Hybrid quantity engine is not ready");
@@ -3324,19 +3349,23 @@ function hybridEnsureSnapshot(inv,approvedSnapshot=null){
   const approved=approvedSnapshot||(typeof mdmV7GetAppliedSnapshot==="function"?mdmV7GetAppliedSnapshot(inv.mergedItems):null);
   const snap=approved&&approved.reconciliation?.financialMatch&&approved.reconciliation?.status==="RECONCILED_BY_SMART_OPTIMIZER"
     ?JSON.parse(JSON.stringify(approved))
-    :hybridMakeSnapshot(inv,hybridUnitDisplayMode());
+    :hybridMakeSnapshot({...inv,grand:mdmHybridSourceGross(inv)},hybridUnitDisplayMode());
   if(approved){
     snap.sourceInvoiceId=inv.id;snap.sourceInvoiceNo=inv.invNo;snap.sourceSavedAt=inv.savedAt||null;
-    const sourceGross=mdmV7Money(inv.grand??inv.mergedTotals?.gross??0),sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
+    const sourceGross=mdmHybridSourceGross(inv),sourceEnabled=inv.calculationSnapshot?.settings?.roundOff??((A.sett||ST0).roundOff!==false),sourceFinancials=mdmCanonicalInvoiceTotals(sourceGross,sourceEnabled);
     snap.roundOffEnabled=sourceEnabled;snap.sourceGross=sourceFinancials.gross;snap.sourceRoundOff=sourceFinancials.roundOff;snap.sourceNet=sourceFinancials.net;snap.hybridRoundOff=sourceFinancials.roundOff;snap.hybridNet=sourceFinancials.net;
     snap.sourceInvoiceSnapshot={...(snap.sourceInvoiceSnapshot||{}),id:inv.id,invNo:inv.invNo,date:inv.date,month:inv.month,year:inv.year,schoolId:inv.schoolId,schoolName:inv.schoolName,schoolAddress:inv.schoolAddress,schoolUdise:inv.schoolUdise,schoolBlock:inv.schoolBlock,schoolDistrict:inv.schoolDistrict,schoolMobile:inv.schoolMobile,invoiceType:inv.invoiceType,roundOffEnabled:sourceEnabled,grand:sourceGross,taxable:Number(inv.taxable)||0,cgst:Number(inv.cgst)||0,sgst:Number(inv.sgst)||0,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net,mergedTotals:{...(inv.mergedTotals||{}),gross:sourceGross,roundOff:sourceFinancials.roundOff,net:sourceFinancials.net},mergedItems:inv.mergedItems.map(r=>({...r}))};
     const gross=mdmV7Money((snap.rows||[]).reduce((a,r)=>a+mdmExC(r.displayTaxable)+mdmExC(r.displayCgst)+mdmExC(r.displaySgst),0)/100);
     // Independent final re-verification through the ONE shared validator against a fresh Original baseline.
-    const fresh=hybridMakeSnapshot(inv,hybridUnitDisplayMode());fresh.roundOffEnabled=sourceEnabled;
+    const fresh=hybridMakeSnapshot({...inv,grand:sourceGross},hybridUnitDisplayMode());fresh.roundOffEnabled=sourceEnabled;
     fresh.sourceGross=sourceFinancials.gross;fresh.sourceRoundOff=sourceFinancials.roundOff;fresh.sourceNet=sourceFinancials.net;
     fresh.sourceInvoiceSnapshot={...(fresh.sourceInvoiceSnapshot||{}),roundOffEnabled:sourceEnabled,mergedItems:inv.mergedItems.map(r=>({...r}))};
     const v=validateExactReconciliation(fresh,snap,{currentSignature:mdmV7SourceSignature(inv.mergedItems),approvedIds:(snap.optimizer?.adjustedItems||[]).map(x=>x.id)});
-    if(gross!==mdmV7Money(inv.grand??inv.mergedTotals?.gross)||!v.ok)throw new Error("Approved optimizer snapshot failed final verification ("+(v.ok?"GROSS_VS_INVOICE":v.failed.join(", "))+"); save blocked. Re-run Analyze & Compare.");
+    if(gross!==sourceGross||!v.ok){
+      const diag=mdmHybridVerifyDiag(inv,snap,v,sourceGross,{snapshotRowGross:gross.toFixed(6),grossVsInvoice:(gross-sourceGross).toFixed(6)});
+      const why=(v.checks||[]).filter(k=>!k.ok).map(k=>k.id+" — "+k.detail).concat(v.ok&&gross!==sourceGross?["GROSS_VS_INVOICE — snapshot gross "+gross.toFixed(2)+" vs invoice gross "+sourceGross.toFixed(2)]:[]).join("; ");
+      throw new Error("Approved optimizer snapshot failed final verification ("+(v.ok?"GROSS_VS_INVOICE":v.failed.join(", "))+": "+why+"); save blocked. Re-run Analyze & Compare.");
+    }
   }
   const old=inv.hybridModel||{schema:"MDM-HYBRID-MODEL",schemaVersion:3,activeRevision:0,revisions:[],createdAt:snap.createdAt};
   const revisions=Array.isArray(old.revisions)?old.revisions.slice():[];
@@ -6392,6 +6421,48 @@ function mrChangeRevisionTheme(id){
   document.getElementById('mr-theme-revision-modal')?.remove();const ov=document.createElement('div');ov.className='ov';ov.id='mr-theme-revision-modal';ov.onclick=e=>{if(e.target===ov)ov.remove();};
   ov.innerHTML=`<div class="modal" style="max-width:520px"><div class="mhd"><div class="mt">Create Theme Revision — ${ec(inv.invNo)}</div><button class="btn btn-g btn-sm" onclick="document.getElementById('mr-theme-revision-modal')?.remove()">Close</button></div><div class="mbd"><div class="info inf-b">Creates a new immutable revision. Existing invoice data and earlier revision themes remain unchanged.</div><label class="flbl">Choose invoice theme</label><select class="fi" id="mr-theme-revision-select">${presets}</select><div class="sac" style="margin-top:12px"><button class="btn btn-p" onclick="mrSaveThemeRevision('${String(id).replace(/'/g,"\'")}')">Create Theme Revision</button></div></div></div>`;document.body.appendChild(ov);
 }
+// ── v4.62.34: Master Revision Control — CURRENT APPLIED THEMES (revision-specific theme) ──
+// themeKey: ""  = keep each invoice's own theme (default, nothing changes)
+//           "__current__" = snapshot the currently saved Theme Engine configuration into the new revision
+//           <preset id>   = a preset from the existing Theme Engine (INVOICE_THEME_PRESETS)
+// The theme is stored ON the revised invoice's new revision (themeBefore/themeAfter) and as invoiceThemeOverride, so
+// older revisions, other invoices and historical PDFs are never touched and the global saved theme is not modified.
+function mrThemeOverrideFor(key){
+  if(!key)return null;
+  if(key==="__current__"){
+    const t=invoiceTheme?invoiceThemeBaseSaved():null;if(!t)return null;
+    const keep=["invoicePreset","themeSeed","themeMode","customTheme","customPrimary","customSecondary","customTertiary","customSecondaryManual","customTertiaryManual","headerBg","accent","highlight","border","headerText","borderMode"];
+    const o={};keep.forEach(k=>{if(t[k]!==undefined)o[k]=t[k];});return o;
+  }
+  const preset=(typeof INVOICE_THEME_PRESETS!=="undefined")&&INVOICE_THEME_PRESETS[key];if(!preset)return null;
+  return {invoicePreset:key,themeSeed:preset.seed,themeMode:preset.mode||"dark",customTheme:false};
+}
+function invoiceThemeBaseSaved(){
+  // The saved (non-revision) theme, ignoring any transient __MDM_INVOICE_THEME_OVERRIDE.
+  const prior=window.__MDM_INVOICE_THEME_OVERRIDE;window.__MDM_INVOICE_THEME_OVERRIDE=null;
+  try{return invoiceTheme();}finally{window.__MDM_INVOICE_THEME_OVERRIDE=prior;}
+}
+function mrThemeLabel(key){
+  if(!key)return "Keep each invoice's existing theme";
+  if(key==="__current__")return "Current saved theme ("+mrThemeName(invoiceThemeBaseSaved())+")";
+  return (INVOICE_THEME_PRESETS[key]?.name)||key;
+}
+function mrThemeName(t){const p=t&&INVOICE_THEME_PRESETS[t.invoicePreset];return p?.name||(t?.invoicePreset==="custom"?"Custom theme":"Theme");}
+function mrSetBulkTheme(v){MR.themeKey=v||"";gP("masterrevision");}
+function mrThemeSectionHTML(){
+  try{
+    const saved=invoiceThemeBaseSaved(),sel=MR.themeKey||"";
+    const effective=sel?(sel==="__current__"?saved:(()=>{const p=INVOICE_THEME_PRESETS[sel];if(!p)return saved;const f=invoiceThemeFamilyForPreset(p);return {headerBg:f.light,accent:f.dark,headerText:p.text,border:p.border};})()):null;
+    const sw=t=>t?`<span style="display:inline-block;min-width:150px;padding:8px 12px;border-radius:8px;background:${ec(t.headerBg)};color:${ec(t.headerText||"#111")};border:2px solid ${ec(t.accent||t.border||"#999")};font-weight:700;font-size:12px">MS ENTERPRISES · Invoice</span>`:`<span class="bdg bn">No theme change</span>`;
+    const opts=Object.entries(INVOICE_THEME_PRESETS||{}).map(([k,v])=>`<option value="${ec(k)}" ${sel===k?"selected":""}>${ec(v.name||k)}</option>`).join("");
+    return `<div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">CURRENT APPLIED THEMES</span><span class="bdg bn">Revision-specific</span></div><div class="cbd">
+      <div class="info inf-b" style="margin-bottom:10px">The theme chosen here is stored with each <b>new</b> revision in this batch only. Earlier revisions, other invoices and already-generated PDFs keep their original appearance, and the globally saved Theme Engine setting is not modified.</div>
+      <div class="fg fg3"><div class="fc"><label class="flbl">Current applied theme (saved)</label><div>${sw(saved)}<div style="font-size:11px;margin-top:4px">${ec(mrThemeName(saved))}</div></div></div>
+      <div class="fc"><label class="flbl">Theme for new revision</label><select class="fi" onchange="mrSetBulkTheme(this.value)"><option value="" ${sel===""?"selected":""}>Keep each invoice's existing theme</option><option value="__current__" ${sel==="__current__"?"selected":""}>Current saved theme (snapshot)</option>${opts}</select></div>
+      <div class="fc"><label class="flbl">Preview</label><div>${sw(effective)}</div></div></div>
+      <div class="sac" style="margin-top:10px"><button class="btn btn-g btn-sm" onclick="mrSetBulkTheme('__current__')">Reset to current saved theme</button><button class="btn btn-g btn-sm" onclick="mrSetBulkTheme('')">Keep existing themes</button><span class="bdg bn">Selected: ${ec(mrThemeLabel(sel))}</span></div></div></div>`;
+  }catch(e){return "";}
+}
 function mrSaveThemeRevision(id){
   if(!mrCanManage()){toast('Administrator access is required.','err');return;}
   const inv=(A.invoices||[]).find(x=>String(x.id)===String(id));const key=document.getElementById('mr-theme-revision-select')?.value;const preset=INVOICE_THEME_PRESETS?.[key];if(!inv||!preset){toast('Select a valid theme.','err');return;}
@@ -6401,7 +6472,7 @@ function mrSaveThemeRevision(id){
   const revision={revisionNo,by:A.currentUser?.name||'Administrator',at:now,reason:'Invoice theme changed',operation:'theme_change',detail:`Theme changed to ${preset.name||key}`,beforeNet:Number(inv.net)||0,afterNet:Number(inv.net)||0,delta:0,before,after,themeBefore:inv.invoiceThemeOverride||null,themeAfter:themeOverride};
   const updated={...inv,invoiceThemeOverride:themeOverride,revisions:[...(inv.revisions||[]),revision],revisionCurrent:revisionNo,updatedAt:now,revisedAt:now,status:'revised',revisionStatus:mrInvoiceShared(inv)?'RE_SHARE_PENDING':(inv.issuedAt?'RE_ISSUE_PENDING':'REVISED_NOT_SHARED'),reSharePending:mrInvoiceShared(inv),recallPending:mrInvoiceShared(inv),reIssuePending:!!inv.issuedAt,revisionEvents:[...(inv.revisionEvents||[]),{type:'THEME_REVISION_CREATED',at:now,revisionNo,theme:key,by:A.currentUser?.name||'Administrator'}]};
   const next=(A.invoices||[]).map(x=>String(x.id)===String(id)?updated:x);try{localStorage.setItem('iv',JSON.stringify(next));const check=JSON.parse(localStorage.getItem('iv')||'null');if(!Array.isArray(check)||!check.some(x=>String(x.id)===String(id)&&Number(x.revisions?.length)===revisionNo))throw new Error('Invoice revision storage verification failed');}catch(e){toast('Theme revision was not saved: '+(e.message||'storage error'),'err');return;}
-  A.invoices=next;auditLog('THEME_REVISION','invoice',id,`Theme revision ${revisionNo}: ${preset.name||key}`,{revisionNo,theme:key});document.getElementById('mr-theme-revision-modal')?.remove();toast(`Theme revision ${revisionNo} saved. Financial amounts were not changed.`,'ok');gP('masterrevision');
+  A.invoices=next;try{sv('iv',next);}catch(_e){console.warn('Theme revision sv() mirror failed',_e);}auditLog('THEME_REVISION','invoice',id,`Theme revision ${revisionNo}: ${preset.name||key}`,{revisionNo,theme:key});document.getElementById('mr-theme-revision-modal')?.remove();toast(`Theme revision ${revisionNo} saved. Financial amounts were not changed.`,'ok');gP('masterrevision');
 }
 
 function mrLifecycleHTML(inv){
@@ -6560,7 +6631,7 @@ function mrCommitPreview(){
   if(pv.errors?.length){toast("Fix all preview errors before applying the batch.","err");return;}
   const changedResults=pv.results.filter(x=>!x.calc.skip);const ids=changedResults.map(x=>x.inv.id);if(!ids.length){toast("No invoice changes to save.","warn");return;}
   const totalBefore=pv.results.reduce((s,x)=>s+(Number(x.inv.net)||0),0),totalAfter=pv.results.reduce((s,x)=>s+(Number(x.calc.after.net)||0),0);
-  const confirmText=`Apply ${pv.rule.mode.toUpperCase()} revision to ${ids.length} invoice(s)?\n\nOld total: ₹${mrMoney(totalBefore)}\nNew total: ₹${mrMoney(totalAfter)}\nDifference: ₹${mrMoney(totalAfter-totalBefore)}\n\nOriginal snapshots will be retained.`;
+  const confirmText=`Apply ${pv.rule.mode.toUpperCase()} revision to ${ids.length} invoice(s)?\n\nOld total: ₹${mrMoney(totalBefore)}\nNew total: ₹${mrMoney(totalAfter)}\nDifference: ₹${mrMoney(totalAfter-totalBefore)}\n\nTheme for new revision: ${mrThemeLabel(MR.themeKey||"")}\nOriginal snapshots will be retained.`;
   if(!confirm(confirmText))return;
   for(const x of pv.results){
     const current=A.invoices.find(i=>i.id===x.inv.id);
@@ -6569,7 +6640,18 @@ function mrCommitPreview(){
     if(!current||JSON.stringify(mrSnapshot(current))!==JSON.stringify(x.calc.before)||revisionHistoryChanged||originalSnapshotChanged){MR.preview=null;gP("masterrevision");toast("Invoice data or revision history changed after preview. Please build a fresh preview before confirming.","err");return;}
   }
   const now=new Date().toISOString(),batch={id:pv.rule.batchId,createdAt:now,by:A.currentUser?.name||"Administrator",reason:pv.rule.reason,operation:pv.specialFruitMode?"egg_fruit_toggle":pv.rule.mode,month:MR.periodMode==="date"?"Custom Date Range":`${MR.fromMonth||"Start"} ${MR.fromYear||""} – ${MR.toMonth||"End"} ${MR.toYear||""}`,year:MR.periodMode==="date"?`${MR.fromDate||"Start"} to ${MR.toDate||"End"}`:"Range",periodMode:MR.periodMode,fromDate:MR.fromDate||"",toDate:MR.toDate||"",fromMonth:MR.fromMonth||"",fromYear:MR.fromYear||"",toMonth:MR.toMonth||"",toYear:MR.toYear||"",schoolCategory:MR.bulkCategory||"All",schoolId:MR.bulkSchoolId||"All",invoiceIds:ids,totalBefore:d2(totalBefore),totalAfter:d2(totalAfter),delta:d2(totalAfter-totalBefore),status:"saved_local",syncStatus:"queued_or_local_only",itemName:pv.specialFruitMode?"Egg / Fruits":(pv.rule.customName||pv.rule.item?.name||""),details:changedResults.map(x=>({invoiceId:x.inv.id,invNo:x.inv.invNo,beforeNet:x.inv.net,afterNet:x.calc.after.net,delta:x.calc.delta,revisionNo:x.calc.after.revisions.length,detail:x.calc.detail}))};
-  const replacements=new Map(changedResults.map(x=>[x.inv.id,x.calc.after]));
+  const __themeKey=MR.themeKey||"",__themeOv=mrThemeOverrideFor(__themeKey);
+  if(__themeKey&&!__themeOv){toast("Selected revision theme is unavailable. Choose a valid theme or keep existing themes.","err");return;}
+  if(__themeOv){batch.themeKey=__themeKey;batch.themeApplied=__themeOv;}
+  const replacements=new Map(changedResults.map(x=>{
+    let after=x.calc.after;
+    if(__themeOv){
+      const revs=(after.revisions||[]).slice(),last=revs.length-1;
+      if(last>=0)revs[last]={...revs[last],themeBefore:after.invoiceThemeOverride||null,themeAfter:{...__themeOv},themeKey:__themeKey};
+      after={...after,invoiceThemeOverride:{...__themeOv},revisions:revs};
+    }
+    return [x.inv.id,after];
+  }));
   const nextInvoices=A.invoices.map(inv=>replacements.get(inv.id)||inv);
   const nextBatches=[...(A.mrb||[]),batch].slice(-300);
   // Persist both keys with verification and best-effort rollback before touching live state.
@@ -6589,6 +6671,8 @@ function mrCommitPreview(){
     MR.preview=null;gP("masterrevision");toast("Bulk revision was not applied because storage verification failed. Check available browser storage and restore from backup if needed.","err");return;
   }
   A.invoices=nextInvoices;A.mrb=nextBatches;
+  // v4.62.34: also route through sv() so IndexedDB + cloud queue get the same data (direct localStorage writes were overwritten by IDB hydration on reload).
+  try{sv("iv",nextInvoices);sv("mrb",nextBatches);}catch(_svErr){console.warn("Bulk revision sv() mirror failed",_svErr);}
   auditLog("BULK_REVISION","invoice_batch",batch.id,`Master revision ${batch.id}: ${batch.operation}, ${ids.length} invoices`,batch);
   MR.preview=null;MR.selectedIds=[];toast(`Revision batch applied to ${ids.length} invoice(s).`,"ok");gP("masterrevision");
 }
@@ -6710,6 +6794,7 @@ function pgMasterRevision(){
   </div>
 </div><div class="sac" style="margin:10px 0"><button class="btn btn-g btn-sm" onclick="mrSelectAll(true)">Select all matching</button><button class="btn btn-g btn-sm" onclick="mrSelectAll(false)">Clear selection</button><span class="bdg bn">${ids.size} selected</span>${mrRevisionPrefs().egg?`<button class="btn btn-g btn-sm" onclick="mrQuickExclude('fruit')" ${ids.size?"":"disabled"}>Quick Exclude: Egg / Fruit</button><button class="btn btn-p btn-sm" onclick="mrPreviewFruitToggles()" ${ids.size?"":"disabled"}>Preview Egg/Fruit ON/OFF</button>`:""}${mrRevisionPrefs().fuel?`<button class="btn btn-g btn-sm" onclick="mrQuickExclude('fuel')" ${ids.size?"":"disabled"}>Quick Exclude: LPG / Firewood</button>`:""}</div><div class="tw"><table class="dt"><thead><tr><th><input type="checkbox" aria-label="Select all" ${filtered.length&&filtered.every(i=>ids.has(i.id))?"checked":""} onchange="mrSelectAll(this.checked)"/></th><th>Invoice</th><th>Month / Year</th><th>School</th><th class="num">Students</th><th class="num">Net Payable</th><th>Egg/Fruit OFF</th><th>Delivery / Revision</th></tr></thead><tbody>${filtered.length?filtered.map(inv=>`<tr><td><input type="checkbox" ${ids.has(inv.id)?"checked":""} onchange="mrToggleInvoice('${inv.id}',this.checked)"/></td><td><b>${ec(inv.invNo)}</b><div style="font-size:10px;color:var(--txl)">${ec(inv.date||"")}</div></td><td>${ec(mrMonthYear(inv))}</td><td>${ec(inv.schoolName||"")}</td><td class="num">${(Number(inv.s15)||0)+(Number(inv.s68)||0)}</td><td class="num">${mrMoney(inv.net)}</td><td><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" aria-label="Exclude Egg/Fruit from ${ec(inv.invNo)}" ${((MR.fruitOffIds||[]).includes(inv.id))?"checked":""} onchange="mrToggleFruitOff('${inv.id}',this.checked)"/> OFF</label></td><td>${mrLifecycleHTML(inv)}${(inv.revisions||[]).length?`<div style="font-size:10px;color:var(--txl);margin-top:3px">Current Revision ${(inv.revisions||[]).length}</div>`:""}</td></tr>`).join(""):`<tr><td colspan="8">No matching invoices.</td></tr>`}</tbody></table></div></div></div>
   <div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">2. Configure Revision Rule</span><span class="bdg bn">${ids.size} target invoice(s)</span></div><div class="cbd"><div class="fg fg3"><div class="fc"><label class="flbl">Operation</label><select class="fi" id="mr-mode" onchange="mrOnModeChange(this.value)"><option value="add" ${mode==="add"?"selected":""}>Add new item to old invoices</option><option value="exclude" ${mode==="exclude"?"selected":""}>Exclude / remove item</option><option value="update" ${mode==="update"?"selected":""}>Change existing item rate / GST</option></select></div><div class="fc"><label class="flbl">Existing Item (optional for custom add)</label><select class="fi" id="mr-item" onchange="mrOnItemChange(this.value)">${itemOpts}</select></div><div class="fc"><label class="flbl">New Item Name (for custom item)</label><input class="fi" id="mr-name" value="${ec(MR.customName)}" oninput="MR.customName=this.value;mrInvalidatePreview()" placeholder="e.g. Parle-G"/></div></div><div class="fg fg3" style="margin-top:10px"><div class="fc"><label class="flbl">Unit</label><input class="fi" id="mr-unit" value="${ec(MR.unit||"Pcs")}" oninput="MR.unit=this.value;mrInvalidatePreview()"/></div><div class="fc"><label class="flbl">Quantity per child (Add)</label><input class="fi" type="number" min="0.001" step="0.001" id="mr-qty" value="${ec(MR.qtyPerChild||"1")}" oninput="MR.qtyPerChild=this.value;mrInvalidatePreview()"/></div><div class="fc"><label class="flbl">Unit Rate</label><input class="fi" type="number" min="0" step="0.01" id="mr-rate" value="${ec(MR.rate)}" oninput="MR.rate=this.value;mrInvalidatePreview()" placeholder="Enter historical rate"/></div></div><div class="fg fg3" style="margin-top:10px"><div class="fc"><label class="flbl">GST Rate (%)</label><input class="fi" type="number" min="0" max="100" step="0.01" id="mr-gst" value="${ec(MR.gst??"0")}" oninput="MR.gst=this.value;mrInvalidatePreview()"/></div><div class="fc"><label class="flbl">GST Treatment</label><select class="fi" id="mr-tax-treatment" onchange="MR.taxTreatment=this.value;mrInvalidatePreview()"><option value="" ${!MR.taxTreatment?"selected":""}>Select historical treatment…</option><option value="taxable" ${MR.taxTreatment==="taxable"?"selected":""}>Taxable</option><option value="exempt" ${MR.taxTreatment==="exempt"?"selected":""}>Exempt</option><option value="nil_rated" ${MR.taxTreatment==="nil_rated"?"selected":""}>Nil-rated</option><option value="non_gst" ${MR.taxTreatment==="non_gst"?"selected":""}>Non-GST</option></select></div><div class="fc"><label class="flbl">HSN / SAC</label><input class="fi" id="mr-hsn" value="${ec(MR.hsn||"")}" oninput="MR.hsn=this.value;mrInvalidatePreview()" placeholder="Applicable classification"/></div><div class="fc"><label class="flbl">Price Includes GST?</label><select class="fi" id="mr-taxmode" onchange="MR.taxMode=this.value;mrInvalidatePreview()"><option value="" ${!MR.taxMode?"selected":""}>Select historical price basis…</option><option value="inclusive" ${MR.taxMode!=="exclusive"?"selected":""}>Yes — inclusive</option><option value="exclusive" ${MR.taxMode==="exclusive"?"selected":""}>No — add GST on top</option></select></div><div class="fc"><label class="flbl">Revision Reason / Authority</label><input class="fi" id="mr-reason" value="${ec(MR.reason)}" oninput="MR.reason=this.value;mrInvalidatePreview()" placeholder="Notification / reason / reference"/></div></div><div class="info inf-b" style="margin-top:10px">For historical additions, verify the rate, HSN/SAC and GST treatment applicable to the selected billing period. Item Master values are not used as historical truth. Enter the documented historical rate, GST rate, GST treatment and price basis yourself. This batch applies one rule to every selected invoice, so split the batch if rates or tax treatment differed by period. Exclude removes the item only from the new revision; the original snapshot stays intact.</div><div class="sac" style="margin-top:12px"><button class="btn btn-p" onclick="mrBuildPreview()" ${ids.size?"":"disabled"}>Preview Changes</button><button class="btn btn-g" onclick="MR.preview=null;gP('masterrevision')">Reset Preview</button></div></div></div>
+  ${mrThemeSectionHTML()}
   ${preview}
   <div class="card mr-advanced-content" ${MR.advancedOpen?"":"hidden"} style="margin-top:14px"><div class="chd"><span class="cht">Recent Master Revision Batches</span><span class="bdg bn">${batchRows.length}</span></div><div class="cbd"><div class="tw"><table class="dt"><thead><tr><th>Batch ID</th><th>Created</th><th>Operation</th><th>Reason</th><th>Invoices</th><th class="num">Difference</th><th>Status</th></tr></thead><tbody>${batchRows.length?batchRows.map(b=>`<tr><td><b>${ec(b.id)}</b></td><td>${b.createdAt?new Date(b.createdAt).toLocaleString("en-IN"):"-"}</td><td>${ec(b.operation||"")}</td><td>${ec(b.reason||"")}</td><td>${(b.invoiceIds||[]).length}</td><td class="num">${mrMoney(b.delta)}</td><td>${ec(b.status||"saved_local")}<div style="font-size:10px;color:var(--txl)">Check Backup &amp; Sync for cloud acknowledgement</div></td></tr>`).join(""):`<tr><td colspan="7">No master revision batches yet.</td></tr>`}</tbody></table></div></div></div>`;
 }
@@ -8752,7 +8837,19 @@ function invoicePdfCacheKey(inv){
   // never reuse a PDF prepared for a different set of rows/totals.
   return [inv?.id,inv?.invNo,inv?.date,inv?.net,inv?.status,inv?.revisedAt,inv?.updatedAt,
     snap?.revisionNo??"original",snap?.updatedAt||snap?.createdAt||"",snap?.sourceNet??"",
-    snap?.rows?.length??0].join("|");
+    snap?.rows?.length??0,mdmEffectiveThemeSig(inv,snap)].join("|");
+}
+// v4.62.34: effective-theme signature so a theme / revision-theme change can never reuse a stale cached PDF.
+function mdmEffectiveThemeOverride(inv,snap){
+  const caller=window.__MDM_INVOICE_THEME_OVERRIDE;                  // set by historical-snapshot rendering
+  if(caller&&typeof caller==="object")return caller;
+  const s=snap===undefined?(invoiceEngineOf(inv)==="hybrid"?mdmActiveHybridRevision(inv):null):snap;
+  return (s&&s.invoiceThemeOverride)||inv?.invoiceThemeOverride||null;   // revision's own theme, else invoice's
+}
+function mdmEffectiveThemeSig(inv,snap){
+  let o=mdmEffectiveThemeOverride(inv,snap),src="rev";
+  if(!o){src="saved";const t=A.sett?.themeDesign||{};o={};Object.keys(t).forEach(k=>{if(typeof t[k]!=="string"||t[k].length<80)o[k]=t[k];});}
+  const j=src+JSON.stringify(o);let h=0;for(let i=0;i<j.length;i++)h=(h*31+j.charCodeAt(i))|0;return src+":"+(h>>>0).toString(36);
 }
 function clearInvoicePdfCache(id){
   if(!id){_invoicePdfCache.clear();return;}
@@ -8787,6 +8884,12 @@ function _pdfCell(doc,text,x,y,w,h,size=5.1,align="left",bold=false){
 }
 
 async function buildInvoicePdfFile(inv,opts={}){
+  // v4.62.34: generate with the theme tied to this invoice's active revision (never silently the Default / latest theme).
+  const __ov=mdmEffectiveThemeOverride(inv),__prior=window.__MDM_INVOICE_THEME_OVERRIDE;
+  if(__ov&&__ov!==__prior){window.__MDM_INVOICE_THEME_OVERRIDE=__ov;try{return await buildInvoicePdfFileCore(inv,opts);}finally{window.__MDM_INVOICE_THEME_OVERRIDE=__prior;}}
+  return buildInvoicePdfFileCore(inv,opts);
+}
+async function buildInvoicePdfFileCore(inv,opts={}){
   const key=invoicePdfCacheKey(inv);
   if(!opts.force && !opts.skipCache && _invoicePdfCache.has(key))return _invoicePdfCache.get(key);
   await loadPdfLibs();
@@ -10374,8 +10477,19 @@ function invoiceThemeSaveFromUI(){
   const st={...(A.sett||ST0),themeDesign:upd};
   try{
     // Canonical settings are authoritative for both Normal/Original and Hybrid.
+    // v4.62.34 ROOT-CAUSE FIX: this used to write localStorage only. On the next load V42.hydrateFromIDB()
+    // restores A.sett from the IndexedDB "kv" copy (which sv() maintains) and that stale copy still held the
+    // previous/default theme, so every saved theme "reverted". Persist through the shared sv() so localStorage,
+    // IndexedDB and the cloud queue all receive the same record. The direct write first is only a quota probe,
+    // because LS.set swallows quota errors.
     localStorage.setItem("st",JSON.stringify(st));
+    sv("st",st);
     A.sett=st;
+    try{clearInvoicePdfCache();}catch(_c){}
+    // Read-back verification: the theme that will be restored on reload must be the one just saved.
+    try{const back=JSON.parse(localStorage.getItem("st")||"{}").themeDesign||{};
+      if((back.invoicePreset||"")!==(upd.invoicePreset||"")||(back.themeSeed||"")!==(upd.themeSeed||""))throw new Error("Theme read-back mismatch");}
+    catch(ve){throw ve;}
     // Keep the compatibility mirror in sync when storage permits. It is no
     // longer allowed to make the primary save fail or overwrite canonical data.
     try{localStorage.setItem("mdm_invoice_typography_theme_v1",JSON.stringify(upd));}catch(_){/* canonical st is already saved */}
@@ -16111,3 +16225,4 @@ v2.8 — Definitive flat-light header + school category correction
 <!-- VERSION 7 HYBRID GUARDED RELEASE CANDIDATE v4.62.29 / HYB-1.4.2-V7. Original calc() preserved. -->
 
 <!-- v4.62.15: Smart Optimizer user-approved proposal is now bound to the active Hybrid draft, displayed in live preview, and persisted as the saved Hybrid revision after independent totals validation. Original NI.calc remains unchanged. -->
+
